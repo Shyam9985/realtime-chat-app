@@ -1,0 +1,64 @@
+import { upload, download } from "../store/api.service";
+
+// Ported from the web client's services/files.service.js. One adaptation: a device has no
+// URL.createObjectURL, so the downloaded photo is handed back as a data uri instead of a Blob.
+
+const blobToDataUri = (blob) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+});
+
+// fetches the logged in user's current profile photo as a data uri;
+// null means "no photo / fetch failed" — the caller falls back to initials
+export async function getProfilePhoto() {
+    try {
+        const blob = await download("files/profile-photo");
+        if (!(blob instanceof Blob) || !blob.size) return null;
+        return await blobToDataUri(blob);
+    } catch {
+        return null;
+    }
+}
+
+// another member's current photo as a data uri. the server answers "no photo" when they have none,
+// when the account is inactive and when they have blocked the viewer; all of those return null here
+export async function getUserPhoto(userId) {
+    try {
+        const blob = await download(`users/${userId}/photo`);
+        if (!(blob instanceof Blob) || !blob.size) return null;
+        return await blobToDataUri(blob);
+    } catch {
+        return null;
+    }
+}
+
+// the file itself is the raw request body (no FormData) so the server can
+// read the byte stream directly; metadata travels in headers.
+// file: a Blob; meta.name / meta.type fill in what a device Blob does not carry
+export async function uploadFile(file, onProgress, meta = {}) {
+    const name = meta.name || file.name || `profile-${Date.now()}.jpg`;
+    const type = meta.type || file.type || "application/octet-stream";
+
+    try {
+        return await upload(
+            "files/upload",
+            file,
+            {
+                "Content-Type": type,
+                "x-file-name": encodeURIComponent(name),
+            },
+            (event) => {
+                // translate axios's byte counts into a plain percentage so
+                // components never deal with transport details
+                if (event.total) {
+                    const pct = Math.round((event.loaded / event.total) * 100);
+                    onProgress?.(pct);
+                }
+            }
+        );
+    } catch (error) {
+        return error;
+    }
+}

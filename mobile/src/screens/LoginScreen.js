@@ -1,0 +1,88 @@
+import React, { useState } from 'react';
+import { Pressable, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../theme/ThemeContext';
+import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/MessageContext';
+import { handleLogin } from '../services/auth.service';
+import * as validate from '../utils/ValidateUtils';
+import { Screen, TextField, Button, Title, Muted, IconButton, FormScroll } from '../components/ui';
+
+// the round green mark with a speech bubble, then title and subtitle
+export function AuthHeader({ title, subtitle }) {
+  const { theme } = useTheme();
+  return (
+    <View style={{ alignItems: 'center', marginBottom: theme.space.xxl }}>
+      <View style={{ width: 84, height: 84, borderRadius: 42, backgroundColor: theme.colors.accentBright, alignItems: 'center', justifyContent: 'center', marginBottom: theme.space.lg, shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 4 }}>
+        <Ionicons name="chatbubble-ellipses" size={44} color="#FFFFFF" />
+      </View>
+      <Title>{title}</Title>
+      <Muted style={{ marginTop: theme.space.xs, fontSize: theme.font.md }}>{subtitle}</Muted>
+    </View>
+  );
+}
+
+// sign in, create account and password recovery share this layout; the focused field stays above the keyboard
+export function AuthLayout({ children }) {
+  const { theme } = useTheme();
+  return (
+    <Screen edges={['top', 'bottom']}>
+      <FormScroll contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: theme.space.xl }}>
+        <View style={{ width: '100%', maxWidth: 440, alignSelf: 'center' }}>{children}</View>
+      </FormScroll>
+    </Screen>
+  );
+}
+
+/*
+ * Ported from the web client's pages/auth/LoginForm.jsx: the same validation, the same auth.service
+ * call and the same messages. On success the user goes to AuthContext.handleLogin, as on the web.
+ */
+export default function LoginScreen({ navigation }) {
+  const { theme } = useTheme();
+  const authCtx = useAuth();
+  const message = useToast();
+  const [isLoading, setIsLoading] = useState(false);
+  const [form, setForm] = useState({ email: '', password: '' });
+  const [errors, setErrors] = useState({});
+  const [showPassword, setShowPassword] = useState(false);
+
+  const handleChange = (name) => (value) => setForm((prev) => ({ ...prev, [name]: value }));
+
+  const handleSubmit = async () => {
+    const validationErrors = {};
+    const emailValidation = validate.isValidEmail(form.email);
+    if (!emailValidation.status) validationErrors.email = emailValidation.message;
+    if (!form.password) validationErrors.password = 'Enter your password.';
+    setErrors(validationErrors);
+    if (Object.keys(validationErrors).length) return;
+
+    setIsLoading(true);
+    const result = await handleLogin({ email: form.email.trim(), password: form.password });
+    setIsLoading(false);
+
+    if (!result?.success) {
+      message.error(result?.statusKey === 'INVALID_CREDENTIALS' ? 'Incorrect email or password.' : (result?.error || result?.message || 'Could not sign you in.'), 2500);
+      return;
+    }
+    await authCtx.handleLogin(result?.data?.user);
+    message.success('Login successful!');
+  };
+
+  return (
+    <AuthLayout>
+      <AuthHeader title="Welcome Back" subtitle="Login to continue" />
+      <TextField label="Email" icon="mail-outline" value={form.email} onChangeText={handleChange('email')} error={errors.email} autoCapitalize="none" keyboardType="email-address" autoComplete="email" textContentType="emailAddress" placeholder="you@example.com" testID="login-email" />
+      <TextField label="Password" icon="lock-closed-outline" value={form.password} onChangeText={handleChange('password')} error={errors.password} secureTextEntry={!showPassword} placeholder="Your password" testID="login-password"
+        onSubmitEditing={handleSubmit} returnKeyType="go" style={{ marginBottom: theme.space.sm }}
+        right={<IconButton name={showPassword ? 'eye-off-outline' : 'eye-outline'} color={theme.colors.textMuted} onPress={() => setShowPassword((v) => !v)} accessibilityLabel="Toggle password visibility" style={{ marginRight: 6 }} />} />
+      <Pressable onPress={() => navigation.navigate('ForgotPassword')} style={{ alignSelf: 'flex-end', marginBottom: theme.space.lg }} accessibilityRole="button" hitSlop={8}>
+        <Text style={{ color: theme.colors.accent, fontWeight: '600' }}>Forgot Password?</Text>
+      </Pressable>
+      <Button title={isLoading ? 'Logging in...' : 'Login'} onPress={handleSubmit} loading={isLoading} />
+      <Pressable onPress={() => navigation.navigate('Register')} style={{ marginTop: theme.space.xl, alignItems: 'center' }}>
+        <Text style={{ color: theme.colors.textMuted }}>Don't have an account? <Text style={{ color: theme.colors.accent, fontWeight: '700' }}>Create Account</Text></Text>
+      </Pressable>
+    </AuthLayout>
+  );
+}

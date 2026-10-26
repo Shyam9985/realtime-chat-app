@@ -1,0 +1,24 @@
+node_modules/
+.env
+
+logs/
+metrics/
+coverage/
+dist/
+
+# user-uploaded files live on disk, not in git
+server/uploads/
+
+# server/public is served statically and not tracked
+server/public/
+!server/public/.gitkeep
+
+*.log
+
+.vscode/settings.json
+certs/
+!certs/README.md
+
+documents/database/databump-v1.sql
+# filled copies of sql scripts carry real passwords
+documents/database/*.local.sql

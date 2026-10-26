@@ -1,0 +1,42 @@
+{
+  "name": "chat-app-server",
+  "version": "1.0.0",
+  "description": "Real-time chat application backend: Express, MySQL, Redis, Socket.IO",
+  "main": "server.js",
+  "keywords": [
+    "chat",
+    "messaging",
+    "express",
+    "socket.io"
+  ],
+  "scripts": {
+    "test": "node --test --test-concurrency=1 tests/",
+    "start": "node server.js"
+  },
+  "author": "shyam",
+  "license": "ISC",
+  "devDependencies": {
+    "nodemon": "^3.1.14",
+    "socket.io-client": "^4.8.4"
+  },
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "chalk": "^4.1.2",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "date-fns": "^4.4.0",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "express-mysql-session": "^3.0.3",
+    "express-session": "^1.19.0",
+    "helmet": "^8.3.0",
+    "jsonwebtoken": "^9.0.3",
+    "morgan": "^1.10.1",
+    "mysql2": "^3.22.4",
+    "node-schedule": "^2.1.1",
+    "nodemailer": "^9.0.3",
+    "redis": "^6.2.1",
+    "socket.io": "^4.8.4",
+    "ua-parser-js": "^2.0.10"
+  }
+}

@@ -1,0 +1,550 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1780" height="1290" viewBox="0 0 1780 1290" font-family="Consolas, 'Courier New', monospace">
+<defs><marker id="one" markerWidth="12" markerHeight="12" refX="11" refY="6" orient="auto"><path d="M5 1 V11 M8 1 V11" stroke="#334155" stroke-width="1.6" fill="none"/></marker><marker id="many" markerWidth="14" markerHeight="14" refX="1" refY="7" orient="auto"><path d="M1 7 L13 1 M1 7 L13 13 M1 7 L13 7 M10 1 V13" stroke="#334155" stroke-width="1.6" fill="none"/></marker></defs>
+<rect width="1780" height="1290" fill="#f8fafc"/>
+<rect x="20" y="20" width="1740" height="860" rx="10" fill="#ecfeff" stroke="#a5f3fc"/>
+<text x="36" y="46" font-size="15" font-weight="bold" fill="#155e75">CHAT  -  ONE_TO_ONE / GROUP conversations, one receipt per recipient, blocks, seeded masters</text>
+<rect x="20" y="895" width="1740" height="365" rx="10" fill="#f1f5f9" stroke="#cbd5e1"/>
+<text x="36" y="915" font-size="15" font-weight="bold" fill="#334155">AUTH &amp; PLATFORM  -  tables the existing login / session / otp / audit / upload code reads</text>
+<text x="36" y="1280" font-size="12" fill="#64748b">Every table: is_active TINYINT(1) NOT NULL DEFAULT 1, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP. Ids BIGINT UNSIGNED. InnoDB, utf8mb4.</text>
+<path d="M1280 110.0 H1380.0 V72.0 H1480" fill="none" stroke="#334155" stroke-width="1.4" stroke-dasharray="5 3" marker-start="url(#many)" marker-end="url(#one)"/>
+<path d="M1000 142.0 H660.0 V72.0 H320" fill="none" stroke="#334155" stroke-width="1.4" stroke-dasharray="5 3" marker-start="url(#many)" marker-end="url(#one)"/>
+<path d="M1280 174.0 H1306 V412.0 H1280" fill="none" stroke="#334155" stroke-width="1.4" stroke-dasharray="5 3" marker-start="url(#many)" marker-end="url(#one)"/>
+<path d="M800 110.0 H900.0 V72.0 H1000" fill="none" stroke="#334155" stroke-width="1.4" stroke-dasharray="5 3" marker-start="url(#many)" marker-end="url(#one)"/>
+<path d="M520 126.0 H420.0 V72.0 H320" fill="none" stroke="#334155" stroke-width="1.4" stroke-dasharray="5 3" marker-start="url(#many)" marker-end="url(#one)"/>
+<path d="M800 158.0 H900.0 V412.0 H1000" fill="none" stroke="#334155" stroke-width="1.4" stroke-dasharray="5 3" marker-start="url(#many)" marker-end="url(#one)"/>
+<path d="M1280 450.0 H1306 V72.0 H1280" fill="none" stroke="#334155" stroke-width="1.4" stroke-dasharray="5 3" marker-start="url(#many)" marker-end="url(#one)"/>
+<path d="M1000 466.0 H660.0 V72.0 H320" fill="none" stroke="#334155" stroke-width="1.4" stroke-dasharray="5 3" marker-start="url(#many)" marker-end="url(#one)"/>
+<path d="M1280 482.0 H1380.0 V412.0 H1480" fill="none" stroke="#334155" stroke-width="1.4" stroke-dasharray="5 3" marker-start="url(#many)" marker-end="url(#one)"/>
+<path d="M1280 514.0 H1380.0 V632.0 H1480" fill="none" stroke="#334155" stroke-width="1.4" stroke-dasharray="5 3" marker-start="url(#many)" marker-end="url(#one)"/>
+<path d="M800 450.0 H900.0 V412.0 H1000" fill="none" stroke="#334155" stroke-width="1.4" stroke-dasharray="5 3" marker-start="url(#many)" marker-end="url(#one)"/>
+<path d="M520 466.0 H420.0 V72.0 H320" fill="none" stroke="#334155" stroke-width="1.4" stroke-dasharray="5 3" marker-start="url(#many)" marker-end="url(#one)"/>
+<path d="M40 450.0 H14 V72.0 H40" fill="none" stroke="#334155" stroke-width="1.4" stroke-dasharray="5 3" marker-start="url(#many)" marker-end="url(#one)"/>
+<path d="M40 466.0 H14 V72.0 H40" fill="none" stroke="#334155" stroke-width="1.4" stroke-dasharray="5 3" marker-start="url(#many)" marker-end="url(#one)"/>
+<path d="M1480 814.0 H900.0 V72.0 H320" fill="none" stroke="#334155" stroke-width="1.4" stroke-dasharray="5 3" marker-start="url(#many)" marker-end="url(#one)"/>
+<path d="M40 986.0 H14 V72.0 H40" fill="none" stroke="#334155" stroke-width="1.4" stroke-dasharray="5 3" marker-start="url(#many)" marker-end="url(#one)"/>
+<path d="M340 970.0 H330.0 V72.0 H320" fill="none" stroke="#334155" stroke-width="1.4" stroke-dasharray="5 3" marker-start="url(#many)" marker-end="url(#one)"/>
+<path d="M1240 986.0 H1224 V887 H342 V72.0 H320" fill="none" stroke="#334155" stroke-width="1.4" stroke-dasharray="5 3" marker-start="url(#many)" marker-end="url(#one)"/>
+<rect x="40" y="60" width="280" height="304" rx="6" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<rect x="40" y="60" width="280" height="24" rx="6" fill="#1d4ed8"/>
+<rect x="40" y="78" width="280" height="6" fill="#1d4ed8"/>
+<text x="50" y="77" font-size="13" font-weight="bold" fill="#fff">users_lst_t</text>
+<text x="46" y="97" font-size="10" font-weight="bold" fill="#b45309">PK</text>
+<text x="66" y="97" font-size="10.5" fill="#0f172a">user_id</text>
+<text x="314" y="97" font-size="9" fill="#64748b" text-anchor="end">BIGINT UNSIGNED</text>
+<text x="46" y="113" font-size="10" font-weight="bold" fill="#0369a1">UQ</text>
+<text x="66" y="113" font-size="10.5" fill="#0f172a">user_nm</text>
+<text x="314" y="113" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(255)</text>
+<text x="46" y="129" font-size="10" font-weight="bold" fill="#0369a1">UQ</text>
+<text x="66" y="129" font-size="10.5" fill="#0f172a">email</text>
+<text x="314" y="129" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(255)</text>
+<text x="46" y="145" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="66" y="145" font-size="10.5" fill="#0f172a">first_nm</text>
+<text x="314" y="145" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(100)</text>
+<text x="46" y="161" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="66" y="161" font-size="10.5" fill="#0f172a">last_nm</text>
+<text x="314" y="161" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(100) NULL</text>
+<text x="46" y="177" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="66" y="177" font-size="10.5" fill="#0f172a">mobile_no</text>
+<text x="314" y="177" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(15) NULL</text>
+<text x="46" y="193" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="66" y="193" font-size="10.5" fill="#0f172a">password_hash</text>
+<text x="314" y="193" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(255)</text>
+<text x="46" y="209" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="66" y="209" font-size="10.5" fill="#0f172a">password_salt</text>
+<text x="314" y="209" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(255) NULL</text>
+<text x="46" y="225" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="66" y="225" font-size="10.5" fill="#0f172a">profile_photo_url</text>
+<text x="314" y="225" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(500) NULL</text>
+<text x="46" y="241" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="66" y="241" font-size="10.5" fill="#0f172a">last_login</text>
+<text x="314" y="241" font-size="9" fill="#64748b" text-anchor="end">DATETIME NULL</text>
+<text x="46" y="257" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="66" y="257" font-size="10.5" fill="#0f172a">is_locked</text>
+<text x="314" y="257" font-size="9" fill="#64748b" text-anchor="end">TINYINT(1) =0</text>
+<text x="46" y="273" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="66" y="273" font-size="10.5" fill="#0f172a">login_attempts</text>
+<text x="314" y="273" font-size="9" fill="#64748b" text-anchor="end">INT UNSIGNED =0</text>
+<text x="46" y="289" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="66" y="289" font-size="10.5" fill="#0f172a">locked_until</text>
+<text x="314" y="289" font-size="9" fill="#64748b" text-anchor="end">DATETIME NULL</text>
+<text x="46" y="305" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="66" y="305" font-size="10.5" fill="#0f172a">is_active</text>
+<text x="314" y="305" font-size="9" fill="#64748b" text-anchor="end">TINYINT(1) =1</text>
+<text x="46" y="321" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="66" y="321" font-size="10.5" fill="#0f172a">created_at</text>
+<text x="314" y="321" font-size="9" fill="#64748b" text-anchor="end">DATETIME =CURRENT_TIMESTAMP</text>
+<text x="46" y="337" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="66" y="337" font-size="10.5" fill="#0f172a">updated_at</text>
+<text x="314" y="337" font-size="9" fill="#64748b" text-anchor="end">DATETIME</text>
+<text x="46" y="353" font-size="10" font-weight="bold" fill="#0369a1">IX</text>
+<text x="66" y="353" font-size="10.5" fill="#0f172a">(first_nm, last_nm)</text>
+<rect x="1480" y="60" width="280" height="128" rx="6" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<rect x="1480" y="60" width="280" height="24" rx="6" fill="#7c3aed"/>
+<rect x="1480" y="78" width="280" height="6" fill="#7c3aed"/>
+<text x="1490" y="77" font-size="13" font-weight="bold" fill="#fff">conversations_type_master_t</text>
+<text x="1486" y="97" font-size="10" font-weight="bold" fill="#b45309">PK</text>
+<text x="1506" y="97" font-size="10.5" fill="#0f172a">conversation_type_id</text>
+<text x="1754" y="97" font-size="9" fill="#64748b" text-anchor="end">INT UNSIGNED</text>
+<text x="1486" y="113" font-size="10" font-weight="bold" fill="#0369a1">UQ</text>
+<text x="1506" y="113" font-size="10.5" fill="#0f172a">type_code</text>
+<text x="1754" y="113" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(20)</text>
+<text x="1486" y="129" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1506" y="129" font-size="10.5" fill="#0f172a">type_name</text>
+<text x="1754" y="129" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(50)</text>
+<text x="1486" y="145" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1506" y="145" font-size="10.5" fill="#0f172a">is_active</text>
+<text x="1754" y="145" font-size="9" fill="#64748b" text-anchor="end">TINYINT(1) =1</text>
+<text x="1486" y="161" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1506" y="161" font-size="10.5" fill="#0f172a">created_at</text>
+<text x="1754" y="161" font-size="9" fill="#64748b" text-anchor="end">DATETIME =CURRENT_TIMESTAMP</text>
+<text x="1486" y="177" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1506" y="177" font-size="10.5" fill="#0f172a">updated_at</text>
+<text x="1754" y="177" font-size="9" fill="#64748b" text-anchor="end">DATETIME</text>
+<rect x="1480" y="400" width="280" height="128" rx="6" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<rect x="1480" y="400" width="280" height="24" rx="6" fill="#7c3aed"/>
+<rect x="1480" y="418" width="280" height="6" fill="#7c3aed"/>
+<text x="1490" y="417" font-size="13" font-weight="bold" fill="#fff">message_type_master_t</text>
+<text x="1486" y="437" font-size="10" font-weight="bold" fill="#b45309">PK</text>
+<text x="1506" y="437" font-size="10.5" fill="#0f172a">message_type_id</text>
+<text x="1754" y="437" font-size="9" fill="#64748b" text-anchor="end">INT UNSIGNED</text>
+<text x="1486" y="453" font-size="10" font-weight="bold" fill="#0369a1">UQ</text>
+<text x="1506" y="453" font-size="10.5" fill="#0f172a">type_code</text>
+<text x="1754" y="453" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(20)</text>
+<text x="1486" y="469" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1506" y="469" font-size="10.5" fill="#0f172a">type_name</text>
+<text x="1754" y="469" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(50)</text>
+<text x="1486" y="485" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1506" y="485" font-size="10.5" fill="#0f172a">is_active</text>
+<text x="1754" y="485" font-size="9" fill="#64748b" text-anchor="end">TINYINT(1) =1</text>
+<text x="1486" y="501" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1506" y="501" font-size="10.5" fill="#0f172a">created_at</text>
+<text x="1754" y="501" font-size="9" fill="#64748b" text-anchor="end">DATETIME =CURRENT_TIMESTAMP</text>
+<text x="1486" y="517" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1506" y="517" font-size="10.5" fill="#0f172a">updated_at</text>
+<text x="1754" y="517" font-size="9" fill="#64748b" text-anchor="end">DATETIME</text>
+<rect x="1000" y="60" width="280" height="192" rx="6" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<rect x="1000" y="60" width="280" height="24" rx="6" fill="#0f766e"/>
+<rect x="1000" y="78" width="280" height="6" fill="#0f766e"/>
+<text x="1010" y="77" font-size="13" font-weight="bold" fill="#fff">conversations_lst_t</text>
+<text x="1006" y="97" font-size="10" font-weight="bold" fill="#b45309">PK</text>
+<text x="1026" y="97" font-size="10.5" fill="#0f172a">conversation_id</text>
+<text x="1274" y="97" font-size="9" fill="#64748b" text-anchor="end">BIGINT UNSIGNED</text>
+<text x="1006" y="113" font-size="10" font-weight="bold" fill="#be123c">FK</text>
+<text x="1026" y="113" font-size="10.5" fill="#0f172a">conversation_type_id</text>
+<text x="1274" y="113" font-size="9" fill="#64748b" text-anchor="end">INT UNSIGNED</text>
+<text x="1006" y="129" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1026" y="129" font-size="10.5" fill="#0f172a">title</text>
+<text x="1274" y="129" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(100) NULL</text>
+<text x="1006" y="145" font-size="10" font-weight="bold" fill="#be123c">FK</text>
+<text x="1026" y="145" font-size="10.5" fill="#0f172a">created_by</text>
+<text x="1274" y="145" font-size="9" fill="#64748b" text-anchor="end">BIGINT UNSIGNED</text>
+<text x="1006" y="161" font-size="10" font-weight="bold" fill="#0369a1">UQ</text>
+<text x="1026" y="161" font-size="10.5" fill="#0f172a">user_pair_key</text>
+<text x="1274" y="161" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(41) NULL</text>
+<text x="1006" y="177" font-size="10" font-weight="bold" fill="#be123c">FK</text>
+<text x="1026" y="177" font-size="10.5" fill="#0f172a">last_message_id</text>
+<text x="1274" y="177" font-size="9" fill="#64748b" text-anchor="end">BIGINT UNSIGNED NULL</text>
+<text x="1006" y="193" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1026" y="193" font-size="10.5" fill="#0f172a">last_message_at</text>
+<text x="1274" y="193" font-size="9" fill="#64748b" text-anchor="end">DATETIME(3) NULL</text>
+<text x="1006" y="209" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1026" y="209" font-size="10.5" fill="#0f172a">is_active</text>
+<text x="1274" y="209" font-size="9" fill="#64748b" text-anchor="end">TINYINT(1) =1</text>
+<text x="1006" y="225" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1026" y="225" font-size="10.5" fill="#0f172a">created_at</text>
+<text x="1274" y="225" font-size="9" fill="#64748b" text-anchor="end">DATETIME =CURRENT_TIMESTAMP</text>
+<text x="1006" y="241" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1026" y="241" font-size="10.5" fill="#0f172a">updated_at</text>
+<text x="1274" y="241" font-size="9" fill="#64748b" text-anchor="end">DATETIME</text>
+<rect x="520" y="60" width="280" height="208" rx="6" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<rect x="520" y="60" width="280" height="24" rx="6" fill="#0f766e"/>
+<rect x="520" y="78" width="280" height="6" fill="#0f766e"/>
+<text x="530" y="77" font-size="13" font-weight="bold" fill="#fff">conversation_members_t</text>
+<text x="526" y="97" font-size="10" font-weight="bold" fill="#b45309">PK</text>
+<text x="546" y="97" font-size="10.5" fill="#0f172a">conversation_member_id</text>
+<text x="794" y="97" font-size="9" fill="#64748b" text-anchor="end">BIGINT UNSIGNED</text>
+<text x="526" y="113" font-size="10" font-weight="bold" fill="#be123c">FK</text>
+<text x="546" y="113" font-size="10.5" fill="#0f172a">conversation_id</text>
+<text x="794" y="113" font-size="9" fill="#64748b" text-anchor="end">BIGINT UNSIGNED</text>
+<text x="526" y="129" font-size="10" font-weight="bold" fill="#be123c">FK</text>
+<text x="546" y="129" font-size="10.5" fill="#0f172a">user_id</text>
+<text x="794" y="129" font-size="9" fill="#64748b" text-anchor="end">BIGINT UNSIGNED</text>
+<text x="526" y="145" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="546" y="145" font-size="10.5" fill="#0f172a">member_role</text>
+<text x="794" y="145" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(20) ='MEMBER'</text>
+<text x="526" y="161" font-size="10" font-weight="bold" fill="#be123c">FK</text>
+<text x="546" y="161" font-size="10.5" fill="#0f172a">last_read_message_id</text>
+<text x="794" y="161" font-size="9" fill="#64748b" text-anchor="end">BIGINT UNSIGNED NULL</text>
+<text x="526" y="177" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="546" y="177" font-size="10.5" fill="#0f172a">joined_at</text>
+<text x="794" y="177" font-size="9" fill="#64748b" text-anchor="end">DATETIME =CURRENT_TIMESTAMP</text>
+<text x="526" y="193" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="546" y="193" font-size="10.5" fill="#0f172a">left_at</text>
+<text x="794" y="193" font-size="9" fill="#64748b" text-anchor="end">DATETIME NULL</text>
+<text x="526" y="209" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="546" y="209" font-size="10.5" fill="#0f172a">is_active</text>
+<text x="794" y="209" font-size="9" fill="#64748b" text-anchor="end">TINYINT(1) =1</text>
+<text x="526" y="225" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="546" y="225" font-size="10.5" fill="#0f172a">created_at</text>
+<text x="794" y="225" font-size="9" fill="#64748b" text-anchor="end">DATETIME =CURRENT_TIMESTAMP</text>
+<text x="526" y="241" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="546" y="241" font-size="10.5" fill="#0f172a">updated_at</text>
+<text x="794" y="241" font-size="9" fill="#64748b" text-anchor="end">DATETIME</text>
+<text x="526" y="257" font-size="10" font-weight="bold" fill="#0369a1">UQ</text>
+<text x="546" y="257" font-size="10.5" fill="#0f172a">(conversation_id, user_id)</text>
+<rect x="1000" y="400" width="280" height="256" rx="6" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<rect x="1000" y="400" width="280" height="24" rx="6" fill="#0f766e"/>
+<rect x="1000" y="418" width="280" height="6" fill="#0f766e"/>
+<text x="1010" y="417" font-size="13" font-weight="bold" fill="#fff">messages_lst_t</text>
+<text x="1006" y="437" font-size="10" font-weight="bold" fill="#b45309">PK</text>
+<text x="1026" y="437" font-size="10.5" fill="#0f172a">message_id</text>
+<text x="1274" y="437" font-size="9" fill="#64748b" text-anchor="end">BIGINT UNSIGNED</text>
+<text x="1006" y="453" font-size="10" font-weight="bold" fill="#be123c">FK</text>
+<text x="1026" y="453" font-size="10.5" fill="#0f172a">conversation_id</text>
+<text x="1274" y="453" font-size="9" fill="#64748b" text-anchor="end">BIGINT UNSIGNED</text>
+<text x="1006" y="469" font-size="10" font-weight="bold" fill="#be123c">FK</text>
+<text x="1026" y="469" font-size="10.5" fill="#0f172a">sender_id</text>
+<text x="1274" y="469" font-size="9" fill="#64748b" text-anchor="end">BIGINT UNSIGNED</text>
+<text x="1006" y="485" font-size="10" font-weight="bold" fill="#be123c">FK</text>
+<text x="1026" y="485" font-size="10.5" fill="#0f172a">message_type_id</text>
+<text x="1274" y="485" font-size="9" fill="#64748b" text-anchor="end">INT UNSIGNED =1</text>
+<text x="1006" y="501" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1026" y="501" font-size="10.5" fill="#0f172a">content</text>
+<text x="1274" y="501" font-size="9" fill="#64748b" text-anchor="end">TEXT NULL</text>
+<text x="1006" y="517" font-size="10" font-weight="bold" fill="#be123c">FK</text>
+<text x="1026" y="517" font-size="10.5" fill="#0f172a">attachment_file_id</text>
+<text x="1274" y="517" font-size="9" fill="#64748b" text-anchor="end">BIGINT UNSIGNED NULL</text>
+<text x="1006" y="533" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1026" y="533" font-size="10.5" fill="#0f172a">client_message_id</text>
+<text x="1274" y="533" font-size="9" fill="#64748b" text-anchor="end">CHAR(36) NULL</text>
+<text x="1006" y="549" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1026" y="549" font-size="10.5" fill="#0f172a">is_deleted</text>
+<text x="1274" y="549" font-size="9" fill="#64748b" text-anchor="end">TINYINT(1) =0</text>
+<text x="1006" y="565" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1026" y="565" font-size="10.5" fill="#0f172a">deleted_at</text>
+<text x="1274" y="565" font-size="9" fill="#64748b" text-anchor="end">DATETIME(3) NULL</text>
+<text x="1006" y="581" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1026" y="581" font-size="10.5" fill="#0f172a">is_active</text>
+<text x="1274" y="581" font-size="9" fill="#64748b" text-anchor="end">TINYINT(1) =1</text>
+<text x="1006" y="597" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1026" y="597" font-size="10.5" fill="#0f172a">created_at</text>
+<text x="1274" y="597" font-size="9" fill="#64748b" text-anchor="end">DATETIME(3)</text>
+<text x="1006" y="613" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1026" y="613" font-size="10.5" fill="#0f172a">updated_at</text>
+<text x="1274" y="613" font-size="9" fill="#64748b" text-anchor="end">DATETIME(3)</text>
+<text x="1006" y="629" font-size="10" font-weight="bold" fill="#0369a1">UQ</text>
+<text x="1026" y="629" font-size="10.5" fill="#0f172a">(sender_id, client_message_id)</text>
+<text x="1006" y="645" font-size="10" font-weight="bold" fill="#0369a1">IX</text>
+<text x="1026" y="645" font-size="10.5" fill="#0f172a">(conversation_id, created_at, message_id)</text>
+<rect x="520" y="400" width="280" height="192" rx="6" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<rect x="520" y="400" width="280" height="24" rx="6" fill="#0f766e"/>
+<rect x="520" y="418" width="280" height="6" fill="#0f766e"/>
+<text x="530" y="417" font-size="13" font-weight="bold" fill="#fff">message_receipts_t</text>
+<text x="526" y="437" font-size="10" font-weight="bold" fill="#b45309">PK</text>
+<text x="546" y="437" font-size="10.5" fill="#0f172a">message_receipt_id</text>
+<text x="794" y="437" font-size="9" fill="#64748b" text-anchor="end">BIGINT UNSIGNED</text>
+<text x="526" y="453" font-size="10" font-weight="bold" fill="#be123c">FK</text>
+<text x="546" y="453" font-size="10.5" fill="#0f172a">message_id</text>
+<text x="794" y="453" font-size="9" fill="#64748b" text-anchor="end">BIGINT UNSIGNED</text>
+<text x="526" y="469" font-size="10" font-weight="bold" fill="#be123c">FK</text>
+<text x="546" y="469" font-size="10.5" fill="#0f172a">user_id</text>
+<text x="794" y="469" font-size="9" fill="#64748b" text-anchor="end">BIGINT UNSIGNED</text>
+<text x="526" y="485" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="546" y="485" font-size="10.5" fill="#0f172a">delivered_at</text>
+<text x="794" y="485" font-size="9" fill="#64748b" text-anchor="end">DATETIME(3) NULL</text>
+<text x="526" y="501" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="546" y="501" font-size="10.5" fill="#0f172a">seen_at</text>
+<text x="794" y="501" font-size="9" fill="#64748b" text-anchor="end">DATETIME(3) NULL</text>
+<text x="526" y="517" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="546" y="517" font-size="10.5" fill="#0f172a">is_active</text>
+<text x="794" y="517" font-size="9" fill="#64748b" text-anchor="end">TINYINT(1) =1</text>
+<text x="526" y="533" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="546" y="533" font-size="10.5" fill="#0f172a">created_at</text>
+<text x="794" y="533" font-size="9" fill="#64748b" text-anchor="end">DATETIME(3)</text>
+<text x="526" y="549" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="546" y="549" font-size="10.5" fill="#0f172a">updated_at</text>
+<text x="794" y="549" font-size="9" fill="#64748b" text-anchor="end">DATETIME(3)</text>
+<text x="526" y="565" font-size="10" font-weight="bold" fill="#0369a1">UQ</text>
+<text x="546" y="565" font-size="10.5" fill="#0f172a">(message_id, user_id)</text>
+<text x="526" y="581" font-size="10" font-weight="bold" fill="#0369a1">IX</text>
+<text x="546" y="581" font-size="10.5" fill="#0f172a">(user_id, seen_at)</text>
+<rect x="40" y="400" width="280" height="160" rx="6" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<rect x="40" y="400" width="280" height="24" rx="6" fill="#0f766e"/>
+<rect x="40" y="418" width="280" height="6" fill="#0f766e"/>
+<text x="50" y="417" font-size="13" font-weight="bold" fill="#fff">user_blocks_t</text>
+<text x="46" y="437" font-size="10" font-weight="bold" fill="#b45309">PK</text>
+<text x="66" y="437" font-size="10.5" fill="#0f172a">block_id</text>
+<text x="314" y="437" font-size="9" fill="#64748b" text-anchor="end">BIGINT UNSIGNED</text>
+<text x="46" y="453" font-size="10" font-weight="bold" fill="#be123c">FK</text>
+<text x="66" y="453" font-size="10.5" fill="#0f172a">blocker_id</text>
+<text x="314" y="453" font-size="9" fill="#64748b" text-anchor="end">BIGINT UNSIGNED</text>
+<text x="46" y="469" font-size="10" font-weight="bold" fill="#be123c">FK</text>
+<text x="66" y="469" font-size="10.5" fill="#0f172a">blocked_id</text>
+<text x="314" y="469" font-size="9" fill="#64748b" text-anchor="end">BIGINT UNSIGNED</text>
+<text x="46" y="485" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="66" y="485" font-size="10.5" fill="#0f172a">is_active</text>
+<text x="314" y="485" font-size="9" fill="#64748b" text-anchor="end">TINYINT(1) =1</text>
+<text x="46" y="501" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="66" y="501" font-size="10.5" fill="#0f172a">created_at</text>
+<text x="314" y="501" font-size="9" fill="#64748b" text-anchor="end">DATETIME =CURRENT_TIMESTAMP</text>
+<text x="46" y="517" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="66" y="517" font-size="10.5" fill="#0f172a">updated_at</text>
+<text x="314" y="517" font-size="9" fill="#64748b" text-anchor="end">DATETIME</text>
+<text x="46" y="533" font-size="10" font-weight="bold" fill="#0369a1">UQ</text>
+<text x="66" y="533" font-size="10.5" fill="#0f172a">(blocker_id, blocked_id)</text>
+<text x="46" y="549" font-size="10" font-weight="bold" fill="#0369a1">CK</text>
+<text x="66" y="549" font-size="10.5" fill="#0f172a">blocker_id &lt;&gt; blocked_id</text>
+<rect x="1480" y="620" width="280" height="272" rx="6" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<rect x="1480" y="620" width="280" height="24" rx="6" fill="#475569"/>
+<rect x="1480" y="638" width="280" height="6" fill="#475569"/>
+<text x="1490" y="637" font-size="13" font-weight="bold" fill="#fff">uploaded_files_lst_t</text>
+<text x="1486" y="657" font-size="10" font-weight="bold" fill="#b45309">PK</text>
+<text x="1506" y="657" font-size="10.5" fill="#0f172a">file_id</text>
+<text x="1754" y="657" font-size="9" fill="#64748b" text-anchor="end">BIGINT UNSIGNED</text>
+<text x="1486" y="673" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1506" y="673" font-size="10.5" fill="#0f172a">original_nm</text>
+<text x="1754" y="673" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(255)</text>
+<text x="1486" y="689" font-size="10" font-weight="bold" fill="#0369a1">UQ</text>
+<text x="1506" y="689" font-size="10.5" fill="#0f172a">stored_nm</text>
+<text x="1754" y="689" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(255)</text>
+<text x="1486" y="705" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1506" y="705" font-size="10.5" fill="#0f172a">file_path</text>
+<text x="1754" y="705" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(500)</text>
+<text x="1486" y="721" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1506" y="721" font-size="10.5" fill="#0f172a">extension</text>
+<text x="1754" y="721" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(20) NULL</text>
+<text x="1486" y="737" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1506" y="737" font-size="10.5" fill="#0f172a">mime_type</text>
+<text x="1754" y="737" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(100)</text>
+<text x="1486" y="753" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1506" y="753" font-size="10.5" fill="#0f172a">size_bytes</text>
+<text x="1754" y="753" font-size="9" fill="#64748b" text-anchor="end">BIGINT UNSIGNED</text>
+<text x="1486" y="769" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1506" y="769" font-size="10.5" fill="#0f172a">checksum_sha256</text>
+<text x="1754" y="769" font-size="9" fill="#64748b" text-anchor="end">CHAR(64) NULL</text>
+<text x="1486" y="785" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1506" y="785" font-size="10.5" fill="#0f172a">entity_type</text>
+<text x="1754" y="785" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(50) NULL</text>
+<text x="1486" y="801" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1506" y="801" font-size="10.5" fill="#0f172a">entity_id</text>
+<text x="1754" y="801" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(64) NULL</text>
+<text x="1486" y="817" font-size="10" font-weight="bold" fill="#be123c">FK</text>
+<text x="1506" y="817" font-size="10.5" fill="#0f172a">uploaded_by</text>
+<text x="1754" y="817" font-size="9" fill="#64748b" text-anchor="end">BIGINT UNSIGNED</text>
+<text x="1486" y="833" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1506" y="833" font-size="10.5" fill="#0f172a">is_active</text>
+<text x="1754" y="833" font-size="9" fill="#64748b" text-anchor="end">TINYINT(1) =1</text>
+<text x="1486" y="849" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1506" y="849" font-size="10.5" fill="#0f172a">created_at</text>
+<text x="1754" y="849" font-size="9" fill="#64748b" text-anchor="end">DATETIME =CURRENT_TIMESTAMP</text>
+<text x="1486" y="865" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1506" y="865" font-size="10.5" fill="#0f172a">updated_at</text>
+<text x="1754" y="865" font-size="9" fill="#64748b" text-anchor="end">DATETIME</text>
+<text x="1486" y="881" font-size="10" font-weight="bold" fill="#0369a1">IX</text>
+<text x="1506" y="881" font-size="10.5" fill="#0f172a">(entity_type, entity_id, is_active)</text>
+<rect x="40" y="920" width="280" height="208" rx="6" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<rect x="40" y="920" width="280" height="24" rx="6" fill="#475569"/>
+<rect x="40" y="938" width="280" height="6" fill="#475569"/>
+<text x="50" y="937" font-size="13" font-weight="bold" fill="#fff">user_sessions_t</text>
+<text x="46" y="957" font-size="10" font-weight="bold" fill="#b45309">PK</text>
+<text x="66" y="957" font-size="10.5" fill="#0f172a">id</text>
+<text x="314" y="957" font-size="9" fill="#64748b" text-anchor="end">BIGINT UNSIGNED</text>
+<text x="46" y="973" font-size="10" font-weight="bold" fill="#0369a1">UQ</text>
+<text x="66" y="973" font-size="10.5" fill="#0f172a">session_id</text>
+<text x="314" y="973" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(128)</text>
+<text x="46" y="989" font-size="10" font-weight="bold" fill="#be123c">FK</text>
+<text x="66" y="989" font-size="10.5" fill="#0f172a">user_id</text>
+<text x="314" y="989" font-size="9" fill="#64748b" text-anchor="end">BIGINT UNSIGNED</text>
+<text x="46" y="1005" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="66" y="1005" font-size="10.5" fill="#0f172a">login_timestamp</text>
+<text x="314" y="1005" font-size="9" fill="#64748b" text-anchor="end">DATETIME =CURRENT_TIMESTAMP</text>
+<text x="46" y="1021" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="66" y="1021" font-size="10.5" fill="#0f172a">last_activity_timestamp</text>
+<text x="314" y="1021" font-size="9" fill="#64748b" text-anchor="end">DATETIME =CURRENT_TIMESTAMP</text>
+<text x="46" y="1037" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="66" y="1037" font-size="10.5" fill="#0f172a">expires_at</text>
+<text x="314" y="1037" font-size="9" fill="#64748b" text-anchor="end">DATETIME</text>
+<text x="46" y="1053" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="66" y="1053" font-size="10.5" fill="#0f172a">destroyed_at</text>
+<text x="314" y="1053" font-size="9" fill="#64748b" text-anchor="end">DATETIME NULL</text>
+<text x="46" y="1069" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="66" y="1069" font-size="10.5" fill="#0f172a">is_active</text>
+<text x="314" y="1069" font-size="9" fill="#64748b" text-anchor="end">TINYINT(1) =1</text>
+<text x="46" y="1085" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="66" y="1085" font-size="10.5" fill="#0f172a">created_at</text>
+<text x="314" y="1085" font-size="9" fill="#64748b" text-anchor="end">DATETIME =CURRENT_TIMESTAMP</text>
+<text x="46" y="1101" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="66" y="1101" font-size="10.5" fill="#0f172a">updated_at</text>
+<text x="314" y="1101" font-size="9" fill="#64748b" text-anchor="end">DATETIME</text>
+<text x="46" y="1117" font-size="10" font-weight="bold" fill="#0369a1">IX</text>
+<text x="66" y="1117" font-size="10.5" fill="#0f172a">(user_id, is_active)</text>
+<rect x="340" y="920" width="280" height="192" rx="6" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<rect x="340" y="920" width="280" height="24" rx="6" fill="#475569"/>
+<rect x="340" y="938" width="280" height="6" fill="#475569"/>
+<text x="350" y="937" font-size="13" font-weight="bold" fill="#fff">user_login_history_t</text>
+<text x="346" y="957" font-size="10" font-weight="bold" fill="#b45309">PK</text>
+<text x="366" y="957" font-size="10.5" fill="#0f172a">login_history_id</text>
+<text x="614" y="957" font-size="9" fill="#64748b" text-anchor="end">BIGINT UNSIGNED</text>
+<text x="346" y="973" font-size="10" font-weight="bold" fill="#be123c">FK</text>
+<text x="366" y="973" font-size="10.5" fill="#0f172a">user_id</text>
+<text x="614" y="973" font-size="9" fill="#64748b" text-anchor="end">BIGINT UNSIGNED</text>
+<text x="346" y="989" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="366" y="989" font-size="10.5" fill="#0f172a">login_timestamp</text>
+<text x="614" y="989" font-size="9" fill="#64748b" text-anchor="end">DATETIME =CURRENT_TIMESTAMP</text>
+<text x="346" y="1005" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="366" y="1005" font-size="10.5" fill="#0f172a">ip_address</text>
+<text x="614" y="1005" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(45) NULL</text>
+<text x="346" y="1021" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="366" y="1021" font-size="10.5" fill="#0f172a">device_info</text>
+<text x="614" y="1021" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(1000) NULL</text>
+<text x="346" y="1037" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="366" y="1037" font-size="10.5" fill="#0f172a">remarks</text>
+<text x="614" y="1037" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(255) NULL</text>
+<text x="346" y="1053" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="366" y="1053" font-size="10.5" fill="#0f172a">is_active</text>
+<text x="614" y="1053" font-size="9" fill="#64748b" text-anchor="end">TINYINT(1) =1</text>
+<text x="346" y="1069" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="366" y="1069" font-size="10.5" fill="#0f172a">created_at</text>
+<text x="614" y="1069" font-size="9" fill="#64748b" text-anchor="end">DATETIME =CURRENT_TIMESTAMP</text>
+<text x="346" y="1085" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="366" y="1085" font-size="10.5" fill="#0f172a">updated_at</text>
+<text x="614" y="1085" font-size="9" fill="#64748b" text-anchor="end">DATETIME</text>
+<text x="346" y="1101" font-size="10" font-weight="bold" fill="#0369a1">IX</text>
+<text x="366" y="1101" font-size="10.5" fill="#0f172a">(user_id, login_timestamp)</text>
+<rect x="640" y="920" width="280" height="128" rx="6" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<rect x="640" y="920" width="280" height="24" rx="6" fill="#475569"/>
+<rect x="640" y="938" width="280" height="6" fill="#475569"/>
+<text x="650" y="937" font-size="13" font-weight="bold" fill="#fff">sessions</text>
+<text x="646" y="957" font-size="10" font-weight="bold" fill="#b45309">PK</text>
+<text x="666" y="957" font-size="10.5" fill="#0f172a">session_id</text>
+<text x="914" y="957" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(128)</text>
+<text x="646" y="973" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="666" y="973" font-size="10.5" fill="#0f172a">expires</text>
+<text x="914" y="973" font-size="9" fill="#64748b" text-anchor="end">INT UNSIGNED</text>
+<text x="646" y="989" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="666" y="989" font-size="10.5" fill="#0f172a">data</text>
+<text x="914" y="989" font-size="9" fill="#64748b" text-anchor="end">MEDIUMTEXT NULL</text>
+<text x="646" y="1005" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="666" y="1005" font-size="10.5" fill="#0f172a">is_active</text>
+<text x="914" y="1005" font-size="9" fill="#64748b" text-anchor="end">TINYINT(1) =1</text>
+<text x="646" y="1021" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="666" y="1021" font-size="10.5" fill="#0f172a">created_at</text>
+<text x="914" y="1021" font-size="9" fill="#64748b" text-anchor="end">DATETIME =CURRENT_TIMESTAMP</text>
+<text x="646" y="1037" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="666" y="1037" font-size="10.5" fill="#0f172a">updated_at</text>
+<text x="914" y="1037" font-size="9" fill="#64748b" text-anchor="end">DATETIME</text>
+<rect x="940" y="920" width="280" height="304" rx="6" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<rect x="940" y="920" width="280" height="24" rx="6" fill="#475569"/>
+<rect x="940" y="938" width="280" height="6" fill="#475569"/>
+<text x="950" y="937" font-size="13" font-weight="bold" fill="#fff">email_audit_logs_t</text>
+<text x="946" y="957" font-size="10" font-weight="bold" fill="#b45309">PK</text>
+<text x="966" y="957" font-size="10.5" fill="#0f172a">email_audit_id</text>
+<text x="1214" y="957" font-size="9" fill="#64748b" text-anchor="end">BIGINT UNSIGNED</text>
+<text x="946" y="973" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="966" y="973" font-size="10.5" fill="#0f172a">recipient_email</text>
+<text x="1214" y="973" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(255)</text>
+<text x="946" y="989" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="966" y="989" font-size="10.5" fill="#0f172a">email_subject</text>
+<text x="1214" y="989" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(255) NULL</text>
+<text x="946" y="1005" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="966" y="1005" font-size="10.5" fill="#0f172a">email_body</text>
+<text x="1214" y="1005" font-size="9" fill="#64748b" text-anchor="end">TEXT NULL</text>
+<text x="946" y="1021" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="966" y="1021" font-size="10.5" fill="#0f172a">email_status</text>
+<text x="1214" y="1021" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(20)</text>
+<text x="946" y="1037" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="966" y="1037" font-size="10.5" fill="#0f172a">message_id</text>
+<text x="1214" y="1037" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(255) NULL</text>
+<text x="946" y="1053" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="966" y="1053" font-size="10.5" fill="#0f172a">response_data</text>
+<text x="1214" y="1053" font-size="9" fill="#64748b" text-anchor="end">TEXT NULL</text>
+<text x="946" y="1069" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="966" y="1069" font-size="10.5" fill="#0f172a">expires_at</text>
+<text x="1214" y="1069" font-size="9" fill="#64748b" text-anchor="end">DATETIME NULL</text>
+<text x="946" y="1085" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="966" y="1085" font-size="10.5" fill="#0f172a">verify_key</text>
+<text x="1214" y="1085" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(255) NULL</text>
+<text x="946" y="1101" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="966" y="1101" font-size="10.5" fill="#0f172a">is_used</text>
+<text x="1214" y="1101" font-size="9" fill="#64748b" text-anchor="end">TINYINT(1) NULL</text>
+<text x="946" y="1117" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="966" y="1117" font-size="10.5" fill="#0f172a">used_by</text>
+<text x="1214" y="1117" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(255) NULL</text>
+<text x="946" y="1133" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="966" y="1133" font-size="10.5" fill="#0f172a">used_for</text>
+<text x="1214" y="1133" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(50) NULL</text>
+<text x="946" y="1149" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="966" y="1149" font-size="10.5" fill="#0f172a">create_user</text>
+<text x="1214" y="1149" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(255) NULL</text>
+<text x="946" y="1165" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="966" y="1165" font-size="10.5" fill="#0f172a">is_active</text>
+<text x="1214" y="1165" font-size="9" fill="#64748b" text-anchor="end">TINYINT(1) =1</text>
+<text x="946" y="1181" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="966" y="1181" font-size="10.5" fill="#0f172a">created_at</text>
+<text x="1214" y="1181" font-size="9" fill="#64748b" text-anchor="end">DATETIME =CURRENT_TIMESTAMP</text>
+<text x="946" y="1197" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="966" y="1197" font-size="10.5" fill="#0f172a">updated_at</text>
+<text x="1214" y="1197" font-size="9" fill="#64748b" text-anchor="end">DATETIME</text>
+<text x="946" y="1213" font-size="10" font-weight="bold" fill="#0369a1">IX</text>
+<text x="966" y="1213" font-size="10.5" fill="#0f172a">(recipient_email, used_for, email_audit_id)</text>
+<rect x="1240" y="920" width="280" height="336" rx="6" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<rect x="1240" y="920" width="280" height="24" rx="6" fill="#475569"/>
+<rect x="1240" y="938" width="280" height="6" fill="#475569"/>
+<text x="1250" y="937" font-size="13" font-weight="bold" fill="#fff">audit_logs_t</text>
+<text x="1246" y="957" font-size="10" font-weight="bold" fill="#b45309">PK</text>
+<text x="1266" y="957" font-size="10.5" fill="#0f172a">audit_log_id</text>
+<text x="1514" y="957" font-size="9" fill="#64748b" text-anchor="end">BIGINT UNSIGNED</text>
+<text x="1246" y="973" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1266" y="973" font-size="10.5" fill="#0f172a">request_id</text>
+<text x="1514" y="973" font-size="9" fill="#64748b" text-anchor="end">CHAR(36) NULL</text>
+<text x="1246" y="989" font-size="10" font-weight="bold" fill="#be123c">FK</text>
+<text x="1266" y="989" font-size="10.5" fill="#0f172a">user_id</text>
+<text x="1514" y="989" font-size="9" fill="#64748b" text-anchor="end">BIGINT UNSIGNED NULL</text>
+<text x="1246" y="1005" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1266" y="1005" font-size="10.5" fill="#0f172a">action</text>
+<text x="1514" y="1005" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(50)</text>
+<text x="1246" y="1021" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1266" y="1021" font-size="10.5" fill="#0f172a">module</text>
+<text x="1514" y="1021" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(50) NULL</text>
+<text x="1246" y="1037" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1266" y="1037" font-size="10.5" fill="#0f172a">entity_type</text>
+<text x="1514" y="1037" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(50) NULL</text>
+<text x="1246" y="1053" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1266" y="1053" font-size="10.5" fill="#0f172a">entity_id</text>
+<text x="1514" y="1053" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(64) NULL</text>
+<text x="1246" y="1069" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1266" y="1069" font-size="10.5" fill="#0f172a">status</text>
+<text x="1514" y="1069" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(20) NULL</text>
+<text x="1246" y="1085" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1266" y="1085" font-size="10.5" fill="#0f172a">status_key</text>
+<text x="1514" y="1085" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(50) NULL</text>
+<text x="1246" y="1101" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1266" y="1101" font-size="10.5" fill="#0f172a">description</text>
+<text x="1514" y="1101" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(1000) NULL</text>
+<text x="1246" y="1117" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1266" y="1117" font-size="10.5" fill="#0f172a">old_values</text>
+<text x="1514" y="1117" font-size="9" fill="#64748b" text-anchor="end">JSON NULL</text>
+<text x="1246" y="1133" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1266" y="1133" font-size="10.5" fill="#0f172a">new_values</text>
+<text x="1514" y="1133" font-size="9" fill="#64748b" text-anchor="end">JSON NULL</text>
+<text x="1246" y="1149" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1266" y="1149" font-size="10.5" fill="#0f172a">error_message</text>
+<text x="1514" y="1149" font-size="9" fill="#64748b" text-anchor="end">TEXT NULL</text>
+<text x="1246" y="1165" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1266" y="1165" font-size="10.5" fill="#0f172a">ip_address</text>
+<text x="1514" y="1165" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(45) NULL</text>
+<text x="1246" y="1181" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1266" y="1181" font-size="10.5" fill="#0f172a">user_agent</text>
+<text x="1514" y="1181" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(500) NULL</text>
+<text x="1246" y="1197" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1266" y="1197" font-size="10.5" fill="#0f172a">is_active</text>
+<text x="1514" y="1197" font-size="9" fill="#64748b" text-anchor="end">TINYINT(1) =1</text>
+<text x="1246" y="1213" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1266" y="1213" font-size="10.5" fill="#0f172a">created_at</text>
+<text x="1514" y="1213" font-size="9" fill="#64748b" text-anchor="end">DATETIME =CURRENT_TIMESTAMP</text>
+<text x="1246" y="1229" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1266" y="1229" font-size="10.5" fill="#0f172a">updated_at</text>
+<text x="1514" y="1229" font-size="9" fill="#64748b" text-anchor="end">DATETIME</text>
+<text x="1246" y="1245" font-size="10" font-weight="bold" fill="#0369a1">IX</text>
+<text x="1266" y="1245" font-size="10.5" fill="#0f172a">(user_id, created_at)</text>
+</svg>
