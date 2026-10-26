@@ -22,3 +22,5 @@ certs/
 documents/database/databump-v1.sql
 # filled copies of sql scripts carry real passwords
 documents/database/*.local.sql
+# screenshots taken while testing the ui stay local
+documents/screens/

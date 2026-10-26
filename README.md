@@ -23,7 +23,7 @@ chat-app/
   tests/               integration suite (npm test) and tests/tools/peer.js
   mobile/              react native (expo) app, the client, see section 6
   server/              server application code (routes, controllers, services, models, ...), see section 2
-  documents/           chat-app-erd-v1.png (add the SRS pdf here)
+  documents/           database design: schema, ERD, Workbench models and their generator (add the SRS pdf here)
 ```
 
 ## 2. Server
@@ -312,10 +312,9 @@ its pages. Confirmations and alerts are centred dialogs; toasts appear at the to
 | `src/components/` | `ui.js` kit (Screen, Button, TextField, Fab, Banner, EmptyState, Avatar, Badge, the centred `Dialog` used for every confirmation and alert, `PopupMenu`, and `KeyboardAvoider` / `FormScroll`, which keep the focused field and the chat composer above the on-screen keyboard; Android draws edge-to-edge and no longer makes room by itself), `OtpInput`, `VerifyOtp`, `UpdatePassword`, `MessageBubble`, `ConversationRow` |
 
 Behaviour worth knowing: a sent message appears at once with a clock, then one tick (stored), two
-ticks (delivered), blue ticks (seen); a failed send is tappable to retry or discard. Opening a chat
+ticks (delivered), green ticks (seen); a failed send is tappable to retry or discard. Opening a chat
 marks it seen; an incoming message in an open chat is acknowledged as delivered and seen in one
-go. When the socket is down the app sends through REST and a banner says so. Screenshots of both
-themes are in `documents/screens/`.
+go. When the socket is down the app sends through REST and a banner says so.
 
 ## 7. Still open
 
