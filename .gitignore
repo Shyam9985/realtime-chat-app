@@ -24,3 +24,5 @@ documents/database/databump-v1.sql
 documents/database/*.local.sql
 # screenshots taken while testing the ui stay local
 documents/screens/
+# browser-automation scratch output
+.playwright-mcp/
