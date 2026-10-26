@@ -166,7 +166,7 @@ npm start                     # http://localhost:4901
 
 cd mobile
 npm install
-copy .env.example .env        # EXPO_PUBLIC_API_URL=http://localhost:4200 (lan ip on a device)
+copy .env.example .env        # EXPO_PUBLIC_API_URL=http://localhost:4200 (keep it; a phone finds this computer itself)
 npx expo start                # android: press a, or scan with Expo Go; w for the browser build
 ```
 
@@ -284,13 +284,17 @@ the send rate limit. It creates its own users and removes everything it wrote.
 ```
 cd mobile
 npm install
-copy .env.example .env          # EXPO_PUBLIC_API_URL=http://localhost:4200 (lan ip on a device)
+copy .env.example .env          # EXPO_PUBLIC_API_URL=http://localhost:4200 (keep it; a phone finds this computer itself)
 npx expo start                  # android: press a, or scan with Expo Go
 npx expo start --web            # browser build on http://localhost:8081, used for ui testing
 ```
 
 Expo SDK 58 wants Node 22.13 or newer; it runs on Node 20 with a warning. The browser build
 (`npx expo start --web`, port 8081) needs that origin in the server's `CLIENT_ORIGINS`; native builds do not.
+
+On a phone, Expo Go must be on the same Wi-Fi as the computer, and Windows must let Node through the firewall.
+In development the app replaces `localhost` in `EXPO_PUBLIC_API_URL` with the computer address Expo Go loaded it from
+(`src/config.js`) and logs the server it uses in the `expo start` terminal; a real server url is used as it is.
 
 The data layer (`store/`, `services/`, `utils/` and the contexts) is the React web client's code, ported when
 that client was removed, so behaviour and messages are unchanged; the screens are the native counterparts of
