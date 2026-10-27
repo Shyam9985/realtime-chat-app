@@ -7,9 +7,9 @@ exports.signUp = async (data, user) => {
     log('in signUp');
 
     // only the hash and salt are stored, never the password itself
-    const qry = 'insert into users_lst_t (user_nm , first_nm , last_nm, mobile_no, email, password_hash, password_salt)values(?,?,?,?,?,?,?)';
+    const qry = 'insert into users_lst_t (user_nm , first_nm , last_nm, mobile_no, date_of_birth, email, password_hash, password_salt)values(?,?,?,?,?,?,?,?)';
 
-    return dbutils.executeQuery(qry, [data.email, data.fst_nm, data.lst_nm || null, data.mobile || null, data.email, data.passwordHash, data.saltKey], 'sign-up');
+    return dbutils.executeQuery(qry, [data.email, data.fst_nm, data.lst_nm || null, data.mobile || null, data.date_of_birth.trim(), data.email, data.passwordHash, data.saltKey], 'sign-up');
 }
 
 // retrieves the user data

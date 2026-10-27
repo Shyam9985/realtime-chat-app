@@ -6,12 +6,13 @@ import { useChat } from '../contexts/ChatContext';
 import { useToast } from '../contexts/MessageContext';
 import { Screen, EmptyState, Button, Divider, Banner, Fab, KeyboardAvoider, ConversationListSkeleton, IconButton, PopupMenu, Dialog, SwitchRow, webNoOutline } from '../components/ui';
 import { ConversationRow } from '../components/ConversationRow';
-import { fullName } from '../utils/chatFormat';
+import { fullName, isGroup } from '../utils/chatFormat';
 
 const FILTERS = [
   { key: 'all', label: 'All', empty: 'No chats yet' },
   { key: 'unread', label: 'Unread', empty: 'No unread chats' },
   { key: 'pinned', label: 'Pinned', empty: 'No pinned chats' },
+  { key: 'groups', label: 'Groups', empty: 'No groups yet' },
 ];
 
 const titleOf = (c) => c.title || fullName(c.other_user);
@@ -39,7 +40,7 @@ export function ChatListView({ navigation, archived = false }) {
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return inSection.filter((x) => (filter === 'unread' ? x.unread_count > 0 : filter === 'pinned' ? x.is_pinned : true))
+    return inSection.filter((x) => (filter === 'unread' ? x.unread_count > 0 : filter === 'pinned' ? x.is_pinned : filter === 'groups' ? isGroup(x) : true))
       .filter((x) => !q || titleOf(x).toLowerCase().includes(q) || (x.last_message?.content || '').toLowerCase().includes(q));
   }, [inSection, query, filter]);
 
@@ -116,7 +117,7 @@ export function ChatListView({ navigation, archived = false }) {
     ? <EmptyState icon="search-outline" title="No chats match" subtitle={`Nothing matched “${query.trim()}”.`} />
     : archived ? <EmptyState icon="archive-outline" title="No archived chats" subtitle="Long press a chat and turn on Archive to move it here." />
       : filter !== 'all' ? <EmptyState icon="filter-outline" title={FILTERS.find((f) => f.key === filter).empty} action={<Button title="Show all chats" variant="secondary" onPress={() => setFilter('all')} />} />
-        : <EmptyState title="No conversations yet" subtitle="Tap the green button to find a person by name or email and start chatting." />;
+        : <EmptyState title="No conversations yet" subtitle="Tap the green button to find a person by name or email and start chatting, or to start a group." />;
 
   return (
     <Screen>
@@ -130,7 +131,8 @@ export function ChatListView({ navigation, archived = false }) {
             data={visible}
             keyExtractor={(x) => String(x.conversation_id)}
             renderItem={({ item }) => <ConversationRow conversation={item} myId={myId} onPress={() => openChat(item)} onLongPress={() => setOptionsFor(item.conversation_id)}
-              onAvatarPress={item.other_user ? () => navigation.navigate('ContactInfo', { userId: item.other_user.user_id }) : undefined} />}
+              onAvatarPress={isGroup(item) ? () => navigation.navigate('GroupInfo', { conversationId: item.conversation_id })
+                : item.other_user ? () => navigation.navigate('ContactInfo', { userId: item.other_user.user_id }) : undefined} />}
             ItemSeparatorComponent={() => <Divider inset={82} />}
             ListHeaderComponent={header}
             ListEmptyComponent={empty}

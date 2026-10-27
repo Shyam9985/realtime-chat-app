@@ -56,7 +56,7 @@ exports.createSrvc = async (userId, conversationIdRaw, body = {}) => {
     const content = messagesService.validateContent(body.content);
     const sendAt = parseSendAt(body.send_at);
     await conversationsService.assertMemberSrvc(conversationId, userId);
-    const replyToMessageId = await messagesService.validateReplyTarget(conversationId, body.reply_to_message_id);
+    const replyToMessageId = await messagesService.validateReplyTarget(conversationId, body.reply_to_message_id, userId);
 
     const result = await scheduledMdl.create({ conversationId, senderId: userId, content, replyToMessageId, sendAt });
     const [row] = await scheduledMdl.getById(result.insertId);

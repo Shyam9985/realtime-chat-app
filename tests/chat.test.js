@@ -31,7 +31,7 @@ test('health reports the database as up', async () => {
 });
 
 test('AT-001 duplicate registration is rejected', async () => {
-    const res = await h.api(app.baseUrl).post('/auth/signup', { email: A.email, password: A.password, fst_nm: 'Dup' });
+    const res = await h.api(app.baseUrl).post('/auth/signup', { email: A.email, password: A.password, fst_nm: 'Dup', date_of_birth: '1995-05-15' });
     assert.equal(res.status, 409);
     assert.equal(res.body.statusKey, 'DUPLICATE_RECORD');
 });

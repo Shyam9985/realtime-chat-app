@@ -86,14 +86,15 @@ All under `/apiv1`. Rate limits are per user or IP.
 
 | Method and path | Auth | Purpose |
 |---|---|---|
-| `POST /auth/signup` | no | create account: email, password, first name required, last name and mobile optional |
+| `POST /auth/signup` | no | create account: email, password, first name and `date_of_birth` (`YYYY-MM-DD`, at least `SIGNUP_MIN_AGE` years ago) required, last name and mobile optional |
 | `POST /auth/login` | no | email + password; returns the user object and the JWT in the `access-token` header; sets the session cookie |
 | `POST /auth/logout` | cookie | destroys the express session and expires the stored session row |
 | `POST /auth/forgot-password` | no | emails a 6-digit OTP, valid 5 minutes |
 | `POST /auth/email/verify-otp` | no | checks `email`, `otp`, `message_key` |
 | `POST /auth/update-password` | no | new password after a verified OTP (`otpKey`) |
 | `GET /auth/reset-password/send-email` | yes | OTP mail for a logged-in password change |
-| `GET /profile` | yes | fresh user object for the logged-in user plus `profile_photo` |
+| `GET /profile` | yes | fresh user object for the logged-in user plus `profile_photo` and `date_of_birth` (private: never in the token or on the public profile) |
+| `PATCH /profile` | yes | edit own `fst_nm`, `lst_nm`, `mobile`, `date_of_birth` with the sign-up rules; a blank last name or mobile clears it; the email is not editable. One-to-one chats that still show the old name follow the new one |
 | `POST /files/upload` | yes | raw request body is the file; name in `x-file-name`, type in `content-type`; streams to disk, records the row, repoints the user's photo |
 | `GET /files/profile-photo` | yes | streams the current photo |
 
@@ -115,12 +116,13 @@ All under `/apiv1`. Rate limits are per user or IP.
 The schema lives in `documents/database/`: `schema-v1.sql` (the DDL plus master seeds, idempotent),
 `chat_application_model_v2.mwb` (the Workbench model) and `chat-app-erd-v2.png` (the diagram). All
 three are generated from one definition in `documents/database/tools/gen_schema.py`, so change the
-schema there, run the script, and screenshot the svg for the png rather than editing a table by hand. Every table has `is_active`, `created_at` and `updated_at` with defaults;
+schema there, run the script, and screenshot the svg for the png rather than editing a table by hand. An existing database
+is upgraded with `documents/database/migration-v3.sql` (group chats and date of birth; additive only). Every table has `is_active`, `created_at` and `updated_at` with defaults;
 ids are `BIGINT UNSIGNED`; engine InnoDB, charset `utf8mb4_0900_ai_ci`.
 
 | Table | Purpose |
 |---|---|
-| `users_lst_t` | accounts; `user_nm` holds the login id (the email), plus lock columns and `profile_photo_url` |
+| `users_lst_t` | accounts; `user_nm` holds the login id (the email), plus lock columns, `profile_photo_url` and `date_of_birth` |
 | `user_sessions_t` | app sessions issued at login (`session_id`, `expires_at`, `destroyed_at`) |
 | `user_login_history_t` | ip and device per login |
 | `sessions` | express-mysql-session store; library owned column names |
@@ -129,10 +131,10 @@ ids are `BIGINT UNSIGNED`; engine InnoDB, charset `utf8mb4_0900_ai_ci`.
 | `uploaded_files_lst_t` | files saved by the upload endpoint |
 | `conversations_type_master_t` | seeded: `ONE_TO_ONE`, `GROUP` |
 | `message_type_master_t` | seeded: `TEXT`, `EMOJI`, `IMAGE`, `VIDEO`, `AUDIO`, `FILE`, `SYSTEM` |
-| `conversations_lst_t` | one row per chat; `user_pair_key` (`lowId:highId`) is unique so a pair has one direct chat; `last_message_id` / `last_message_at` denormalised for the list |
-| `conversation_members_t` | membership with `member_role`, `last_read_message_id` for unread counts, unique per (conversation, user) |
-| `messages_lst_t` | `content`, `message_type_id`, optional `attachment_file_id`, `client_message_id` unique per sender for idempotent sends, `is_deleted` / `deleted_at`; indexed on (`conversation_id`, `created_at`, `message_id`) for keyset paging |
-| `message_receipts_t` | `delivered_at` / `seen_at` per recipient per message |
+| `conversations_lst_t` | one row per chat; `user_pair_key` (`lowId:highId`) is unique so a pair has one direct chat; a group's shared `title` and `description`; `last_message_id` / `last_message_at` for the group as a whole |
+| `conversation_members_t` | membership with `member_role` (`ADMIN` / `MEMBER`; a group can have several admins), `joined_at` / `left_at` (a member who exits keeps the row, read-only), `last_read_message_id` for unread counts, `last_message_id` (the newest message this member can see: their list preview and order), unique per (conversation, user) |
+| `messages_lst_t` | `content`, `message_type_id`, optional `attachment_file_id`, `client_message_id` unique per sender for idempotent sends, `is_deleted` / `deleted_at`; group notices are `SYSTEM` messages with `system_event` and `system_target_user_id`; indexed on (`conversation_id`, `created_at`, `message_id`) for keyset paging |
+| `message_receipts_t` | `delivered_at` / `seen_at` per recipient per message; `excluded_at` when the recipient left the group before seeing it (ticks stop waiting for them) |
 | `user_blocks_t` | blocker to blocked, unique per pair; unblock sets `is_active = 0` |
 
 Apply or re-apply with:
@@ -151,6 +153,8 @@ mysql -u chatapp_admin -p chat_application < documents/database/schema-v1.sql
 | `EXPRESS_SECRET`, `EXPRESS_SESSION_EXPIRES` | session cookie signing key and lifetime in ms |
 | `DB_HOST`, `DB_PORT`, `DB_NAME` | MySQL |
 | `ADMIN_USER/PASSWORD`, `CHAT_USER/PASSWORD` | the two pool logins, created by `documents/database/create-app-users.sql` |
+| `GROUP_MAX_MEMBERS` | optional; most people in a group, the creator included (default 100) |
+| `SIGNUP_MIN_AGE` | optional; youngest age allowed to sign up (default 13) |
 | `REDIS_URL`, `REDIS_USERNAME`, `REDIS_PASSWORD` | Redis; username and password blank for a local instance |
 | `EMAIL_USER`, `EMAIL_PASSWORD` | Gmail SMTP login for OTP mails |
 | `APP_NAME` | name shown in outgoing mails |
@@ -187,10 +191,18 @@ rate limiter falls back to memory when it is down.
 
 ## 5. Chat features (SRS v1.1)
 
-Implemented end to end: user discovery, one-to-one conversations, real-time text messages with
-delivered and seen receipts, offline recovery, directional blocking, delete for everyone within 15
-minutes, keyset history paging. Group chat, file and media messages are out of scope for now (the
-schema already allows them).
+Implemented end to end: user discovery, one-to-one conversations and group chats, real-time text
+messages with delivered and seen receipts, offline recovery, directional blocking, delete for
+everyone within 15 minutes, keyset history paging. File and media messages are out of scope for now
+(the schema already allows them).
+
+Groups: the creator is the first admin and a group can have several. Only admins add or remove
+people, make or dismiss admins, and change the shared name and description; any member can exit.
+A group always keeps an admin while it has members: when the last one exits, the member who has been
+in it longest takes over. Every change is a notice in the chat (a `SYSTEM` message: the sender is
+who did it, `system_target_user_id` who it happened to) and a `group:updated` push. Someone who exits
+or is removed keeps reading what they received, read-only, and can then delete the group from their
+list; adding them back reopens their row.
 
 ### 5.1 Server layout
 
@@ -198,8 +210,8 @@ schema already allows them).
 |---|---|---|
 | routes | `usersRtr`, `conversationsRtr`, `messagesRtr`, `healthRtr` | every chat route is `isAuthenticated` + `checkRateLimit`; mutating ones carry `audit()` |
 | controllers | `usersCtrl`, `conversationsCtrl`, `messagesCtrl`, `healthCtrl` | thin: validate ids, call a service, map errors with `utils/chat.errors.js` |
-| services | `usersService`, `conversationsService`, `messagesService` | the business rules; they announce what happened on `appEvents` and never know about sockets |
-| models | `usersMdl`, `blocksMdl`, `conversationsMdl`, `messagesMdl` | sql only; multi-row writes use `executeTransaction` |
+| services | `usersService`, `conversationsService`, `messagesService`, `groupsService` | the business rules; they announce what happened on `appEvents` and never know about sockets |
+| models | `usersMdl`, `blocksMdl`, `conversationsMdl`, `messagesMdl`, `groupsMdl` | sql only; multi-row writes use `executeTransaction` |
 | socket | `server/socket/` | `index.js` attaches Socket.IO to the http server; `socket.auth.js` verifies the same jwt as the rest api (plus session and account state); `socket.handlers.js` maps events to services; `socket.relay.js` turns `appEvents` into socket emits to the `user:<id>` rooms |
 
 Why that shape: a message sent over REST, over a socket, or by a future worker runs the same service
@@ -222,6 +234,17 @@ transport, the rule, or the sql.
   (`created_at >= now(3) - interval 15 minute`), so the device clock never matters (FR-021).
 - Sends from one socket are processed one at a time; the socket limiter answers immediately and the
   accepted ones queue behind each other.
+- Every group change (create, add, remove, exit, roles, name) is one transaction that first locks the
+  conversation row and the current member rows, then checks the caller's role against those locked
+  rows, and writes its notice in the same transaction. Two admins removing each other at once: one
+  wins, the other is refused. Two simultaneous adds cannot overshoot `GROUP_MAX_MEMBERS`.
+- Who sees a message: its sender, and everyone it was delivered to (a receipt). Receipts are written
+  for the members at the moment of sending, minus anyone who blocked the sender, so one rule covers
+  joining later, exiting, rejoining and blocking inside a group; history, search, reply, forward and
+  each member's list preview all use it.
+- A message counts as delivered / seen only once every recipient still waited for has it, so in a
+  group one reader does not turn the ticks blue; a member who exits before reading is marked
+  `excluded_at` and no longer waited for.
 
 ### 5.3 REST endpoints (all under `/apiv1`, jwt required unless noted)
 
@@ -233,7 +256,17 @@ transport, the rule, or the sql.
 | `GET /users/:id` | another member's public profile: name, email, `member_since`, `has_photo`, `blocked_by_me`, the shared `conversation_id`. No mobile number. A member who blocked the caller stays visible by name but their photo is withheld |
 | `GET /users/:id/photo` | streams that member's photo; 404 when there is none, the account is inactive, or they blocked the caller (one answer for all three) |
 | `POST /users/:id/block`, `DELETE /users/:id/block` | directional block / unblock, idempotent |
-| `GET /conversations` | the caller's conversations with other user, last message, `unread_count`, `blocked_by_me` |
+| `GET /conversations` | the caller's conversations (groups they exited included, `is_member: false`) with other user or group fields (`description`, `member_count`, `my_role`), the last message they can see, `unread_count`, `blocked_by_me` |
+| `GET /conversations/:id` | one conversation as the list shows it |
+| `POST /conversations/groups` `{ title, description?, member_ids }` | create a group; the caller is its admin; people who blocked the caller (or vice versa) and unknown ids are left out and returned in `skipped_user_ids` |
+| `GET /conversations/:id/group` | the group's details and current members with their roles (members only) |
+| `PATCH /conversations/:id/group` `{ title?, description? }` | admins: change the shared name / description |
+| `POST /conversations/:id/members` `{ user_ids }` | admins: add people (already-in and skipped ones are reported) |
+| `PATCH /conversations/:id/members/:userId` `{ role }` | admins: `ADMIN` or `MEMBER`; the last admin cannot step down |
+| `DELETE /conversations/:id/members/:userId` | admins: remove someone (not themselves) |
+| `POST /conversations/:id/leave` | any member exits the group; returns `promoted_user_id` when someone became admin |
+| `DELETE /conversations/:id` | a group the caller already exited leaves their list |
+| `GET /messages/:id/receipts` | message info in a group: each recipient's delivered / read time (sender only) |
 | `POST /conversations` `{ user_id }` | get or create the one-to-one conversation (201 created, 200 existing) |
 | `GET /conversations/:id/messages?cursor=&limit=` | newest first, `next_cursor` / `has_more`; deleted messages come back with `content: null` |
 | `POST /conversations/:id/seen` | rest fallback for `message:seen` |
@@ -254,7 +287,7 @@ Replies: `POST /messages` and `message:send` take an optional `reply_to_message_
 Scheduled messages are sent by a job that runs every minute (and once at start-up, so messages due while Render was asleep go out on wake) when `SCHEDULE_RUN=true`. Each run claims a due row atomically and sends it through the normal send path with the client id `sched-<id>`, so validation, block rules, receipts and the live push are those of a normal send, and a message is never sent twice.
 
 Chat-specific status keys: `BLOCKED`, `NOT_A_MEMBER`, `SELF_ACTION`, `DELETE_WINDOW_EXPIRED`,
-`ACCOUNT_INACTIVE`. A missing conversation and a foreign one both answer `NOT_A_MEMBER` so an id
+`ACCOUNT_INACTIVE`, and for groups `NOT_GROUP_ADMIN` (403), `GROUP_FULL` (409), `LAST_ADMIN` (409). A missing conversation and a foreign one both answer `NOT_A_MEMBER` so an id
 is never confirmed to exist. A logged-out session invalidates its jwt immediately on both transports.
 
 ### 5.4 Socket.IO events
@@ -270,12 +303,14 @@ receipt of the user is marked delivered and the senders are told (offline recove
 | client to server | `message:seen` | `{ conversation_id }` marks every unseen message in it |
 | server to recipient | `message:new` | the persisted message |
 | server to sender | `message:sent` | the persisted message (other devices of the sender) |
-| server to sender | `message:delivered`, `message:seen` | `{ message_id or message_ids, conversation_id, user_id, timestamp }` |
+| server to sender | `message:delivered`, `message:seen` | `{ message_id or message_ids, conversation_id, user_id, timestamp }`, sent once every recipient has it |
 | server to members | `message:deleted` | `{ message_id, conversation_id, deleted_at }` |
 | server to members | `conversation:new` | `{ conversation_id }` |
 | server to members | `message:edited` | the edited message |
 | server to the user's devices | `conversation:updated` | the conversation summary after pin / archive / rename |
 | server to the sender's devices | `scheduled:changed` | `{ conversation_id }`: refetch the scheduled list |
+| server to members (and whoever was removed or exited) | `group:updated` | `{ conversation_id }`: reload the group's summary and member list |
+| server to the user's devices | `conversation:removed` | `{ conversation_id }`: an exited group was deleted from the list |
 | server to caller | `error` | `{ event, statusKey, code, message }`, also returned in the ack |
 
 The sender is always the socket's user; a `sender_id` in the payload is ignored. Limits:
@@ -293,6 +328,9 @@ edge cases: duplicate conversation from either side, non-member access, payload 
 idempotent resend, delivery and seen propagation, offline recovery, keyset paging, directional
 block on both transports, delete window by server clock, inactive account, logout invalidation and
 the send rate limit. It creates its own users and removes everything it wrote.
+`tests/features-v2.test.js` covers release 2, `tests/groups.test.js` the group rules (admins, exiting, who sees
+what, group ticks, the member limit, concurrent admin actions) and `tests/profile.test.js` the date of birth and
+profile editing; the ids in their test names point at `documents/testing/test-cases-v2.md` and `-v3.md`.
 `tests/tools/peer.js` is a scripted chat partner for manual testing of the app
 (`node tests/tools/peer.js`): it acknowledges, marks seen, replies, and pings every 20 s.
 
@@ -324,9 +362,9 @@ its pages. Confirmations and alerts are centred dialogs; toasts appear at the to
 | `src/services/` | `auth`, `profile`, `files`, `chat` and `socket` services from the web client. The auth, profile and files ones return the server envelope and never throw; the chat ones throw it |
 | `src/utils/` | `ValidateUtils.js` and `chatFormat.js` from the web client |
 | `src/contexts/` | `AuthContext` (`handleLogin` / `handleLogOut`, as on the web), `ChatContext` (the web client's chat reducer and socket wiring), `MessageContext` (toasts: `useToast().success / error / warning / info`) |
-| `src/screens/` | Login, Register, ForgotPassword (send code, six-box code entry, new password), Conversations (search, unread badges, pinned new-chat button), NewChat, Chat (bubbles and ticks, the ⋮ menu to block or unblock, long-press delete for everyone, retry a failed message), Profile (photo, details, password reset by code, theme, font size, blocked users, sign out), ContactInfo (another member's photo, name, email, join date, Message, block / unblock; opened from the chat header, the ⋮ menu or a chat's avatar), About (what the app does in everyday words, what the message ticks mean, privacy, account safety, what is coming later) |
+| `src/screens/` | Login, Register (with the date of birth), ForgotPassword (send code, six-box code entry, new password), Conversations (search, filters including Groups, unread badges, pinned new-chat button), NewChat (with "New group"), NewGroup and NewGroupDetails (pick people, then name the group), GroupInfo (members and roles, admin actions, Exit group, Delete group after exiting), AddMembers, Chat (bubbles and ticks, the ⋮ menu to block or unblock, long-press delete for everyone, retry a failed message), Profile (photo, details and Edit profile, password reset by code, theme, font size, blocked users, sign out), ContactInfo (another member's photo, name, email, join date, Message, block / unblock; opened from the chat header, the ⋮ menu or a chat's avatar), About (what the app does in everyday words, what the message ticks mean, privacy, account safety, what is coming later) |
 | `src/navigation/` | root stack: a bottom tab bar (Chats, Profile, About) that grows by the phone's bottom inset so it sits above the gesture bar or navigation buttons, plus NewChat and Chat pushed above it; Login, Register and ForgotPassword when signed out |
-| `src/components/` | `ui.js` kit (Screen, Button, TextField, Fab, Banner, EmptyState, Avatar, Badge, the centred `Dialog` used for every confirmation and alert, `PopupMenu`, and `KeyboardAvoider` / `FormScroll`, which keep the focused field and the chat composer above the on-screen keyboard; Android draws edge-to-edge and no longer makes room by itself), `OtpInput`, `VerifyOtp`, `UpdatePassword`, `MessageBubble`, `ConversationRow` |
+| `src/components/` | `ui.js` kit (Screen, Button, TextField, Fab, Banner, EmptyState, Avatar, Badge, the centred `Dialog` used for every confirmation and alert, `PopupMenu`, and `KeyboardAvoider` / `FormScroll`, which keep the focused field and the chat composer above the on-screen keyboard; Android draws edge-to-edge and no longer makes room by itself), `OtpInput`, `VerifyOtp`, `UpdatePassword`, `MessageBubble` (also `SystemNotice` for group notices), `ConversationRow`, `PeoplePicker` (search and pick several people), `DateField` (the phone's calendar, a date field in the browser) |
 
 Behaviour worth knowing: a sent message appears at once with a clock, then one tick (stored), two
 ticks (delivered), blue ticks (read); a failed send is tappable to retry or discard. Opening a chat
@@ -335,7 +373,6 @@ go. When the socket is down the app sends through REST and a banner says so.
 
 ## 7. Still open
 
-- Group chat UI and REST for membership (schema and services already tolerate groups).
 - Attachments: `messages_lst_t.attachment_file_id` exists; the upload endpoint is image-only today.
 - Push notifications, account deletion and retention rules, production TLS (`rejectUnauthorized`).
 - Scaling past one node: the Socket.IO redis adapter so rooms span instances.

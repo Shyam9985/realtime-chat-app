@@ -16,10 +16,10 @@ export async function handleLogin(formData) {
     return data;
 }
 
-// creates the account; the server expects fst_nm / lst_nm / mobile and rejects unknown fields
+// creates the account; the server expects fst_nm / lst_nm / mobile / date_of_birth and rejects unknown fields
 export async function handleSignup(values) {
     try {
-        const body = { email: values.email.trim(), password: values.password, fst_nm: values.firstName.trim() };
+        const body = { email: values.email.trim(), password: values.password, fst_nm: values.firstName.trim(), date_of_birth: values.dateOfBirth };
         if (values.lastName?.trim()) body.lst_nm = values.lastName.trim();
         if (values.mobile?.trim()) body.mobile = values.mobile.trim();
         const response = await post('auth/signup', body);

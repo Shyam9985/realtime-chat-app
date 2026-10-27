@@ -55,3 +55,6 @@ exports.editHistory = handle('messages edit history', RESPONSE_STATUS.DATA_FOUND
 
 // POST /messages/:id/forward  { conversation_ids: [] }  - per-target results
 exports.forward = handle('messages forward', RESPONSE_STATUS.SUCCESS, (req) => messagesService.forwardSrvc(req.user.user_id, req.params.id, req.body?.conversation_ids));
+
+// GET /messages/:id/receipts  - message info in a group: each recipient's delivered / read time (sender only)
+exports.receipts = handle('messages receipts', RESPONSE_STATUS.DATA_FOUND, (req) => messagesService.receiptsSrvc(req.user.user_id, req.params.id));

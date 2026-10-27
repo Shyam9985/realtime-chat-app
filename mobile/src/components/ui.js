@@ -353,6 +353,16 @@ export function Avatar({ user, size = 44, showPhoto = true }) {
   );
 }
 
+// a group's picture: the people icon on the same soft disc (groups have no photo)
+export function GroupAvatar({ size = 44 }) {
+  const { theme } = useTheme();
+  return (
+    <View accessibilityLabel="Group" style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: theme.colors.accentSoft, alignItems: 'center', justifyContent: 'center' }}>
+      <Ionicons name="people" size={Math.round(size * 0.5)} color={theme.colors.accent} />
+    </View>
+  );
+}
+
 export function Badge({ count }) {
   const { theme } = useTheme();
   if (!count) return null;

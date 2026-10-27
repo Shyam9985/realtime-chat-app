@@ -129,6 +129,24 @@ const isValidDate = (date) => {
         && !isNaN(parsed);
 };
 
+// a date of birth as 'YYYY-MM-DD': a real calendar day, not in the future, and the person at least
+// minAge (SIGNUP_MIN_AGE, default 13) and at most 120 years old. returns the { status, message } shape
+// of a custom validator
+const isValidBirthDate = (value, { minAge = Number(process.env.SIGNUP_MIN_AGE) || 13, label = 'Date of birth' } = {}) => {
+    const match = typeof value === 'string' ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim()) : null;
+    if (!match) return { status: false, message: `${label} must be a date like 1995-08-21.` };
+    const [y, m, d] = match.slice(1).map(Number);
+    const date = new Date(Date.UTC(y, m - 1, d));
+    if (date.getUTCFullYear() !== y || date.getUTCMonth() !== m - 1 || date.getUTCDate() !== d) return { status: false, message: `${label} is not a real date.` };
+    const today = new Date();
+    if (date.getTime() > today.getTime()) return { status: false, message: `${label} cannot be in the future.` };
+    const birthdayPassed = today.getUTCMonth() > m - 1 || (today.getUTCMonth() === m - 1 && today.getUTCDate() >= d);
+    const age = today.getUTCFullYear() - y - (birthdayPassed ? 0 : 1);
+    if (age < minAge) return { status: false, message: `You must be at least ${minAge} years old to use YaapZone.` };
+    if (age > 120) return { status: false, message: `${label} is too far in the past.` };
+    return { status: true, message: null };
+};
+
 // returns the { status, message } shape expected by validateNode's boolean type check
 const isValidBoolean = (value) => {
     return { status: typeof value === 'boolean', message: null };
@@ -441,6 +459,7 @@ module.exports = {
     isPositiveInteger,
     isValidAmount,
     isValidDate,
+    isValidBirthDate,
     isStrongPassword,
     isValidEnum,
     isValidGstin,

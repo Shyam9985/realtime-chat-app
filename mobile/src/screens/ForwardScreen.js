@@ -4,8 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { useChat } from '../contexts/ChatContext';
 import { useToast } from '../contexts/MessageContext';
-import { Screen, Avatar, Divider, EmptyState, Button, KeyboardAvoider, webNoOutline } from '../components/ui';
-import { fullName } from '../utils/chatFormat';
+import { Screen, Avatar, GroupAvatar, Divider, EmptyState, Button, KeyboardAvoider, webNoOutline } from '../components/ui';
+import { fullName, isGroup } from '../utils/chatFormat';
 
 const MAX_TARGETS = 10;
 const titleOf = (c) => c.title || fullName(c.other_user);
@@ -27,7 +27,8 @@ export default function ForwardScreen({ route, navigation }) {
 
   const list = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return chat.conversations.filter((x) => !q || titleOf(x).toLowerCase().includes(q));
+    // a group you exited can no longer be written to
+    return chat.conversations.filter((x) => x.is_member !== false && (!q || titleOf(x).toLowerCase().includes(q)));
   }, [chat.conversations, query]);
 
   const toggle = (id) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : p.length >= MAX_TARGETS ? p : [...p, id]));
@@ -80,7 +81,7 @@ export default function ForwardScreen({ route, navigation }) {
               <Pressable onPress={() => toggle(item.conversation_id)} disabled={full} accessibilityRole="checkbox" accessibilityState={{ checked: on, disabled: full }}
                 accessibilityLabel={titleOf(item)} testID={`forward-target-${item.conversation_id}`}
                 style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: theme.space.md, paddingHorizontal: theme.space.lg, paddingVertical: 10, backgroundColor: pressed ? c.surfaceAlt : c.surface, opacity: full ? 0.5 : 1 })}>
-                <Avatar user={item.other_user} size={44} />
+                {isGroup(item) ? <GroupAvatar size={44} /> : <Avatar user={item.other_user} size={44} />}
                 <Text numberOfLines={1} style={{ flex: 1, color: c.text, fontSize: theme.font.md, fontWeight: '600' }}>{titleOf(item)}</Text>
                 <Ionicons name={on ? 'checkmark-circle' : 'ellipse-outline'} size={24} color={on ? c.accent : c.textMuted} />
               </Pressable>

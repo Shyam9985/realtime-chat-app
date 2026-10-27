@@ -1,5 +1,5 @@
--- chat_application schema (v1 plus the v2 additions). generated from the schema definition in gen_schema.py;
--- for a NEW database. an existing v1 database is upgraded with documents/database/migration-v2.sql instead.
+-- chat_application schema (v1 plus the v2 and v3 additions). generated from the schema definition in gen_schema.py;
+-- for a NEW database. an existing database is upgraded with documents/database/migration-v3.sql instead.
 -- every table carries is_active / created_at / updated_at with defaults.
 -- run as chatapp_admin:
 --   mysql -u chatapp_admin -p chat_application < documents/database/schema-v1.sql
@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS `users_lst_t` (
   `first_nm` VARCHAR(100) NOT NULL,
   `last_nm` VARCHAR(100) NULL,
   `mobile_no` VARCHAR(15) NULL,
+  `date_of_birth` DATE NULL COMMENT 'asked at sign-up; private to the user',
   `password_hash` VARCHAR(255) NOT NULL,
   `password_salt` VARCHAR(255) NULL,
   `profile_photo_url` VARCHAR(500) NULL,
@@ -61,6 +62,7 @@ CREATE TABLE IF NOT EXISTS `conversations_lst_t` (
   `conversation_id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   `conversation_type_id` INT UNSIGNED NOT NULL,
   `title` VARCHAR(100) NULL COMMENT 'group name; null for one-to-one',
+  `description` VARCHAR(500) NULL COMMENT 'group description; null for one-to-one',
   `created_by` BIGINT UNSIGNED NOT NULL,
   `user_pair_key` VARCHAR(41) NULL COMMENT '''lowUserId:highUserId'' for ONE_TO_ONE, null for groups',
   `last_message_id` BIGINT UNSIGNED NULL COMMENT 'denormalised for the conversation list',
@@ -85,6 +87,7 @@ CREATE TABLE IF NOT EXISTS `conversation_members_t` (
   `user_id` BIGINT UNSIGNED NOT NULL,
   `member_role` VARCHAR(20) NOT NULL DEFAULT 'MEMBER' COMMENT 'MEMBER | ADMIN (groups)',
   `last_read_message_id` BIGINT UNSIGNED NULL,
+  `last_message_id` BIGINT UNSIGNED NULL COMMENT 'newest message this member can see; their list preview and order',
   `is_pinned` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '1 = pinned to the top of this member''s chat list',
   `pinned_at` DATETIME(3) NULL COMMENT 'when pinned; orders pinned chats',
   `is_archived` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '1 = shown in this member''s archive instead of the list',
@@ -100,6 +103,7 @@ CREATE TABLE IF NOT EXISTS `conversation_members_t` (
   KEY `idx_member_user` (`user_id`),
   KEY `idx_member_user_list` (`user_id`, `is_archived`, `is_pinned`, `pinned_at`),
   KEY `fk_member_last_read_idx` (`last_read_message_id`),
+  KEY `fk_member_last_message_idx` (`last_message_id`),
   CONSTRAINT `fk_member_conversation` FOREIGN KEY (`conversation_id`) REFERENCES `conversations_lst_t` (`conversation_id`) ON DELETE NO ACTION ON UPDATE NO ACTION,
   CONSTRAINT `fk_member_user` FOREIGN KEY (`user_id`) REFERENCES `users_lst_t` (`user_id`) ON DELETE NO ACTION ON UPDATE NO ACTION
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='who is in a conversation; last_read_message_id drives unread counts';
@@ -242,6 +246,8 @@ CREATE TABLE IF NOT EXISTS `messages_lst_t` (
   `conversation_id` BIGINT UNSIGNED NOT NULL,
   `sender_id` BIGINT UNSIGNED NOT NULL,
   `message_type_id` INT UNSIGNED NOT NULL DEFAULT 1,
+  `system_event` VARCHAR(30) NULL COMMENT 'SYSTEM notices: GROUP_CREATED | MEMBER_ADDED | MEMBER_REMOVED | MEMBER_LEFT | ADMIN_MADE | ADMIN_DISMISSED | ADMIN_ASSIGNED | NAME_CHANGED | DESCRIPTION_CHANGED',
+  `system_target_user_id` BIGINT UNSIGNED NULL COMMENT 'SYSTEM notices: the member the notice is about',
   `content` TEXT NULL,
   `attachment_file_id` BIGINT UNSIGNED NULL COMMENT 'uploaded_files_lst_t.file_id for image / file messages',
   `reply_to_message_id` BIGINT UNSIGNED NULL COMMENT 'the message this one quotes (swipe to reply)',
@@ -261,13 +267,15 @@ CREATE TABLE IF NOT EXISTS `messages_lst_t` (
   KEY `fk_msg_attachment_idx` (`attachment_file_id`),
   KEY `fk_msg_reply_to_idx` (`reply_to_message_id`),
   KEY `fk_msg_forwarded_from_idx` (`forwarded_from_message_id`),
+  KEY `fk_msg_system_target_idx` (`system_target_user_id`),
   FULLTEXT KEY `ft_msg_content` (`content`),
   CONSTRAINT `fk_msg_conversation` FOREIGN KEY (`conversation_id`) REFERENCES `conversations_lst_t` (`conversation_id`) ON DELETE NO ACTION ON UPDATE NO ACTION,
   CONSTRAINT `fk_msg_sender` FOREIGN KEY (`sender_id`) REFERENCES `users_lst_t` (`user_id`) ON DELETE NO ACTION ON UPDATE NO ACTION,
   CONSTRAINT `fk_msg_type` FOREIGN KEY (`message_type_id`) REFERENCES `message_type_master_t` (`message_type_id`) ON DELETE NO ACTION ON UPDATE NO ACTION,
   CONSTRAINT `fk_msg_attachment` FOREIGN KEY (`attachment_file_id`) REFERENCES `uploaded_files_lst_t` (`file_id`) ON DELETE SET NULL ON UPDATE NO ACTION,
   CONSTRAINT `fk_msg_reply_to` FOREIGN KEY (`reply_to_message_id`) REFERENCES `messages_lst_t` (`message_id`) ON DELETE SET NULL ON UPDATE NO ACTION,
-  CONSTRAINT `fk_msg_forwarded_from` FOREIGN KEY (`forwarded_from_message_id`) REFERENCES `messages_lst_t` (`message_id`) ON DELETE SET NULL ON UPDATE NO ACTION
+  CONSTRAINT `fk_msg_forwarded_from` FOREIGN KEY (`forwarded_from_message_id`) REFERENCES `messages_lst_t` (`message_id`) ON DELETE SET NULL ON UPDATE NO ACTION,
+  CONSTRAINT `fk_msg_system_target` FOREIGN KEY (`system_target_user_id`) REFERENCES `users_lst_t` (`user_id`) ON DELETE NO ACTION ON UPDATE NO ACTION
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='messages; soft delete via is_deleted within the 15 minute window';
 
 -- ---------------------------------------------------------------- message_edits_t
@@ -320,6 +328,7 @@ CREATE TABLE IF NOT EXISTS `message_receipts_t` (
   `user_id` BIGINT UNSIGNED NOT NULL COMMENT 'the recipient',
   `delivered_at` DATETIME(3) NULL,
   `seen_at` DATETIME(3) NULL,
+  `excluded_at` DATETIME(3) NULL COMMENT 'set when the recipient left the group before seeing it; ticks stop waiting for them',
   `is_active` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '1 = active, 0 = soft deleted',
   `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   `updated_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
@@ -336,6 +345,9 @@ SET @ddl := IF(@fk_exists = 0, 'ALTER TABLE `conversations_lst_t` ADD CONSTRAINT
 PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 SET @fk_exists := (SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'conversation_members_t' AND CONSTRAINT_NAME = 'fk_member_last_read');
 SET @ddl := IF(@fk_exists = 0, 'ALTER TABLE `conversation_members_t` ADD CONSTRAINT `fk_member_last_read` FOREIGN KEY (`last_read_message_id`) REFERENCES `messages_lst_t` (`message_id`) ON DELETE SET NULL ON UPDATE NO ACTION', 'SELECT 1');
+PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @fk_exists := (SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'conversation_members_t' AND CONSTRAINT_NAME = 'fk_member_last_message');
+SET @ddl := IF(@fk_exists = 0, 'ALTER TABLE `conversation_members_t` ADD CONSTRAINT `fk_member_last_message` FOREIGN KEY (`last_message_id`) REFERENCES `messages_lst_t` (`message_id`) ON DELETE SET NULL ON UPDATE NO ACTION', 'SELECT 1');
 PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 -- ---------------------------------------------------------------- seed data (masters)

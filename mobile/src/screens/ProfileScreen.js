@@ -6,14 +6,16 @@ import { useTheme, MIN_FONT, MAX_FONT, DEFAULT_FONT } from '../theme/ThemeContex
 import { useAuth } from '../contexts/AuthContext';
 import { useChat } from '../contexts/ChatContext';
 import { useToast } from '../contexts/MessageContext';
-import { getProfile } from '../services/profile.service';
+import { getProfile, updateProfile } from '../services/profile.service';
 import { loadPhoto, savePhoto } from '../store/photoStore';
 import { handleLogout, resetPasswordMail } from '../services/auth.service';
 import { listBlocked } from '../services/chat.service';
-import { Screen, Avatar, Button, Muted, Divider, Dialog, Spinner, IconButton, Section, FormScroll, PeopleListSkeleton } from '../components/ui';
+import { Screen, Avatar, Button, Muted, Divider, Dialog, Spinner, IconButton, Section, FormScroll, PeopleListSkeleton, TextField } from '../components/ui';
+import DateField from '../components/DateField';
 import VerifyOtp from '../components/VerifyOtp';
 import UpdatePassword from '../components/UpdatePassword';
-import { fullName } from '../utils/chatFormat';
+import * as validate from '../utils/ValidateUtils';
+import { birthDateLabel, fullName } from '../utils/chatFormat';
 
 // what the upload endpoint accepts (server/utils/files.utils.js)
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -84,6 +86,10 @@ export default function ProfileScreen() {
   const [uploading, setUploading] = useState(false);
   const [confirmSignOut, setConfirmSignOut] = useState(false);
   const [blocked, setBlocked] = useState(null);
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState({});
+  const [formErrors, setFormErrors] = useState({});
+  const [saving, setSaving] = useState(false);
 
   // fresh profile from the server; the stored user only reflects the last login
   useEffect(() => {
@@ -153,6 +159,44 @@ export default function ProfileScreen() {
     }
   }
 
+  // edit profile: the same rules as sign-up. only what changed is sent; a blank last name or mobile clears it
+  const startEdit = () => {
+    setForm({ firstName: user.first_nm || '', lastName: user.last_nm || '', mobile: user.mobile_no || '', dateOfBirth: user.date_of_birth || '' });
+    setFormErrors({});
+    setEditing(true);
+  };
+  const setField = (name) => (value) => { setForm((f) => ({ ...f, [name]: value })); setFormErrors((e) => ({ ...e, [name]: undefined })); };
+  const saveProfile = async () => {
+    const errors = {};
+    const first = validate.isValidPersonName(form.firstName, { label: 'First name' });
+    if (!first.status) errors.firstName = first.message;
+    if (form.lastName.trim()) { const last = validate.isValidPersonName(form.lastName, { label: 'Last name' }); if (!last.status) errors.lastName = last.message; }
+    if (form.mobile.trim()) { const mobile = validate.isValidMobile(form.mobile); if (!mobile.status) errors.mobile = mobile.message; }
+    const dob = validate.isValidBirthDate(form.dateOfBirth);
+    if (!dob.status) errors.dateOfBirth = dob.message;
+    setFormErrors(errors);
+    if (Object.keys(errors).length) return;
+
+    const changes = {};
+    if (form.firstName.trim() !== (user.first_nm || '')) changes.fst_nm = form.firstName.trim();
+    if (form.lastName.trim() !== (user.last_nm || '')) changes.lst_nm = form.lastName.trim();
+    if (form.mobile.trim() !== (user.mobile_no || '')) changes.mobile = form.mobile.trim();
+    if (form.dateOfBirth !== (user.date_of_birth || '')) changes.date_of_birth = form.dateOfBirth;
+    if (!Object.keys(changes).length) { setEditing(false); return; }
+
+    setSaving(true);
+    const response = await updateProfile(changes);
+    setSaving(false);
+    if (response?.success) {
+      setUser(response.data);
+      authCtx.updateUser({ first_nm: response.data.first_nm, last_nm: response.data.last_nm, mobile_no: response.data.mobile_no });
+      setEditing(false);
+      toast.success('Profile updated.');
+    } else {
+      toast.error(response?.error || response?.message || 'Could not update your profile.');
+    }
+  };
+
   const unblock = async (u) => {
     try {
       await unblockUser(u.user_id);
@@ -181,13 +225,32 @@ export default function ProfileScreen() {
           </Pressable>
           <Text style={{ fontSize: theme.font.xl, fontWeight: '700', color: c.text }} testID="profile-name">{fullName(user)}</Text>
           <Muted>{user.email}</Muted>
+          {!editing ? <Button title="Edit profile" icon="create-outline" variant="secondary" onPress={startEdit} style={{ marginTop: theme.space.sm, paddingVertical: 8 }} testID="profile-edit-open" /> : null}
         </View>
 
-        <Section title="Details">
-          <Field label="Username" value={user.user_nm} />
-          <Field label="Email" value={user.email} />
-          <Field label="Mobile" value={user.mobile_no} />
-          <Field label="Last Login" value={user.last_login} last />
+        <Section title={editing ? 'Edit profile' : 'Details'}>
+          {editing ? (
+            <View style={{ padding: theme.space.lg }} testID="profile-edit">
+              <TextField label="First Name" icon="person-outline" value={form.firstName} onChangeText={setField('firstName')} error={formErrors.firstName} autoComplete="given-name" testID="edit-first" />
+              <TextField label="Last Name (optional)" icon="person-outline" value={form.lastName} onChangeText={setField('lastName')} error={formErrors.lastName} autoComplete="family-name" testID="edit-last" />
+              <TextField label="Mobile Number (optional)" icon="call-outline" value={form.mobile} onChangeText={setField('mobile')} error={formErrors.mobile} keyboardType="phone-pad" placeholder="10 digit mobile number" testID="edit-mobile" />
+              <DateField label="Date of Birth" value={form.dateOfBirth} onChange={setField('dateOfBirth')} error={formErrors.dateOfBirth} placeholder="Choose your date of birth"
+                maximumDate={new Date()} minimumDate={new Date(1900, 0, 1)} initial={new Date(2000, 0, 1)} testID="edit-dob" />
+              <Muted style={{ marginBottom: theme.space.lg }}>Your email is your sign-in, so it can’t be changed here. Your mobile number and date of birth are never shown to others.</Muted>
+              <View style={{ flexDirection: 'row', gap: theme.space.md }}>
+                <Button title="Cancel" variant="secondary" onPress={() => setEditing(false)} style={{ flex: 1 }} testID="profile-cancel" />
+                <Button title={saving ? 'Saving…' : 'Save'} onPress={saveProfile} loading={saving} style={{ flex: 1 }} testID="profile-save" />
+              </View>
+            </View>
+          ) : (
+            <>
+              <Field label="Username" value={user.user_nm} />
+              <Field label="Email" value={user.email} />
+              <Field label="Mobile" value={user.mobile_no} />
+              <Field label="Birthday" value={birthDateLabel(user.date_of_birth)} />
+              <Field label="Last Login" value={user.last_login} last />
+            </>
+          )}
         </Section>
 
         <Section title="Reset Password">

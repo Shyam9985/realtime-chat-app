@@ -18,12 +18,19 @@ const DEFAULT_PAGE = 30;
 const MAX_PAGE = 100;
 
 const statusOf = (row) => (row.seen_at ? 'SEEN' : row.delivered_at ? 'DELIVERED' : 'SENT');
+const { nameOf } = conversationsService;
+const SYSTEM = 'SYSTEM';
 
 const toMessageDto = (row) => ({
     message_id: row.message_id,
     conversation_id: row.conversation_id,
     sender_id: row.sender_id,
+    sender_name: nameOf(row.sender_first_nm, row.sender_last_nm),
     message_type: row.message_type,
+    // group notices (message_type SYSTEM): what happened and who it happened to
+    system_event: row.system_event ?? null,
+    system_target_user_id: row.system_target_user_id ?? null,
+    system_target_name: nameOf(row.target_first_nm, row.target_last_nm),
     content: row.is_deleted ? null : row.content,
     client_message_id: row.client_message_id,
     is_deleted: !!row.is_deleted,
@@ -39,23 +46,72 @@ const toMessageDto = (row) => ({
     reply_to: row.reply_to_message_id ? {
         message_id: row.reply_to_message_id,
         sender_id: row.reply_sender_id,
+        sender_name: nameOf(row.reply_sender_first_nm, row.reply_sender_last_nm),
         content: row.reply_is_deleted ? null : row.reply_content,
         is_deleted: !!row.reply_is_deleted
     } : null
 });
 
-let textTypeId = null;
-const getTextTypeId = async () => {
-    if (textTypeId) return textTypeId;
-    const [row] = await messagesMdl.getMessageTypeByCode('TEXT');
+// master ids, cached after the first lookup: master rows do not change at runtime
+const typeIds = {};
+const getTypeId = async (code) => {
+    if (typeIds[code]) return typeIds[code];
+    const [row] = await messagesMdl.getMessageTypeByCode(code);
     if (!row) resutils.createError('DatabaseError', 'Message type master is not seeded.');
-    textTypeId = row.message_type_id;
-    return textTypeId;
+    typeIds[code] = row.message_type_id;
+    return typeIds[code];
 };
+const getTextTypeId = () => getTypeId('TEXT');
+const getSystemTypeId = () => getTypeId(SYSTEM);
 
 const loadMessage = async (messageId) => {
     const [row] = await messagesMdl.getById(messageId);
     return row ? toMessageDto(row) : null;
+};
+
+// a group notice is the record of a membership change: it cannot be edited, deleted, forwarded or quoted
+const refuseNotice = (row, what) => {
+    if (row.message_type === SYSTEM) resutils.createError('notEditable', `Group notices cannot be ${what}.`);
+};
+
+/*
+ * Tells senders that ticks moved. A message counts as delivered (or seen) only once every recipient
+ * still waited for has it, so in a group one reader does not turn the ticks blue; in a one-to-one chat
+ * that is the single recipient, exactly as before. Called after receipts change: a delivered ack, a
+ * reconnect, a chat being opened, or a member leaving before they read.
+ */
+const announceStatus = async (messageIds, { seen = true, byUserId = null } = {}) => {
+    if (!messageIds.length) return;
+    const rows = await messagesMdl.getAggregateStatus([...new Set(messageIds)]);
+    const userId = byUserId == null ? null : Number(byUserId);
+    const seenGroups = new Map();
+    for (const row of rows) {
+        if (seen && row.seen_at) {
+            const key = `${row.sender_id}:${row.conversation_id}`;
+            const group = seenGroups.get(key) || { sender_id: row.sender_id, conversation_id: row.conversation_id, message_ids: [], seen_at: row.seen_at };
+            group.message_ids.push(row.message_id);
+            if (row.seen_at > group.seen_at) group.seen_at = row.seen_at;
+            seenGroups.set(key, group);
+        } else if (row.delivered_at) {
+            appEvents.emit('message.delivered', {
+                message_id: row.message_id, conversation_id: row.conversation_id, user_id: userId,
+                sender_id: row.sender_id, delivered_at: toIso(row.delivered_at)
+            });
+        }
+    }
+    for (const g of seenGroups.values()) {
+        appEvents.emit('conversation.seen', {
+            conversation_id: g.conversation_id, user_id: userId, seen_at: toIso(g.seen_at), message_ids: g.message_ids, sender_ids: [g.sender_id]
+        });
+    }
+};
+
+// a message that was written outside the send path (group notices): announced like any other
+const announceMessage = async (messageId) => {
+    const message = await loadMessage(messageId);
+    const recipientIds = await messagesMdl.getRecipientIds(messageId);
+    appEvents.emit('message.created', { message, recipientIds, senderId: message.sender_id });
+    return message;
 };
 
 // FR-007 / FR-027: text only, trimmed, non-empty, bounded
@@ -86,13 +142,14 @@ const insertWithRetry = async (args, attempt = 1) => {
     }
 };
 
-// a reply may only quote a live message of the same conversation
-const validateReplyTarget = async (conversationId, value) => {
+// a reply may only quote a live message of the same conversation that the sender can see
+const validateReplyTarget = async (conversationId, value, senderId) => {
     if (value === undefined || value === null || value === '') return null;
     const replyToId = parseId(value, 'Reply message id');
-    const [target] = await messagesMdl.getById(replyToId);
+    const [target] = await messagesMdl.getVisibleById(replyToId, senderId);
     if (!target || target.conversation_id !== conversationId) resutils.createError('validationFailed', 'You can only reply to a message in this conversation.');
     if (target.is_deleted) resutils.createError('validationFailed', 'You cannot reply to a deleted message.');
+    if (target.message_type === SYSTEM) resutils.createError('validationFailed', 'You cannot reply to a group notice.');
     return replyToId;
 };
 
@@ -147,7 +204,7 @@ exports.sendSrvc = async (senderId, payload = {}) => {
     const content = validateContent(payload.content);
     const clientMessageId = validateClientMessageId(payload.client_message_id);
     await conversationsService.assertMemberSrvc(conversationId, senderId);
-    const replyToMessageId = await validateReplyTarget(conversationId, payload.reply_to_message_id);
+    const replyToMessageId = await validateReplyTarget(conversationId, payload.reply_to_message_id, senderId);
     return createMessage(senderId, { conversationId, content, clientMessageId, replyToMessageId });
 };
 
@@ -166,18 +223,20 @@ const decodeCursor = (value) => {
     }
 };
 
-// FR-010: newest first, ordered by (created_at, message_id); next_cursor continues backwards
+// FR-010: newest first, ordered by (created_at, message_id); next_cursor continues backwards. only
+// what the caller can see: in a group, what was sent while they were in it (and not by someone they
+// blocked); someone who exited keeps reading what they received
 exports.historySrvc = async (userId, conversationIdRaw, cursorRaw, limitRaw) => {
     log('in historySrvc');
     const conversationId = parseId(conversationIdRaw, 'Conversation id');
-    await conversationsService.assertMemberSrvc(conversationId, userId);
+    await conversationsService.assertReaderSrvc(conversationId, userId);
 
     let limit = Number.parseInt(limitRaw, 10);
     if (!Number.isInteger(limit) || limit < 1) limit = DEFAULT_PAGE;
     if (limit > MAX_PAGE) limit = MAX_PAGE;
     const cursor = decodeCursor(cursorRaw);
 
-    const rows = await messagesMdl.getHistory(conversationId, cursor, limit + 1);
+    const rows = await messagesMdl.getHistory(conversationId, Number(userId), cursor, limit + 1);
     const hasMore = rows.length > limit;
     const page = hasMore ? rows.slice(0, limit) : rows;
     return {
@@ -187,13 +246,19 @@ exports.historySrvc = async (userId, conversationIdRaw, cursorRaw, limitRaw) => 
     };
 };
 
-// FR-020..024: only the sender, only inside the window measured by the database clock
+// everyone who holds a copy of the message: its sender and the people it was delivered to. edits and
+// deletions go to them only, so nobody who joined a group later is sent a message they never had
+const audienceOf = async (message) => [message.sender_id, ...(await messagesMdl.getRecipientIds(message.message_id))];
+
+// FR-020..024: only the sender, still in the conversation, only inside the window measured by the database clock
 exports.deleteForEveryoneSrvc = async (userId, messageIdRaw) => {
     log('in deleteForEveryoneSrvc');
     const messageId = parseId(messageIdRaw, 'Message id');
     const [row] = await messagesMdl.getById(messageId);
     if (!row) resutils.createError('messageNotFound', 'Message not found.');
     if (row.sender_id !== Number(userId)) resutils.createError('notOwner', 'You can only delete your own messages.');
+    refuseNotice(row, 'deleted');
+    await conversationsService.assertMemberSrvc(row.conversation_id, userId);
     if (row.is_deleted) return { message: toMessageDto(row), already: true };
 
     const result = await messagesMdl.softDeleteWithinWindow(messageId, userId, DELETE_WINDOW_MINUTES);
@@ -204,12 +269,12 @@ exports.deleteForEveryoneSrvc = async (userId, messageIdRaw) => {
     }
 
     const message = await loadMessage(messageId);
-    const memberIds = await conversationsMdl.getMemberIds(message.conversation_id);
-    appEvents.emit('message.deleted', { message, memberIds });
+    appEvents.emit('message.deleted', { message, memberIds: await audienceOf(message) });
     return { message, already: false };
 };
 
-// FR-012: the recipient's client acknowledged the message
+// FR-012: the recipient's client acknowledged the message. the sender hears about it once the
+// message has reached everyone (in a group: every recipient)
 exports.markDeliveredSrvc = async (userId, messageIdRaw) => {
     log('in markDeliveredSrvc');
     const messageId = parseId(messageIdRaw, 'Message id');
@@ -219,40 +284,27 @@ exports.markDeliveredSrvc = async (userId, messageIdRaw) => {
 
     await messagesMdl.markDelivered(messageId, userId);
     const [updated] = await messagesMdl.getReceipt(messageId, userId);
-    const deliveredAt = toIso(updated?.delivered_at);
-    appEvents.emit('message.delivered', {
-        message_id: messageId, conversation_id: receipt.conversation_id, user_id: Number(userId),
-        sender_id: receipt.sender_id, delivered_at: deliveredAt
-    });
-    return { changed: true, delivered_at: deliveredAt };
+    await announceStatus([messageId], { seen: false, byUserId: userId });
+    return { changed: true, delivered_at: toIso(updated?.delivered_at) };
 };
 
 // FR-011: a reconnecting user has, by definition, received everything waiting for them
 exports.markPendingDeliveredSrvc = async (userId) => {
     log('in markPendingDeliveredSrvc');
-    const { deliveredAt, rows } = await messagesMdl.markAllPendingDelivered(userId);
-    for (const row of rows) {
-        appEvents.emit('message.delivered', {
-            message_id: row.message_id, conversation_id: row.conversation_id, user_id: Number(userId),
-            sender_id: row.sender_id, delivered_at: toIso(deliveredAt)
-        });
-    }
+    const { rows } = await messagesMdl.markAllPendingDelivered(userId);
+    await announceStatus(rows.map((r) => r.message_id), { seen: false, byUserId: userId });
     return rows.length;
 };
 
-// FR-013 / FR-014: the recipient opened the conversation
+// FR-013 / FR-014: the recipient opened the conversation (an exited group too: they can still read it)
 exports.markSeenSrvc = async (userId, conversationIdRaw) => {
     log('in markSeenSrvc');
     const conversationId = parseId(conversationIdRaw, 'Conversation id');
-    await conversationsService.assertMemberSrvc(conversationId, userId);
+    await conversationsService.assertReaderSrvc(conversationId, userId);
 
     const { seenAt, rows } = await messagesMdl.markConversationSeen(conversationId, userId);
     if (!rows.length) return { changed: 0 };
-    const senderIds = [...new Set(rows.map((r) => r.sender_id))];
-    appEvents.emit('conversation.seen', {
-        conversation_id: conversationId, user_id: Number(userId), seen_at: toIso(seenAt),
-        message_ids: rows.map((r) => r.message_id), sender_ids: senderIds
-    });
+    await announceStatus(rows.map((r) => r.message_id), { byUserId: userId });
     return { changed: rows.length, seen_at: toIso(seenAt) };
 };
 
@@ -265,7 +317,9 @@ exports.editSrvc = async (userId, messageIdRaw, contentRaw) => {
     const [row] = await messagesMdl.getById(messageId);
     if (!row) resutils.createError('messageNotFound', 'Message not found.');
     if (row.sender_id !== Number(userId)) resutils.createError('notOwner', 'You can only edit your own messages.');
+    refuseNotice(row, 'edited');
     if (row.is_deleted) resutils.createError('notEditable', 'A deleted message cannot be edited.');
+    await conversationsService.assertMemberSrvc(row.conversation_id, userId);
     if (row.content === content) return { message: toMessageDto(row), changed: false };
 
     const edited = await messagesMdl.editWithinWindow(messageId, userId, content, EDIT_WINDOW_MINUTES);
@@ -276,8 +330,7 @@ exports.editSrvc = async (userId, messageIdRaw, contentRaw) => {
     }
 
     const message = await loadMessage(messageId);
-    const memberIds = await conversationsMdl.getMemberIds(message.conversation_id);
-    appEvents.emit('message.edited', { message, memberIds });
+    appEvents.emit('message.edited', { message, memberIds: await audienceOf(message) });
     return { message, changed: true };
 };
 
@@ -308,14 +361,16 @@ exports.forwardSrvc = async (userId, messageIdRaw, conversationIdsRaw) => {
     const targets = [...new Set(conversationIdsRaw.map((id) => parseId(id, 'Conversation id')))];
     if (targets.length > MAX_FORWARD_TARGETS) resutils.createError('validationFailed', `You can forward to at most ${MAX_FORWARD_TARGETS} conversations at once.`);
 
-    const [source] = await messagesMdl.getById(messageId);
+    // a message the caller cannot see (someone else's chat, or a group message from before they
+    // joined) gets the same answer as a missing one: nothing leaks
+    const [source] = await messagesMdl.getVisibleById(messageId, Number(userId));
     if (!source) resutils.createError('messageNotFound', 'Message not found.');
-    // a message from someone else's chat gets the same answer as a missing one: nothing leaks
     try {
-        await conversationsService.assertMemberSrvc(source.conversation_id, userId);
+        await conversationsService.assertReaderSrvc(source.conversation_id, userId);
     } catch (_) {
         resutils.createError('messageNotFound', 'Message not found.');
     }
+    refuseNotice(source, 'forwarded');
     if (source.is_deleted) resutils.createError('validationFailed', 'A deleted message cannot be forwarded.');
 
     const results = [];
@@ -335,14 +390,30 @@ exports.forwardSrvc = async (userId, messageIdRaw, conversationIdsRaw) => {
 exports.searchSrvc = async (userId, conversationIdRaw, queryRaw, limitRaw) => {
     log('in searchSrvc');
     const conversationId = parseId(conversationIdRaw, 'Conversation id');
-    await conversationsService.assertMemberSrvc(conversationId, userId);
+    await conversationsService.assertReaderSrvc(conversationId, userId);
     const text = typeof queryRaw === 'string' ? queryRaw.trim() : '';
     if (!text) resutils.createError('validationFailed', 'Type something to search for.');
     if (text.length > 100) resutils.createError('validationFailed', 'Search text cannot exceed 100 characters.');
     let limit = Number.parseInt(limitRaw, 10);
     if (!Number.isInteger(limit) || limit < 1 || limit > MAX_SEARCH_RESULTS) limit = 50;
-    const rows = await messagesMdl.search(conversationId, text, limit);
+    const rows = await messagesMdl.search(conversationId, Number(userId), text, limit);
     return { messages: rows.map(toMessageDto) };
+};
+
+// message info in a group: who has it and who has read it, each with their own time. the sender only
+exports.receiptsSrvc = async (userId, messageIdRaw) => {
+    log('in receiptsSrvc');
+    const messageId = parseId(messageIdRaw, 'Message id');
+    const [row] = await messagesMdl.getById(messageId);
+    if (!row) resutils.createError('messageNotFound', 'Message not found.');
+    if (row.sender_id !== Number(userId)) resutils.createError('notOwner', 'Only the sender can see who received a message.');
+    const receipts = await messagesMdl.listReceipts(messageId);
+    return {
+        receipts: receipts.map((r) => ({
+            user_id: r.user_id, name: nameOf(r.first_nm, r.last_nm),
+            delivered_at: toIso(r.delivered_at), seen_at: toIso(r.seen_at), left_group: !!r.excluded_at
+        }))
+    };
 };
 
 // read all: every conversation of the caller with unseen messages, archived ones included. each one
@@ -361,6 +432,9 @@ exports.markAllSeenSrvc = async (userId) => {
 };
 
 exports.createMessage = createMessage;
+exports.announceMessage = announceMessage;
+exports.announceStatus = announceStatus;
+exports.getSystemTypeId = getSystemTypeId;
 exports.validateContent = validateContent;
 exports.validateClientMessageId = validateClientMessageId;
 exports.validateReplyTarget = validateReplyTarget;

@@ -14,6 +14,7 @@ import { DELETE_WINDOW_MINUTES } from '../utils/chatFormat';
 
 const FEATURES = [
   { icon: 'chatbubbles-outline', title: 'Chat one-to-one', text: 'Tap the green button in Chats, then search by name or email to start a conversation.' },
+  { icon: 'people-outline', title: 'Chat in groups', text: 'Tap the green button, then “New group”: pick people and give the group a name. You become its admin. Admins add or remove people, make others admins, and change the name. Anyone can exit a group, and still read what they received.' },
   { icon: 'flash-outline', title: 'Messages arrive instantly', text: 'If the other person is offline, your message waits and reaches them as soon as they’re back online.' },
   { icon: 'person-circle-outline', title: 'See who you’re talking to', text: 'Tap someone’s photo in Chats, or their name at the top of a chat, to see their profile.' },
   { icon: 'trash-outline', title: 'Delete for everyone', text: `Press and hold a message you sent to see when it was delivered and read, or to delete it for both of you. You have ${DELETE_WINDOW_MINUTES} minutes after sending.` },
@@ -25,14 +26,15 @@ const FEATURES = [
 const TICKS = [
   { status: 'SENDING', label: 'Sending' },
   { status: 'SENT', label: 'Sent' },
-  { status: 'DELIVERED', label: 'Delivered to their phone' },
-  { status: 'SEEN', label: 'Read' },
+  { status: 'DELIVERED', label: 'Delivered to their phone (in a group, to everyone)' },
+  { status: 'SEEN', label: 'Read (in a group, by everyone)' },
   { status: 'FAILED', label: 'Not sent. Tap the message to try again.' },
 ];
 
 const PRIVACY = [
   { icon: 'eye-off-outline', text: 'Other members can’t see your conversations.' },
-  { icon: 'id-card-outline', text: 'Other members can see your name, email address, profile photo and the date you joined. Your mobile number is never shown.' },
+  { icon: 'id-card-outline', text: 'Other members can see your name, email address, profile photo and the date you joined. Your mobile number and date of birth are never shown.' },
+  { icon: 'people-circle-outline', text: 'In a group, you only see the messages sent while you were in it. After you exit, you keep what you received but get nothing new.' },
   { icon: 'hand-left-outline', text: 'People you block can’t message you, find you in search or see your profile photo.' },
   { icon: 'cloud-done-outline', text: 'Your chats are saved to your account, so they’re still there when you sign in on a new phone.' },
 ];
@@ -43,7 +45,6 @@ const SAFETY = [
 ];
 
 const COMING_LATER = [
-  { icon: 'people-outline', text: 'Group chats' },
   { icon: 'images-outline', text: 'Sending photos, files, voice notes and videos' },
 ];
 

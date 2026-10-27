@@ -29,7 +29,7 @@ const stamp = () => new Date().toISOString().slice(11, 19);
 const say = (...a) => console.log(`[peer ${stamp()}]`, ...a);
 
 (async () => {
-    const reg = await api('POST', '/auth/signup', { email: EMAIL, password: PASSWORD, fst_nm: NAME, lst_nm: 'Peer' });
+    const reg = await api('POST', '/auth/signup', { email: EMAIL, password: PASSWORD, fst_nm: NAME, lst_nm: 'Peer', date_of_birth: '1995-05-15' });
     say(reg.status === 201 ? 'registered' : `signup: ${reg.body?.statusKey}`);
     const login = await api('POST', '/auth/login', { email: EMAIL, password: PASSWORD });
     if (login.status !== 200) { console.error('login failed', login.body); process.exit(1); }

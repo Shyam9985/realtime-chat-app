@@ -53,6 +53,15 @@ export default function NewChatScreen({ navigation }) {
         <TextField icon="search" value={query} onChangeText={setQuery} placeholder="Search by name or email" autoFocus autoCapitalize="none" autoCorrect={false} testID="search-input"
           right={status === 'searching' ? <Spinner size="small" style={{ marginRight: 12 }} /> : null} />
       </View>
+      {/* a group starts here too: pick several people, then name it */}
+      <Pressable onPress={() => navigation.navigate('NewGroup')} accessibilityRole="button" testID="new-group"
+        style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: theme.space.md, paddingHorizontal: theme.space.lg, paddingVertical: theme.space.md, backgroundColor: pressed ? c.surfaceAlt : c.surface, borderBottomWidth: 1, borderBottomColor: c.border })}>
+        <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: c.accentBright, alignItems: 'center', justifyContent: 'center' }}>
+          <Ionicons name="people" size={22} color="#FFFFFF" />
+        </View>
+        <Text style={{ flex: 1, fontSize: theme.font.md, fontWeight: '700', color: c.text }}>New group</Text>
+        <Ionicons name="chevron-forward" size={18} color={c.textMuted} />
+      </Pressable>
       <KeyboardAvoider>
         {status === 'searching' && results.length === 0 ? (
           <PeopleListSkeleton />

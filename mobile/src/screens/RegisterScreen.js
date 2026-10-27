@@ -6,10 +6,11 @@ import { useToast } from '../contexts/MessageContext';
 import { handleSignup } from '../services/auth.service';
 import * as validate from '../utils/ValidateUtils';
 import { TextField, Button, Muted, Title } from '../components/ui';
+import DateField from '../components/DateField';
 import { AuthLayout } from './LoginScreen';
 
 const initialState = {
-  values: { firstName: '', lastName: '', email: '', mobile: '', password: '', confirmPassword: '' },
+  values: { firstName: '', lastName: '', email: '', mobile: '', dateOfBirth: '', password: '', confirmPassword: '' },
   errors: {},
 };
 
@@ -39,6 +40,8 @@ const validateForm = (v) => {
     const mobile = validate.isValidMobile(v.mobile);
     if (!mobile.status) errors.mobile = mobile.message;
   }
+  const dob = validate.isValidBirthDate(v.dateOfBirth);
+  if (!dob.status) errors.dateOfBirth = dob.message;
   const password = validate.isStrongPassword(v.password);
   if (!password.status) errors.password = password.message;
   if (v.confirmPassword !== v.password) errors.confirmPassword = 'Passwords do not match.';
@@ -109,6 +112,8 @@ export default function RegisterScreen({ navigation }) {
       </View>
       <TextField label="Email" icon="mail-outline" value={values.email} onChangeText={handleChange('email')} error={errors.email} autoCapitalize="none" keyboardType="email-address" autoComplete="email" placeholder="you@example.com" testID="reg-email" />
       <TextField label="Mobile Number (optional)" icon="call-outline" value={values.mobile} onChangeText={handleChange('mobile')} error={errors.mobile} keyboardType="phone-pad" autoComplete="tel" placeholder="10 digit mobile number" testID="reg-mobile" />
+      <DateField label="Date of Birth" value={values.dateOfBirth} onChange={handleChange('dateOfBirth')} error={errors.dateOfBirth} placeholder="Choose your date of birth"
+        maximumDate={new Date()} minimumDate={new Date(1900, 0, 1)} initial={new Date(2000, 0, 1)} testID="reg-dob" />
       <TextField label="Password" icon="lock-closed-outline" value={values.password} onChangeText={handleChange('password')} error={errors.password} secureTextEntry placeholder="At least 8 characters, mixed case, a number and a symbol" testID="reg-password" />
       <TextField label="Confirm Password" icon="lock-closed-outline" value={values.confirmPassword} onChangeText={handleChange('confirmPassword')} error={errors.confirmPassword} secureTextEntry placeholder="Repeat your password" testID="reg-confirm" onSubmitEditing={handleSubmit} returnKeyType="go" />
       <Button title={isLoading ? 'Creating account...' : 'Create Account'} onPress={handleSubmit} loading={isLoading} />

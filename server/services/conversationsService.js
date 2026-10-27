@@ -6,9 +6,12 @@ const { parseId, toIso } = require('../utils/validate.utils');
 const { log } = require('../utils/log.utils');
 
 const DIRECT = 'ONE_TO_ONE';
+const GROUP = 'GROUP';
 
 // 'lowId:highId' - the same two users always produce the same key, whoever starts the chat
 const pairKeyFor = (a, b) => `${Math.min(a, b)}:${Math.max(a, b)}`;
+
+const nameOf = (first, last) => (first ? [first, last].filter(Boolean).join(' ') : null);
 
 const toSummaryDto = (row) => ({
     conversation_id: row.conversation_id,
@@ -16,6 +19,14 @@ const toSummaryDto = (row) => ({
     // the name this member sees: their own title (one-to-one: the other person's name unless renamed),
     // else the shared group title
     title: row.custom_title || row.title || null,
+    description: row.description ?? null,
+    created_by: row.created_by,
+    // groups: whether the caller is still in it (an exited group stays listed, read-only), their role,
+    // and how many people are in it now
+    is_member: !row.left_at,
+    left_at: toIso(row.left_at),
+    my_role: row.my_role,
+    member_count: row.conversation_type === GROUP ? Number(row.member_count) || 0 : null,
     is_pinned: !!row.is_pinned,
     pinned_at: toIso(row.pinned_at),
     is_archived: !!row.is_archived,
@@ -30,6 +41,11 @@ const toSummaryDto = (row) => ({
     last_message: row.last_message_id ? {
         message_id: row.last_message_id,
         sender_id: row.last_sender_id,
+        sender_name: nameOf(row.last_sender_first_nm, row.last_sender_last_nm),
+        message_type: row.last_message_type,
+        system_event: row.last_system_event ?? null,
+        system_target_user_id: row.last_system_target_user_id ?? null,
+        system_target_name: nameOf(row.last_target_first_nm, row.last_target_last_nm),
         content: row.last_content,
         is_deleted: !!row.last_is_deleted,
         status: row.last_status,
@@ -37,7 +53,7 @@ const toSummaryDto = (row) => ({
     } : null,
     unread_count: Number(row.unread_count) || 0,
     blocked_by_me: !!row.blocked_by_me,
-    last_message_at: toIso(row.last_message_at),
+    last_message_at: toIso(row.last_created_at),
     created_at: toIso(row.created_at)
 });
 
@@ -89,12 +105,30 @@ exports.listSrvc = async (userId) => {
 };
 
 // FR-006: membership gate. a missing conversation and a foreign one get the same answer, so the
-// response never confirms that a conversation id exists
+// response never confirms that a conversation id exists. this is the gate for anything that writes
+// to a conversation (send, schedule, forward into, edit, delete, manage a group)
 exports.assertMemberSrvc = async (conversationIdRaw, userId) => {
     const conversationId = parseId(conversationIdRaw, 'Conversation id');
     const [membership] = await conversationsMdl.getMembership(conversationId, userId);
     if (!membership) resutils.createError('notMember', 'You are not a member of this conversation.');
     return membership;
+};
+
+// the reading gate: current members, and people who exited a group (they keep what they received
+// while they were in it: history, search, export, read receipts, pin / archive)
+exports.assertReaderSrvc = async (conversationIdRaw, userId) => {
+    const conversationId = parseId(conversationIdRaw, 'Conversation id');
+    const [membership] = await conversationsMdl.getReadableMembership(conversationId, userId);
+    if (!membership) resutils.createError('notMember', 'You are not a member of this conversation.');
+    return membership;
+};
+
+// GET /conversations/:id: one chat as the caller's list shows it
+exports.getOneSrvc = async (userId, conversationIdRaw) => {
+    log('in getOneSrvc');
+    const conversationId = parseId(conversationIdRaw, 'Conversation id');
+    await exports.assertReaderSrvc(conversationId, userId);
+    return { conversation: await exports.getSummarySrvc(userId, conversationId) };
 };
 
 const MAX_TITLE = 100;
@@ -113,12 +147,14 @@ const optionalBoolean = (value, label) => {
 exports.updateSettingsSrvc = async (userId, conversationIdRaw, body = {}) => {
     log('in updateSettingsSrvc');
     const conversationId = parseId(conversationIdRaw, 'Conversation id');
-    const membership = await exports.assertMemberSrvc(conversationId, userId);
+    const membership = await exports.assertReaderSrvc(conversationId, userId);
 
     const isPinned = optionalBoolean(body.is_pinned, 'is_pinned');
     const isArchived = optionalBoolean(body.is_archived, 'is_archived');
     let customTitle;
     if (body.custom_title !== undefined) {
+        // a group has one name for everyone, changed by its admins (PATCH /conversations/:id/group)
+        if (membership.type_code === GROUP) resutils.createError('validationFailed', "A group's name is the same for everyone. Admins change it from Group info.");
         if (body.custom_title !== null && typeof body.custom_title !== 'string') resutils.createError('validationFailed', 'The name must be text.');
         const title = (body.custom_title || '').trim();
         if (title.length > MAX_TITLE) resutils.createError('validationFailed', `The name cannot exceed ${MAX_TITLE} characters.`);
@@ -136,3 +172,6 @@ exports.updateSettingsSrvc = async (userId, conversationIdRaw, body = {}) => {
 
 exports.toSummaryDto = toSummaryDto;
 exports.pairKeyFor = pairKeyFor;
+exports.nameOf = nameOf;
+exports.DIRECT = DIRECT;
+exports.GROUP = GROUP;

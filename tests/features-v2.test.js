@@ -202,7 +202,7 @@ test('RP-03 / RP-05 / RP-08 replies quote a message of the same chat; a deleted 
     const original = await send(sB, ab, 'what time?');
     const live = h.waitFor(sB, 'message:new', (m) => m.reply_to?.message_id === original.message_id);
     const reply = await send(sA, ab, 'at six', { reply_to_message_id: original.message_id });
-    assert.deepEqual(reply.reply_to, { message_id: original.message_id, sender_id: B.user.user_id, content: 'what time?', is_deleted: false });
+    assert.deepEqual(reply.reply_to, { message_id: original.message_id, sender_id: B.user.user_id, sender_name: 'Bob', content: 'what time?', is_deleted: false });
     await live;
 
     await as(B).del(`/messages/${original.message_id}`);

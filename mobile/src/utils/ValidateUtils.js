@@ -136,3 +136,20 @@ export const isStrongPassword = (password, { label = 'Password', minLength = 8, 
 
     return success();
 };
+
+// a date of birth as 'YYYY-MM-DD': a real day, not in the future, at least minAge years ago (the server
+// checks the same, with the same default of 13)
+export const isValidBirthDate = (value, { label = 'Date of birth', minAge = 13 } = {}) => {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || '').trim());
+    if (!match) return failure(`${label} is required.`);
+    const [y, m, d] = match.slice(1).map(Number);
+    const date = new Date(y, m - 1, d);
+    if (date.getFullYear() !== y || date.getMonth() !== m - 1 || date.getDate() !== d) return failure(`${label} is not a real date.`);
+    const today = new Date();
+    if (date > today) return failure(`${label} cannot be in the future.`);
+    const birthdayPassed = today.getMonth() > m - 1 || (today.getMonth() === m - 1 && today.getDate() >= d);
+    const age = today.getFullYear() - y - (birthdayPassed ? 0 : 1);
+    if (age < minAge) return failure(`You must be at least ${minAge} years old to use YaapZone.`);
+    if (age > 120) return failure(`${label} is too far in the past.`);
+    return success();
+};

@@ -11,6 +11,14 @@ exports.getActiveUserById = (userId) => {
     return dbutils.executeQuery(qry, [userId], 'get active user by id');
 };
 
+// which of these ids are active accounts
+exports.getActiveIdsIn = (userIds) => {
+    log('in getActiveIdsIn');
+    if (!userIds.length) return Promise.resolve([]);
+    const qry = `select user_id from users_lst_t where is_active = 1 and user_id in (${userIds.map(() => '?').join(', ')})`;
+    return dbutils.executeQuery(qry, userIds, 'get active ids');
+};
+
 // discovery: active users other than the viewer, matched on name or email, excluding anyone who
 // has blocked the viewer (they must stay invisible). blocked_by_me lets the client label people
 // the viewer has blocked without a second call

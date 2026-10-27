@@ -37,3 +37,16 @@ export const scheduleMessage = (conversationId, content, sendAt, replyToMessageI
         .then((d) => d.scheduled);
 export const updateScheduled = (scheduledId, changes) => data(patch(`scheduled/${scheduledId}`, changes)).then((d) => d.scheduled);
 export const cancelScheduled = (scheduledId) => data(remove(`scheduled/${scheduledId}`));
+
+// groups: one chat summary, create, details and members, admin actions, exit, delete after exiting
+export const getConversation = (conversationId) => data(get(`conversations/${conversationId}`)).then((d) => d.conversation);
+export const createGroup = (title, description, memberIds) =>
+    data(post("conversations/groups", { title, member_ids: memberIds, ...(description ? { description } : {}) }));
+export const getGroup = (conversationId) => data(get(`conversations/${conversationId}/group`)).then((d) => d.group);
+export const updateGroup = (conversationId, changes) => data(patch(`conversations/${conversationId}/group`, changes));
+export const addGroupMembers = (conversationId, userIds) => data(post(`conversations/${conversationId}/members`, { user_ids: userIds }));
+export const removeGroupMember = (conversationId, userId) => data(remove(`conversations/${conversationId}/members/${userId}`));
+export const setGroupMemberRole = (conversationId, userId, role) => data(patch(`conversations/${conversationId}/members/${userId}`, { role }));
+export const leaveGroup = (conversationId) => data(post(`conversations/${conversationId}/leave`, {}));
+export const deleteGroup = (conversationId) => data(remove(`conversations/${conversationId}`));
+export const getMessageReceipts = (messageId) => data(get(`messages/${messageId}/receipts`)).then((d) => d.receipts);

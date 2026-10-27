@@ -19,6 +19,10 @@ import ChatScreen from '../screens/ChatScreen';
 import ContactInfoScreen from '../screens/ContactInfoScreen';
 import ArchivedScreen from '../screens/ArchivedScreen';
 import ForwardScreen from '../screens/ForwardScreen';
+import NewGroupScreen from '../screens/NewGroupScreen';
+import NewGroupDetailsScreen from '../screens/NewGroupDetailsScreen';
+import GroupInfoScreen from '../screens/GroupInfoScreen';
+import AddMembersScreen from '../screens/AddMembersScreen';
 
 const Stack = createNativeStackNavigator();
 const Tabs = createBottomTabNavigator();
@@ -97,6 +101,10 @@ export default function RootNavigator() {
             <Stack.Screen name="ContactInfo" component={ContactInfoScreen} options={{ title: 'Contact info' }} />
             <Stack.Screen name="Archived" component={ArchivedScreen} options={{ title: 'Archived' }} />
             <Stack.Screen name="Forward" component={ForwardScreen} options={{ title: 'Forward to…' }} />
+            <Stack.Screen name="NewGroup" component={NewGroupScreen} options={{ title: 'New group' }} />
+            <Stack.Screen name="NewGroupDetails" component={NewGroupDetailsScreen} options={{ title: 'Name the group' }} />
+            <Stack.Screen name="GroupInfo" component={GroupInfoScreen} options={{ title: 'Group info' }} />
+            <Stack.Screen name="AddMembers" component={AddMembersScreen} options={{ title: 'Add members' }} />
           </>
         ) : (
           <>

@@ -2,7 +2,7 @@ import { Platform } from 'react-native';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as chatApi from '../services/chat.service';
-import { DELETED_PLACEHOLDER, dayLabel, timeOf, isSameDay } from './chatFormat';
+import { DELETED_PLACEHOLDER, dayLabel, timeOf, isSameDay, isNotice, noticeText } from './chatFormat';
 
 const PAGE = 100;
 const MAX_MESSAGES = 10000;
@@ -28,19 +28,22 @@ function buildHtml({ title, messages, myId, nameOf }) {
   const rows = [];
   messages.forEach((m, i) => {
     if (i === 0 || !isSameDay(m.created_at, messages[i - 1].created_at)) rows.push(`<div class="day">${escapeHtml(dayLabel(m.created_at))}</div>`);
+    // a group notice ("Maya added Noah") is a centred line, as in the chat
+    if (isNotice(m)) { rows.push(`<div class="notice">${escapeHtml(noticeText(m, myId))}</div>`); return; }
     const mine = m.sender_id === myId;
     const labels = [m.is_forwarded && !m.is_deleted ? '<div class="label">Forwarded</div>' : ''];
     const quote = m.reply_to && !m.is_deleted
-      ? `<div class="quote"><b>${escapeHtml(nameOf(m.reply_to.sender_id))}</b><br>${m.reply_to.content == null ? `<i>${escapeHtml(DELETED_PLACEHOLDER)}</i>` : escapeHtml(m.reply_to.content)}</div>` : '';
+      ? `<div class="quote"><b>${escapeHtml(nameOf(m.reply_to.sender_id, m.reply_to.sender_name))}</b><br>${m.reply_to.content == null ? `<i>${escapeHtml(DELETED_PLACEHOLDER)}</i>` : escapeHtml(m.reply_to.content)}</div>` : '';
     const text = m.is_deleted ? `<i>${escapeHtml(DELETED_PLACEHOLDER)}</i>` : escapeHtml(m.content).replace(/\n/g, '<br>');
     rows.push(`<div class="row ${mine ? 'mine' : 'theirs'}"><div class="bubble">
-      <div class="sender">${escapeHtml(mine ? 'You' : nameOf(m.sender_id))}</div>${labels.join('')}${quote}<div class="text">${text}</div>
+      <div class="sender">${escapeHtml(mine ? 'You' : nameOf(m.sender_id, m.sender_name))}</div>${labels.join('')}${quote}<div class="text">${text}</div>
       <div class="meta">${m.is_edited && !m.is_deleted ? 'Edited · ' : ''}${escapeHtml(timeOf(m.created_at))}</div></div></div>`);
   });
   return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>
     body { font-family: -apple-system, Roboto, "Segoe UI", sans-serif; color: #111B21; margin: 24px; }
     h1 { font-size: 20px; margin: 0; } .sub { color: #667781; font-size: 12px; margin: 4px 0 16px; }
     .day { text-align: center; color: #667781; font-size: 11px; margin: 14px 0 6px; }
+    .notice { text-align: center; color: #667781; font-size: 11px; font-style: italic; margin: 6px 0; }
     .row { display: flex; margin: 3px 0; } .mine { justify-content: flex-end; }
     .bubble { max-width: 75%; padding: 6px 10px; border-radius: 10px; background: #FFFFFF; border: 1px solid #E9EDEF; page-break-inside: avoid; }
     .mine .bubble { background: #D9FDD3; border-color: #CDEFC6; }

@@ -282,6 +282,23 @@ const RESPONSE_STATUS = {
         message: "Messages can only be edited within 15 minutes of sending."
     },
 
+    // ---- groups ----
+    NOT_GROUP_ADMIN: {
+        code: 403,
+        statusKey: "NOT_GROUP_ADMIN",
+        message: "Only group admins can do that."
+    },
+    GROUP_FULL: {
+        code: 409,
+        statusKey: "GROUP_FULL",
+        message: "This group is full."
+    },
+    LAST_ADMIN: {
+        code: 409,
+        statusKey: "LAST_ADMIN",
+        message: "A group needs at least one admin."
+    },
+
     ACCOUNT_INACTIVE: {
         code: 403,
         statusKey: "ACCOUNT_INACTIVE",

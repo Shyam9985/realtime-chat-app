@@ -43,7 +43,14 @@ export function AuthProvider({ children }) {
     return () => registerLogoutHandler(null);
   }, [handleLogOut]);
 
-  const value = useMemo(() => ({ status, user, isLoggedIn: status === 'signedIn', handleLogin, handleLogOut }), [status, user, handleLogin, handleLogOut]);
+  // after the user edits their profile: the stored copy (names in headers, the chat list) follows
+  const updateUser = useCallback(async (fields) => {
+    const next = { ...(await tokenStore.getUser()), ...fields };
+    await tokenStore.setUser(next);
+    setUser(next);
+  }, []);
+
+  const value = useMemo(() => ({ status, user, isLoggedIn: status === 'signedIn', handleLogin, handleLogOut, updateUser }), [status, user, handleLogin, handleLogOut, updateUser]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

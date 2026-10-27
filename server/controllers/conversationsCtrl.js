@@ -4,6 +4,7 @@ const validutils = require('../utils/validate.utils');
 const conversationsService = require('../services/conversationsService');
 const messagesService = require('../services/messagesService');
 const scheduledService = require('../services/scheduledService');
+const groupsService = require('../services/groupsService');
 const { sendChatError } = require('./usersCtrl');
 const { log } = require('../utils/log.utils');
 
@@ -82,3 +83,22 @@ exports.createScheduled = handle('scheduled create', RESPONSE_STATUS.CREATED, (r
 // PATCH / DELETE /scheduled/:id  - change or cancel a pending scheduled message
 exports.updateScheduled = handle('scheduled update', RESPONSE_STATUS.UPDATED, (req) => scheduledService.updateSrvc(req.user.user_id, req.params.id, req.body || {}));
 exports.cancelScheduled = handle('scheduled cancel', RESPONSE_STATUS.DELETED, (req) => scheduledService.cancelSrvc(req.user.user_id, req.params.id));
+
+// GET /conversations/:id  - one chat as the caller's list shows it
+exports.getOne = handle('conversations get one', RESPONSE_STATUS.DATA_FOUND, (req) => conversationsService.getOneSrvc(req.user.user_id, req.params.id));
+
+// ---- groups
+// POST /conversations/groups  { title, description?, member_ids }
+exports.createGroup = handle('group create', RESPONSE_STATUS.CREATED, (req) => groupsService.createSrvc(req.user.user_id, req.body || {}));
+// GET / PATCH /conversations/:id/group  - details and members; { title?, description? } (admins)
+exports.getGroup = handle('group get', RESPONSE_STATUS.DATA_FOUND, (req) => groupsService.getGroupSrvc(req.user.user_id, req.params.id));
+exports.updateGroup = handle('group update', RESPONSE_STATUS.UPDATED, (req) => groupsService.updateInfoSrvc(req.user.user_id, req.params.id, req.body || {}));
+// POST /conversations/:id/members  { user_ids }  (admins)
+exports.addMembers = handle('group add members', RESPONSE_STATUS.SUCCESS, (req) => groupsService.addMembersSrvc(req.user.user_id, req.params.id, req.body || {}));
+// DELETE / PATCH /conversations/:id/members/:userId  - remove; { role } (admins)
+exports.removeMember = handle('group remove member', RESPONSE_STATUS.SUCCESS, (req) => groupsService.removeMemberSrvc(req.user.user_id, req.params.id, req.params.userId));
+exports.setMemberRole = handle('group set role', RESPONSE_STATUS.UPDATED, (req) => groupsService.setRoleSrvc(req.user.user_id, req.params.id, req.params.userId, req.body || {}));
+// POST /conversations/:id/leave  - any member exits the group
+exports.leaveGroup = handle('group leave', RESPONSE_STATUS.SUCCESS, (req) => groupsService.leaveSrvc(req.user.user_id, req.params.id));
+// DELETE /conversations/:id  - an exited group leaves the caller's list
+exports.deleteGroup = handle('group delete', RESPONSE_STATUS.DELETED, (req) => groupsService.deleteSrvc(req.user.user_id, req.params.id));

@@ -86,7 +86,8 @@ exports.signUp = async (req, res) => {
                 password: { required: true, type: 'password', label: 'Password' },
                 mobile: { required: false, type: 'mobile-no', label: 'Mobile Number' },
                 fst_nm: { required: true, type: 'alpha', minLength: 2, maxLength: 100, label: 'First Name' },
-                lst_nm: { required: false, type: 'alpha', maxLength: 100, label: 'Last Name' }
+                lst_nm: { required: false, type: 'alpha', maxLength: 100, label: 'Last Name' },
+                date_of_birth: { required: true, type: 'string', label: 'Date of birth', validator: (value) => validutils.isValidBirthDate(value) }
             });
 
         if (!validation?.validationStatus) resutils.createError('validationFailed', validation.errors[0]);

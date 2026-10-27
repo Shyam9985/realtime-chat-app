@@ -5,25 +5,56 @@ import { useTheme } from '../theme/ThemeContext';
 import { useChat } from '../contexts/ChatContext';
 import { useToast } from '../contexts/MessageContext';
 import * as chatApi from '../services/chat.service';
-import { Screen, Banner, IconButton, Button, EmptyState, Avatar, Dialog, PopupMenu, KeyboardAvoider, ChatSkeleton, TextField, webNoOutline } from '../components/ui';
-import { MessageBubble, DaySeparator, StatusTicks, ReplyQuote } from '../components/MessageBubble';
+import { Screen, Banner, IconButton, Button, EmptyState, Avatar, GroupAvatar, Dialog, PopupMenu, KeyboardAvoider, ChatSkeleton, TextField, webNoOutline } from '../components/ui';
+import { MessageBubble, DaySeparator, StatusTicks, ReplyQuote, SystemNotice } from '../components/MessageBubble';
 import ScheduleDialog from '../components/ScheduleDialog';
 import { exportChatAsPdf } from '../utils/exportChat';
-import { DELETE_WINDOW_MINUTES, MESSAGE_MAX_LENGTH, dayLabel, fullName, fullStamp, isSameDay, minutesSince, timeOf } from '../utils/chatFormat';
+import { DELETE_WINDOW_MINUTES, MESSAGE_MAX_LENGTH, dayLabel, firstName, fullName, fullStamp, isGroup, isNotice, isSameDay, minutesSince, noticeText, timeOf } from '../utils/chatFormat';
 
 const EDIT_WINDOW_MINUTES = 15;
 
-// whatsapp-style header: avatar, name and the email underneath; tapping it opens the contact's profile
-function HeaderTitle({ user, title, color, onPress }) {
+// whatsapp-style header: avatar, name and a line underneath (the email; in a group, who is in it).
+// tapping it opens the contact's profile or the group's info
+function HeaderTitle({ user, group, title, subtitle, color, onPress }) {
   return (
-    <Pressable onPress={onPress} disabled={!onPress} accessibilityRole="button" accessibilityLabel={`View ${title}'s profile`} testID="chat-header"
-      style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-      {user ? <Avatar user={user} size={36} /> : null}
-      <View style={{ minWidth: 0 }}>
+    <Pressable onPress={onPress} disabled={!onPress} accessibilityRole="button" accessibilityLabel={group ? `${title}, group info` : `View ${title}'s profile`} testID="chat-header"
+      style={{ flexDirection: 'row', alignItems: 'center', gap: 10, maxWidth: 230 }}>
+      {group ? <GroupAvatar size={36} /> : user ? <Avatar user={user} size={36} /> : null}
+      <View style={{ minWidth: 0, flexShrink: 1 }}>
         <Text numberOfLines={1} style={{ color, fontWeight: '700', fontSize: 17 }}>{title}</Text>
-        {user?.email ? <Text numberOfLines={1} style={{ color, opacity: 0.8, fontSize: 12 }}>{user.email}</Text> : null}
+        {subtitle ? <Text numberOfLines={1} style={{ color, opacity: 0.8, fontSize: 12 }} testID="chat-header-subtitle">{subtitle}</Text> : null}
       </View>
     </Pressable>
+  );
+}
+
+// message info in a group: who has read it and who has it, each with their own time
+function GroupReceipts({ receipts, theme }) {
+  const c = theme.colors;
+  if (receipts == null) return <ActivityIndicator size="small" color={c.accent} style={{ marginVertical: theme.space.md }} />;
+  const groups = [
+    { key: 'read', status: 'SEEN', label: 'Read by', rows: receipts.filter((r) => r.seen_at), at: (r) => r.seen_at },
+    { key: 'delivered', status: 'DELIVERED', label: 'Delivered to', rows: receipts.filter((r) => r.delivered_at && !r.seen_at && !r.left_group), at: (r) => r.delivered_at },
+    { key: 'waiting', status: 'SENT', label: 'Not delivered yet', rows: receipts.filter((r) => !r.delivered_at && !r.left_group), at: () => null },
+    { key: 'left', status: 'SENT', label: 'Left the group before reading', rows: receipts.filter((r) => r.left_group && !r.seen_at), at: () => null },
+  ].filter((g) => g.rows.length);
+  return (
+    <View testID="group-receipts">
+      {groups.map((g) => (
+        <View key={g.key} style={{ marginTop: theme.space.md }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+            <StatusTicks status={g.status} color={c.textMuted} seenColor={c.seen} />
+            <Text style={{ color: c.text, fontWeight: '700', fontSize: theme.font.sm }}>{g.label}</Text>
+          </View>
+          {g.rows.map((r) => (
+            <View key={r.user_id} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: theme.space.md, paddingVertical: 3 }}>
+              <Text numberOfLines={1} style={{ flex: 1, color: c.text, fontSize: theme.font.sm }}>{r.name}</Text>
+              {g.at(r) ? <Text style={{ color: c.textMuted, fontSize: theme.font.sm }}>{fullStamp(g.at(r))}</Text> : null}
+            </View>
+          ))}
+        </View>
+      ))}
+    </View>
   );
 }
 
@@ -58,6 +89,9 @@ export default function ChatScreen({ route, navigation }) {
   const conversation = chat.conversations.find((x) => x.conversation_id === conversationId);
   const thread = chat.threads[conversationId];
   const other = conversation?.other_user;
+  const group = isGroup(conversation);
+  // after exiting (or being removed) a group stays readable but nothing can be sent
+  const isMember = conversation ? conversation.is_member !== false : true;
   const name = conversation ? (conversation.title || fullName(other)) : title;
   const messages = useMemo(() => thread?.messages || [], [thread]);
   const listRef = useRef(null);
@@ -83,6 +117,20 @@ export default function ChatScreen({ route, navigation }) {
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameText, setRenameText] = useState('');
   const [exporting, setExporting] = useState(null);   // null | number of messages fetched so far
+  const [receipts, setReceipts] = useState(null);     // message info in a group: each member's times
+  const [members, setMembers] = useState(null);       // a group's current members, for the header line
+
+  // a group's members (the header shows who is in it); refetched when the group changes
+  const groupVersion = chat.groupVersion[conversationId] || 0;
+  useEffect(() => {
+    if (!group || !isMember) { setMembers(null); return undefined; }
+    let alive = true;
+    chatApi.getGroup(conversationId).then((g) => { if (alive) setMembers(g.members); }).catch(() => {});
+    return () => { alive = false; };
+  }, [conversationId, group, isMember, groupVersion]);
+  const subtitle = !group ? other?.email
+    : !isMember ? 'You’re no longer a member'
+      : members ? [...members.filter((m) => !m.is_me).map((m) => firstName(fullName(m))), 'You'].join(', ') : 'Tap for group info';
 
   useEffect(() => {
     chat.openConversation(conversationId);
@@ -99,10 +147,14 @@ export default function ChatScreen({ route, navigation }) {
     return () => { alive = false; };
   }, [conversationId, scheduledVersion]);
 
-  const openProfile = useCallback(() => { if (other) navigation.navigate('ContactInfo', { userId: other.user_id, fromChat: true }); }, [navigation, other]);
-  const authorName = useCallback((senderId) => (senderId === chat.myId ? 'You' : fullName(other)), [chat.myId, other]);
+  const openProfile = useCallback(() => {
+    if (group) navigation.navigate('GroupInfo', { conversationId });
+    else if (other) navigation.navigate('ContactInfo', { userId: other.user_id, fromChat: true });
+  }, [navigation, other, group, conversationId]);
+  // who wrote a message: you, the other person, or in a group the name the server sent with it
+  const authorName = useCallback((senderId, senderName) => (senderId === chat.myId ? 'You' : group ? senderName || 'Someone' : fullName(other)), [chat.myId, other, group]);
   const isMine = (m) => m.sender_id === chat.myId;
-  const canEdit = (m) => isMine(m) && !m.is_deleted && !m.local && m.status !== 'FAILED' && minutesSince(m.created_at) < EDIT_WINDOW_MINUTES;
+  const canEdit = (m) => isMember && isMine(m) && !m.is_deleted && !m.local && m.status !== 'FAILED' && minutesSince(m.created_at) < EDIT_WINDOW_MINUTES;
 
   // ---- jump to a message (search result, reply quote): load older pages if needed, then scroll
   const jumpTo = useCallback(async (messageId) => {
@@ -153,11 +205,11 @@ export default function ChatScreen({ route, navigation }) {
         headerTitle: () => <Text style={{ color, fontWeight: '700', fontSize: 17 }}>1 selected</Text>,
         headerRight: () => (
           <View style={{ flexDirection: 'row', alignItems: 'center' }} testID="selection-actions">
-            {!m.is_deleted ? headerIcon('arrow-undo-outline', () => { setReplyTo(m); setEditing(null); setSelected(null); }, 'Reply', color, 'action-reply') : null}
+            {!m.is_deleted && isMember ? headerIcon('arrow-undo-outline', () => { setReplyTo(m); setEditing(null); setSelected(null); }, 'Reply', color, 'action-reply') : null}
             {!m.is_deleted ? headerIcon('arrow-redo-outline', () => { setSelected(null); navigation.navigate('Forward', { message: m }); }, 'Forward', color, 'action-forward') : null}
             {canEdit(m) ? headerIcon('create-outline', () => { setEditing({ kind: 'message', message: m }); setReplyTo(null); setDraft(m.content); setSelected(null); }, 'Edit', color, 'action-edit') : null}
             {isMine(m) ? headerIcon('information-circle-outline', () => { setConfirm({ kind: 'info', message: m }); setSelected(null); }, 'Message info', color, 'action-info') : null}
-            {isMine(m) && !m.is_deleted ? headerIcon('trash-outline', () => { setConfirm({ kind: 'delete', message: m, allowed: minutesSince(m.created_at) < DELETE_WINDOW_MINUTES }); setSelected(null); }, 'Delete', color, 'action-delete') : null}
+            {isMine(m) && !m.is_deleted && isMember ? headerIcon('trash-outline', () => { setConfirm({ kind: 'delete', message: m, allowed: minutesSince(m.created_at) < DELETE_WINDOW_MINUTES }); setSelected(null); }, 'Delete', color, 'action-delete') : null}
           </View>
         ),
       });
@@ -181,17 +233,17 @@ export default function ChatScreen({ route, navigation }) {
     } else {
       navigation.setOptions({
         headerLeft: undefined,
-        headerTitle: () => <HeaderTitle user={other} title={name} color={color} onPress={other ? openProfile : undefined} />,
+        headerTitle: () => <HeaderTitle user={other} group={group} title={name} subtitle={subtitle} color={color} onPress={other || group ? openProfile : undefined} />,
         headerRight: () => (
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             {headerIcon('search-outline', () => setSearchMode(true), 'Search this chat', color, 'chat-search-open')}
-            {other ? headerIcon('ellipsis-vertical', () => setMenuOpen(true), 'Conversation options', color, 'chat-menu') : null}
+            {other || group ? headerIcon('ellipsis-vertical', () => setMenuOpen(true), 'Conversation options', color, 'chat-menu') : null}
           </View>
         ),
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [navigation, selected, searchMode, searchQuery, results, resultIndex, other, name, c.headerText, openProfile]);
+  }, [navigation, selected, searchMode, searchQuery, results, resultIndex, other, group, subtitle, name, c.headerText, openProfile]);
 
   // ---- sending, editing, scheduling
   const send = useCallback(async () => {
@@ -246,13 +298,14 @@ export default function ChatScreen({ route, navigation }) {
 
   const actionFailed = (e) => setSendError(e?.statusKey === 'DELETE_WINDOW_EXPIRED' ? 'Too late: the 15 minute window has passed.' : e?.error || e?.message || 'Action failed.');
 
-  // message info: fetch earlier versions of an edited message when it opens
+  // message info: fetch earlier versions of an edited message, and in a group who has it, when it opens
   useEffect(() => {
     setHistory(null);
-    if (confirm?.kind === 'info' && confirm.message.is_edited) {
-      chatApi.getEditHistory(confirm.message.message_id).then(setHistory).catch(() => setHistory([]));
-    }
-  }, [confirm]);
+    setReceipts(null);
+    if (confirm?.kind !== 'info') return;
+    if (confirm.message.is_edited) chatApi.getEditHistory(confirm.message.message_id).then(setHistory).catch(() => setHistory([]));
+    if (group) chatApi.getMessageReceipts(confirm.message.message_id).then(setReceipts).catch(() => setReceipts([]));
+  }, [confirm, group]);
 
   const rename = async () => {
     try {
@@ -276,7 +329,24 @@ export default function ChatScreen({ route, navigation }) {
     }
   };
 
-  const menuItems = !other ? [] : [
+  const exitGroup = async () => {
+    try { await chat.leaveGroup(conversationId); toast.success('You exited the group.'); }
+    catch (e) { actionFailed(e); }
+  };
+  const deleteGroup = async () => {
+    try { await chat.deleteGroup(conversationId); toast.success('Group deleted.'); navigation.popToTop(); }
+    catch (e) { actionFailed(e); }
+  };
+
+  // a group: its info (members, admin actions), export, and exit, or delete once exited.
+  // a one-to-one chat: the profile, a personal name, export, block
+  const menuItems = group ? [
+    { label: 'Group info', icon: 'people-circle-outline', onPress: openProfile },
+    { label: 'Export chat', icon: 'document-text-outline', onPress: exportPdf },
+    isMember
+      ? { label: 'Exit group', icon: 'exit-outline', destructive: true, onPress: () => setConfirm({ kind: 'exit' }) }
+      : { label: 'Delete group', icon: 'trash-outline', destructive: true, onPress: () => setConfirm({ kind: 'deleteGroup' }) },
+  ] : !other ? [] : [
     { label: 'View profile', icon: 'person-circle-outline', onPress: openProfile },
     { label: 'Rename chat', icon: 'pencil-outline', onPress: () => { setRenameText(conversation?.title || ''); setRenameOpen(true); } },
     { label: 'Export chat', icon: 'document-text-outline', onPress: exportPdf },
@@ -294,6 +364,22 @@ export default function ChatScreen({ route, navigation }) {
         actions: [{ label: 'Cancel' }, { label: 'Block', style: 'destructive', testID: 'confirm-block', onPress: () => chat.blockUser(other.user_id).catch(actionFailed) }],
       };
     }
+    if (confirm.kind === 'exit') {
+      return {
+        visible: true, icon: 'exit-outline', tone: 'danger', title: `Exit “${name}”?`,
+        message: conversation?.my_role === 'ADMIN' && members?.length > 1 && members.filter((m) => m.role === 'ADMIN').length === 1
+          ? 'You are the only admin: the member who has been in the group longest becomes admin. You can still read the messages you received.'
+          : 'You will stop receiving messages from this group. You can still read the messages you received.',
+        actions: [{ label: 'Cancel' }, { label: 'Exit', style: 'destructive', testID: 'confirm-exit-group', onPress: exitGroup }],
+      };
+    }
+    if (confirm.kind === 'deleteGroup') {
+      return {
+        visible: true, icon: 'trash-outline', tone: 'danger', title: `Delete “${name}”?`,
+        message: 'The group and its messages disappear from your chats on all your devices.',
+        actions: [{ label: 'Cancel' }, { label: 'Delete', style: 'destructive', testID: 'confirm-delete-group', onPress: deleteGroup }],
+      };
+    }
     if (confirm.kind === 'info') {
       // read live from the thread, so delivered / read times appear while the dialog is open
       const m = messages.find((x) => x.message_id === confirm.message.message_id) || confirm.message;
@@ -303,8 +389,9 @@ export default function ChatScreen({ route, navigation }) {
           <View style={{ marginTop: theme.space.md }} testID="message-info">
             <Text numberOfLines={3} style={{ color: c.textMuted, fontSize: theme.font.sm, textAlign: 'center', marginBottom: theme.space.md }}>{m.content}</Text>
             <InfoLine status="SENT" label="Sent" at={fullStamp(m.created_at)} theme={theme} />
-            <InfoLine status="DELIVERED" label="Delivered" at={fullStamp(m.delivered_at)} theme={theme} />
-            <InfoLine status="SEEN" label="Read" at={fullStamp(m.seen_at)} theme={theme} />
+            <InfoLine status="DELIVERED" label={group ? 'Delivered to everyone' : 'Delivered'} at={fullStamp(m.delivered_at)} theme={theme} />
+            <InfoLine status="SEEN" label={group ? 'Read by everyone' : 'Read'} at={fullStamp(m.seen_at)} theme={theme} />
+            {group ? <GroupReceipts receipts={receipts} theme={theme} /> : null}
             {m.is_edited ? (
               <View style={{ marginTop: theme.space.md }} testID="edit-history">
                 <Text style={{ color: c.text, fontWeight: '700', fontSize: theme.font.sm, marginBottom: 4 }}>Edited {fullStamp(m.edited_at)}</Text>
@@ -321,7 +408,7 @@ export default function ChatScreen({ route, navigation }) {
     if (confirm.kind === 'delete') {
       return confirm.allowed ? {
         visible: true, icon: 'trash-outline', tone: 'danger', title: 'Delete for everyone?',
-        message: `The message is replaced by “This message was deleted” for both of you. You can do this for ${DELETE_WINDOW_MINUTES} minutes after sending.`,
+        message: `The message is replaced by “This message was deleted” for ${group ? 'everyone in the group' : 'both of you'}. You can do this for ${DELETE_WINDOW_MINUTES} minutes after sending.`,
         actions: [{ label: 'Cancel' }, { label: 'Delete', style: 'destructive', testID: 'confirm-delete', onPress: () => chat.deleteMessage(confirm.message).catch(actionFailed) }],
       } : {
         visible: true, icon: 'time-outline', title: 'Delete for everyone?',
@@ -343,14 +430,24 @@ export default function ChatScreen({ route, navigation }) {
   const renderItem = ({ item, index }) => {
     const older = messages[index + 1];
     const showDay = !older || !isSameDay(item.created_at, older.created_at);
+    if (isNotice(item)) {
+      return (
+        <View>
+          {showDay ? <DaySeparator label={dayLabel(item.created_at)} /> : null}
+          <SystemNotice text={noticeText(item, chat.myId)} />
+        </View>
+      );
+    }
+    const startsRun = showDay || !older || isNotice(older) || older.sender_id !== item.sender_id;
     return (
       <View>
         {showDay ? <DaySeparator label={dayLabel(item.created_at)} /> : null}
         <MessageBubble message={item} mine={isMine(item)} highlight={highlight} focused={focusedId === item.message_id}
+          senderName={group && !isMine(item) && startsRun ? authorName(item.sender_id, item.sender_name) : null}
           selected={selected && ((selected.message_id && selected.message_id === item.message_id) || (selected.client_message_id && selected.client_message_id === item.client_message_id))}
           onLongPress={() => { if (!item.local && item.status !== 'FAILED') setSelected(item); }}
           onPress={() => { if (selected) setSelected(null); else if (item.status === 'FAILED') setConfirm({ kind: 'failed', message: item }); }}
-          onReply={(m) => { setReplyTo(m); setEditing(null); }}
+          onReply={isMember ? (m) => { setReplyTo(m); setEditing(null); } : undefined}
           onQuotePress={jumpTo} quoteAuthor={authorName} />
       </View>
     );
@@ -365,7 +462,7 @@ export default function ChatScreen({ route, navigation }) {
       {/* the composer rides on top of the keyboard on both platforms */}
       <KeyboardAvoider>
         {chat.socketStatus !== 'connected' ? <Banner kind="warning" text={chat.socketStatus === 'connecting' ? 'Connecting…' : 'Offline. Sending falls back to the server api.'} /> : null}
-        {conversation?.blocked_by_me ? (
+        {!group && conversation?.blocked_by_me ? (
           <Banner kind="danger" text={`You blocked ${fullName(other)}. They can't message you.`}
             action={<Button title="Unblock" variant="ghost" onPress={() => chat.unblockUser(other.user_id).catch(actionFailed)} style={{ paddingVertical: 6, paddingHorizontal: 10 }} />} />
         ) : null}
@@ -378,7 +475,7 @@ export default function ChatScreen({ route, navigation }) {
           ) : thread?.status === 'error' && messages.length === 0 ? (
             <EmptyState icon="cloud-offline-outline" title="Could not load messages" subtitle={thread.error} action={<Button title="Try again" onPress={() => chat.openConversation(conversationId)} />} />
           ) : messages.length === 0 ? (
-            <EmptyState icon="hand-left-outline" title={`Say hello to ${fullName(other)}`} subtitle="Messages are delivered in real time and kept for when they are offline." />
+            <EmptyState icon="hand-left-outline" title={group ? 'No messages yet' : `Say hello to ${fullName(other)}`} subtitle="Messages are delivered in real time and kept for when they are offline." />
           ) : (
             <FlatList
               ref={listRef}
@@ -403,7 +500,7 @@ export default function ChatScreen({ route, navigation }) {
         {sendError ? <Banner kind="danger" text={sendError} action={<IconButton name="close" size={18} color={c.danger} onPress={() => setSendError(null)} accessibilityLabel="Dismiss" />} /> : null}
 
         {/* scheduled messages: a compact strip that opens into the list */}
-        {pending.length ? (
+        {pending.length && isMember ? (
           <View style={{ marginHorizontal: theme.space.sm, marginTop: theme.space.xs, borderRadius: 12, backgroundColor: c.surface, overflow: 'hidden' }} testID="scheduled-strip">
             <Pressable onPress={() => setScheduledOpen((o) => !o)} accessibilityRole="button" accessibilityState={{ expanded: scheduledOpen }}
               style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: theme.space.md, paddingVertical: 8 }}>
@@ -431,10 +528,10 @@ export default function ChatScreen({ route, navigation }) {
         ) : null}
 
         {/* reply quote or edit banner above the composer */}
-        {replyTo || editing ? (
+        {(replyTo || editing) && isMember ? (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: theme.space.sm, marginTop: theme.space.xs, padding: 6, borderRadius: 12, backgroundColor: c.surface }} testID="composer-context">
             {replyTo ? (
-              <ReplyQuote reply={replyTo} authorName={authorName(replyTo.sender_id)} compact style={{ flex: 1 }} />
+              <ReplyQuote reply={replyTo} authorName={authorName(replyTo.sender_id, replyTo.sender_name)} compact style={{ flex: 1 }} />
             ) : (
               <View style={{ flex: 1, borderLeftWidth: 4, borderLeftColor: c.accent, paddingLeft: 8 }}>
                 <Text style={{ color: c.accent, fontWeight: '700', fontSize: theme.font.sm }}>{editing.kind === 'message' ? 'Editing message' : 'Editing scheduled message'}</Text>
@@ -446,7 +543,12 @@ export default function ChatScreen({ route, navigation }) {
           </View>
         ) : null}
 
-        {/* composer: pill input and a round send button (hold it to schedule) */}
+        {/* composer: pill input and a round send button (hold it to schedule). after exiting a group: a notice instead */}
+        {!isMember ? (
+          <View style={{ margin: theme.space.sm, padding: theme.space.md, borderRadius: 12, backgroundColor: c.surface, alignItems: 'center' }} testID="read-only-bar">
+            <Text style={{ color: c.textMuted, fontSize: theme.font.sm, textAlign: 'center' }}>You can’t send messages to this group because you’re no longer a member.</Text>
+          </View>
+        ) : (
         <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: theme.space.sm, paddingHorizontal: theme.space.sm, paddingVertical: theme.space.sm }}>
           <View style={{ flex: 1, flexDirection: 'row', alignItems: 'flex-end', backgroundColor: c.surface, borderRadius: 24, paddingLeft: theme.space.md, paddingRight: theme.space.sm, paddingVertical: 4, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 1, shadowOffset: { width: 0, height: 1 }, elevation: 1 }}>
             <TextInput
@@ -470,6 +572,7 @@ export default function ChatScreen({ route, navigation }) {
             <Ionicons name={editing?.kind === 'message' ? 'checkmark' : 'send'} size={22} color="#FFFFFF" />
           </Pressable>
         </View>
+        )}
       </KeyboardAvoider>
 
       <PopupMenu visible={menuOpen} items={menuItems} onClose={() => setMenuOpen(false)} />

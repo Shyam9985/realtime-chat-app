@@ -51,7 +51,7 @@ const SWIPE_TRIGGER = 64;
  * it to the right quotes it in the composer; tapping a failed one offers retry. Swipe only reacts to
  * a clearly horizontal drag, so scrolling the chat never starts a reply by accident.
  */
-export function MessageBubble({ message, mine, onLongPress, onPress, onReply, onQuotePress, quoteAuthor, highlight, selected, focused }) {
+export function MessageBubble({ message, mine, senderName, onLongPress, onPress, onReply, onQuotePress, quoteAuthor, highlight, selected, focused }) {
   const { theme } = useTheme();
   const c = theme.colors;
   const deleted = message.is_deleted;
@@ -112,6 +112,8 @@ export function MessageBubble({ message, mine, onLongPress, onPress, onReply, on
             opacity: pressed ? 0.85 : failed ? 0.8 : 1,
           })}
         >
+          {/* in a group, who wrote it (once per run of messages from the same person) */}
+          {senderName ? <Text numberOfLines={1} style={{ color: c.accent, fontWeight: '700', fontSize: theme.font.sm, marginBottom: 2 }} testID="sender-name">{senderName}</Text> : null}
           {message.is_forwarded && !deleted ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 }}>
               <Ionicons name="arrow-redo" size={12} color={meta} />
@@ -119,7 +121,7 @@ export function MessageBubble({ message, mine, onLongPress, onPress, onReply, on
             </View>
           ) : null}
           {message.reply_to && !deleted ? (
-            <ReplyQuote reply={message.reply_to} authorName={quoteAuthor ? quoteAuthor(message.reply_to.sender_id) : ''} onPress={onQuotePress ? () => onQuotePress(message.reply_to.message_id) : undefined} style={{ marginBottom: 4 }} />
+            <ReplyQuote reply={message.reply_to} authorName={quoteAuthor ? quoteAuthor(message.reply_to.sender_id, message.reply_to.sender_name) : ''} onPress={onQuotePress ? () => onQuotePress(message.reply_to.message_id) : undefined} style={{ marginBottom: 4 }} />
           ) : null}
           {deleted ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -137,6 +139,18 @@ export function MessageBubble({ message, mine, onLongPress, onPress, onReply, on
           </View>
         </Pressable>
       </Animated.View>
+    </View>
+  );
+}
+
+// a group notice ("Maya added Noah"): a centred line in the chat, not a message anyone wrote
+export function SystemNotice({ text }) {
+  const { theme } = useTheme();
+  return (
+    <View style={{ alignItems: 'center', marginVertical: theme.space.xs, paddingHorizontal: theme.space.xl }} testID="system-notice">
+      <View style={{ backgroundColor: theme.colors.surface, paddingHorizontal: theme.space.md, paddingVertical: 5, borderRadius: theme.radius.sm, opacity: 0.95 }}>
+        <Text style={{ color: theme.colors.textMuted, fontSize: theme.font.xs, textAlign: 'center' }}>{text}</Text>
+      </View>
     </View>
   );
 }

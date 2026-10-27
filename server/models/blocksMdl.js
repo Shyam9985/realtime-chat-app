@@ -38,6 +38,17 @@ exports.recipientsBlockingSender = (senderId, recipientIds) => {
     return dbutils.executeQuery(qry, [senderId, ...recipientIds], 'recipients blocking sender');
 };
 
+// the people in the list with an active block between them and userId, in either direction (adding
+// to a group: nobody is put in a group with someone they blocked or who blocked them, by that person)
+exports.blockedEitherWay = (userId, otherIds) => {
+    log('in blockedEitherWay');
+    if (!otherIds.length) return Promise.resolve([]);
+    const marks = otherIds.map(() => '?').join(', ');
+    const qry = `select blocked_id as user_id from user_blocks_t where blocker_id = ? and is_active = 1 and blocked_id in (${marks})
+        union select blocker_id as user_id from user_blocks_t where blocked_id = ? and is_active = 1 and blocker_id in (${marks})`;
+    return dbutils.executeQuery(qry, [userId, ...otherIds, userId, ...otherIds], 'blocked either way');
+};
+
 exports.listBlockedUsers = (blockerId) => {
     log('in listBlockedUsers');
     const qry = `select b.block_id, u.user_id, u.first_nm, u.last_nm, u.email, u.profile_photo_url, b.updated_at as blocked_at

@@ -1,4 +1,5 @@
 const resutils = require('../utils/response.utils');
+const validutils = require('../utils/validate.utils');
 const RESPONSE_STATUS = require('../utils/standard.messages');
 const profileService = require('../services/profileService');
 const { log } = require('../utils/log.utils');
@@ -9,6 +10,9 @@ const sendProfileError = (req, res, error, fname) => {
 
     if (error.name === 'noUser') {
         return resutils.sendErrorResponse(req, res, error.message, RESPONSE_STATUS.NO_DATA_FOUND, { function: fname });
+    }
+    if (error.name === 'validationFailed') {
+        return resutils.sendErrorResponse(req, res, error.message, RESPONSE_STATUS.VALIDATION_ERROR, { function: fname });
     }
 
     return resutils.sendErrorResponse(req, res, 'We could not load your profile right now. Please try again in a moment.',
@@ -24,5 +28,26 @@ exports.getProfile = async (req, res) => {
         return resutils.sendSuccessResponse(req, res, result, RESPONSE_STATUS.DATA_FOUND, { function: 'get profile controller' });
     } catch (error) {
         return sendProfileError(req, res, error, 'get profile controller');
+    }
+}
+
+// PATCH /profile  { fst_nm?, lst_nm?, mobile?, date_of_birth? }  - the same rules as sign-up; a blank
+// last name or mobile clears it. the email (the login id) is not editable, so it is an unknown field here
+exports.updateProfile = async (req, res) => {
+    log('in updateProfile');
+    try {
+        const body = req.body || {};
+        const validation = await validutils.validatePayload(body, {
+            fst_nm: { required: false, type: 'alpha', maxLength: 100, label: 'First Name' },
+            lst_nm: { required: false, type: 'alpha', maxLength: 100, label: 'Last Name' },
+            mobile: { required: false, type: 'mobile-no', label: 'Mobile Number' },
+            date_of_birth: { required: false, type: 'string', label: 'Date of birth', validator: (value) => validutils.isValidBirthDate(value) }
+        });
+        if (!validation?.validationStatus) resutils.createError('validationFailed', validation.errors[0]);
+
+        const result = await profileService.updateProfileSrvc(req.user.user_id, body);
+        return resutils.sendSuccessResponse(req, res, result, RESPONSE_STATUS.UPDATED, { function: 'update profile controller' });
+    } catch (error) {
+        return sendProfileError(req, res, error, 'update profile controller');
     }
 }

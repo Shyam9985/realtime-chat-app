@@ -15,7 +15,8 @@ import { useAuth } from "./AuthContext";
 const ChatContext = createContext(null);
 
 // scheduledVersion: per conversation, bumped when the sender's scheduled messages change (screens refetch)
-const initialState = { conversations: [], conversationsStatus: "idle", conversationsError: null, threads: {}, socketStatus: "disconnected", scheduledVersion: {} };
+// groupVersion: per group, bumped when its members, roles, name or description change (screens refetch)
+const initialState = { conversations: [], conversationsStatus: "idle", conversationsError: null, threads: {}, socketStatus: "disconnected", scheduledVersion: {}, groupVersion: {} };
 const emptyThread = () => ({ messages: [], nextCursor: null, hasMore: true, status: "idle", error: null });
 
 const ts = (v) => (v ? new Date(v).getTime() : 0);
@@ -64,7 +65,11 @@ function reducer(state, action) {
                 ...state,
                 conversations: sortConversations(state.conversations.map((c) => c.conversation_id !== message.conversation_id ? c : {
                     ...c,
-                    last_message: { message_id: message.message_id, sender_id: message.sender_id, content: message.content, is_deleted: message.is_deleted, created_at: message.created_at, status: message.status },
+                    last_message: {
+                        message_id: message.message_id, sender_id: message.sender_id, sender_name: message.sender_name, message_type: message.message_type,
+                        system_event: message.system_event, system_target_user_id: message.system_target_user_id, system_target_name: message.system_target_name,
+                        content: message.content, is_deleted: message.is_deleted, created_at: message.created_at, status: message.status,
+                    },
                     last_message_at: message.created_at,
                     unread_count: incrementUnread ? (c.unread_count || 0) + 1 : c.unread_count,
                 })),
@@ -94,6 +99,12 @@ function reducer(state, action) {
         case "PREVIEW_CONTENT": return { ...state, conversations: state.conversations.map((c) => (c.conversation_id === action.message.conversation_id && c.last_message?.message_id === action.message.message_id ? { ...c, last_message: { ...c.last_message, content: action.message.content } } : c)) };
         case "UNREAD_CLEARED": return { ...state, conversations: state.conversations.map((c) => (c.unread_count ? { ...c, unread_count: 0 } : c)) };
         case "SCHEDULED_CHANGED": return { ...state, scheduledVersion: { ...state.scheduledVersion, [action.id]: (state.scheduledVersion[action.id] || 0) + 1 } };
+        case "GROUP_CHANGED": return { ...state, groupVersion: { ...state.groupVersion, [action.id]: (state.groupVersion[action.id] || 0) + 1 } };
+        // a group deleted from the list after exiting it: the chat and its messages leave this phone's state
+        case "CONVERSATION_REMOVE": {
+            const { [action.id]: _gone, ...threads } = state.threads;
+            return { ...state, conversations: state.conversations.filter((c) => c.conversation_id !== action.id), threads };
+        }
         case "MESSAGE_PATCH": { const t = state.threads[action.conversationId]; if (!t) return state; return { ...state, threads: { ...state.threads, [action.conversationId]: { ...t, messages: patch(t.messages, action.predicate, action.fields) } } }; }
         case "MESSAGE_REMOVE": { const t = state.threads[action.conversationId]; if (!t) return state; return { ...state, threads: { ...state.threads, [action.conversationId]: { ...t, messages: t.messages.filter((m) => !action.predicate(m)) } } }; }
         case "RESET": return initialState;
@@ -240,6 +251,34 @@ export function ChatProvider({ children }) {
         return conversation;
     }, []);
 
+    // one chat's summary again (a group whose members, roles or name changed); gone when no longer readable
+    const refreshConversation = useCallback(async (conversationId) => {
+        try { dispatch({ type: "CONVERSATION_UPSERT", conversation: await chatApi.getConversation(conversationId) }); }
+        catch (error) { if (error?.statusKey === "NOT_A_MEMBER") dispatch({ type: "CONVERSATION_REMOVE", id: conversationId }); }
+    }, []);
+
+    // groups. skipped: the people who could not be added (blocked, or no longer on YaapZone)
+    const createGroup = useCallback(async (title, description, memberIds) => {
+        const { conversation, skipped_user_ids: skipped } = await chatApi.createGroup(title, description, memberIds);
+        dispatch({ type: "CONVERSATION_UPSERT", conversation });
+        return { conversation, skipped };
+    }, []);
+
+    // any member can exit; the group stays in their list, read-only
+    const leaveGroup = useCallback(async (conversationId) => {
+        const { conversation } = await chatApi.leaveGroup(conversationId);
+        dispatch({ type: "CONVERSATION_UPSERT", conversation });
+        dispatch({ type: "GROUP_CHANGED", id: conversationId });
+        loadHistory(conversationId, null, true);
+        return conversation;
+    }, [loadHistory]);
+
+    // only after exiting: the group leaves the list
+    const deleteGroup = useCallback(async (conversationId) => {
+        await chatApi.deleteGroup(conversationId);
+        dispatch({ type: "CONVERSATION_REMOVE", id: conversationId });
+    }, []);
+
     const setBlockedFlag = (userId, blocked) => state.conversations.filter((c) => c.other_user?.user_id === userId).forEach((c) => dispatch({ type: "CONVERSATION_PATCH", id: c.conversation_id, fields: { blocked_by_me: blocked } }));
     const blockUser = useCallback(async (userId) => { await chatApi.blockUser(userId); setBlockedFlag(userId, true); }, [state.conversations]);     // eslint-disable-line react-hooks/exhaustive-deps
     const unblockUser = useCallback(async (userId) => { await chatApi.unblockUser(userId); setBlockedFlag(userId, false); }, [state.conversations]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -255,9 +294,12 @@ export function ChatProvider({ children }) {
             }),
             socket.on("message:new", (message) => {
                 const isOpen = active.current === message.conversation_id;
+                // group notices arrive already read: they never count as unread and need no acknowledgement
+                const notice = message.message_type === "SYSTEM";
                 dispatch({ type: "MESSAGE_MERGE", message });
-                if (state.conversations.some((c) => c.conversation_id === message.conversation_id)) dispatch({ type: "CONVERSATION_PREVIEW", message, incrementUnread: !isOpen });
+                if (state.conversations.some((c) => c.conversation_id === message.conversation_id)) dispatch({ type: "CONVERSATION_PREVIEW", message, incrementUnread: !isOpen && !notice });
                 else refreshConversations();
+                if (notice) return;
                 sendDelivered(message.message_id);
                 if (isOpen) sendSeen(message.conversation_id);
             }),
@@ -276,15 +318,18 @@ export function ChatProvider({ children }) {
             socket.on("message:edited", (message) => { dispatch({ type: "MESSAGE_UPDATE", message }); dispatch({ type: "PREVIEW_CONTENT", message }); }),
             socket.on("conversation:updated", (conversation) => dispatch({ type: "CONVERSATION_UPSERT", conversation })),
             socket.on("scheduled:changed", ({ conversation_id }) => dispatch({ type: "SCHEDULED_CHANGED", id: conversation_id })),
+            // a group changed (members, roles, name): its summary is reloaded, open group screens refetch
+            socket.on("group:updated", ({ conversation_id }) => { refreshConversation(conversation_id); dispatch({ type: "GROUP_CHANGED", id: conversation_id }); }),
+            socket.on("conversation:removed", ({ conversation_id }) => dispatch({ type: "CONVERSATION_REMOVE", id: conversation_id })),
         ];
         return () => { offs.forEach((off) => off && off()); };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [authStatus, refreshConversations, loadHistory, sendSeen, sendDelivered, state.conversations.length]);
+    }, [authStatus, refreshConversations, refreshConversation, loadHistory, sendSeen, sendDelivered, state.conversations.length]);
 
     const value = useMemo(() => ({ ...state, myId, refreshConversations, openConversation, closeConversation, loadOlder, sendMessage, retryMessage, discardMessage, deleteMessage, startConversation, blockUser, unblockUser,
-        editMessage, forwardMessage, updateConversationSettings, readAll, ensureMessageLoaded }),
+        editMessage, forwardMessage, updateConversationSettings, readAll, ensureMessageLoaded, refreshConversation, createGroup, leaveGroup, deleteGroup }),
         [state, myId, refreshConversations, openConversation, closeConversation, loadOlder, sendMessage, retryMessage, discardMessage, deleteMessage, startConversation, blockUser, unblockUser,
-            editMessage, forwardMessage, updateConversationSettings, readAll, ensureMessageLoaded]);
+            editMessage, forwardMessage, updateConversationSettings, readAll, ensureMessageLoaded, refreshConversation, createGroup, leaveGroup, deleteGroup]);
     return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;
 }
 

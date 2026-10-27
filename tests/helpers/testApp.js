@@ -54,7 +54,7 @@ const createUser = async (baseUrl, label) => {
     const email = `it_${Date.now()}_${Math.random().toString(36).slice(2, 7)}_${label}@test.local`;
     const password = 'Integration@123';
     const anon = api(baseUrl);
-    const reg = await anon.post('/auth/signup', { email, password, fst_nm: label });
+    const reg = await anon.post('/auth/signup', { email, password, fst_nm: label, date_of_birth: '1995-05-15' });
     if (reg.status !== 201) throw new Error(`signup failed: ${JSON.stringify(reg.body)}`);
     const login = await anon.post('/auth/login', { email, password });
     if (login.status !== 200) throw new Error(`login failed: ${JSON.stringify(login.body)}`);

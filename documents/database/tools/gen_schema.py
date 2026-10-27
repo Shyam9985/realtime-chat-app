@@ -42,6 +42,7 @@ T("users_lst_t", "core", "accounts; user_nm holds the login id (the email)", [
     C("first_nm", "VARCHAR(100)", False),
     C("last_nm", "VARCHAR(100)"),
     C("mobile_no", "VARCHAR(15)"),
+    C("date_of_birth", "DATE", comment="asked at sign-up; private to the user"),
     C("password_hash", "VARCHAR(255)", False),
     C("password_salt", "VARCHAR(255)"),
     C("profile_photo_url", "VARCHAR(500)"),
@@ -78,6 +79,7 @@ T("conversations_lst_t", "chat", "one row per chat; user_pair_key makes a one-to
     C("conversation_id", ID, False, ai=True),
     C("conversation_type_id", "INT UNSIGNED", False),
     C("title", "VARCHAR(100)", comment="group name; null for one-to-one"),
+    C("description", "VARCHAR(500)", comment="group description; null for one-to-one"),
     C("created_by", ID, False),
     C("user_pair_key", "VARCHAR(41)", comment="'lowUserId:highUserId' for ONE_TO_ONE, null for groups"),
     C("last_message_id", ID, comment="denormalised for the conversation list"),
@@ -96,6 +98,7 @@ T("conversation_members_t", "chat", "who is in a conversation; last_read_message
     C("user_id", ID, False),
     C("member_role", "VARCHAR(20)", False, "'MEMBER'", comment="MEMBER | ADMIN (groups)"),
     C("last_read_message_id", ID),
+    C("last_message_id", ID, comment="newest message this member can see; their list preview and order"),
     C("is_pinned", "TINYINT(1)", False, "0", comment="1 = pinned to the top of this member's chat list"),
     C("pinned_at", "DATETIME(3)", comment="when pinned; orders pinned chats"),
     C("is_archived", "TINYINT(1)", False, "0", comment="1 = shown in this member's archive instead of the list"),
@@ -108,7 +111,8 @@ T("conversation_members_t", "chat", "who is in a conversation; last_read_message
     indexes=[("idx_member_user", ["user_id"]), ("idx_member_user_list", ["user_id", "is_archived", "is_pinned", "pinned_at"])],
     fks=[("fk_member_conversation", ["conversation_id"], "conversations_lst_t", ["conversation_id"], "NO ACTION", False),
          ("fk_member_user", ["user_id"], "users_lst_t", ["user_id"], "NO ACTION", False),
-         ("fk_member_last_read", ["last_read_message_id"], "messages_lst_t", ["message_id"], "SET NULL", True)],
+         ("fk_member_last_read", ["last_read_message_id"], "messages_lst_t", ["message_id"], "SET NULL", True),
+         ("fk_member_last_message", ["last_message_id"], "messages_lst_t", ["message_id"], "SET NULL", True)],
     layout=(520, 60))
 
 T("messages_lst_t", "chat", "messages; soft delete via is_deleted within the 15 minute window", [
@@ -116,6 +120,8 @@ T("messages_lst_t", "chat", "messages; soft delete via is_deleted within the 15 
     C("conversation_id", ID, False),
     C("sender_id", ID, False),
     C("message_type_id", "INT UNSIGNED", False, "1"),
+    C("system_event", "VARCHAR(30)", comment="SYSTEM notices: GROUP_CREATED | MEMBER_ADDED | MEMBER_REMOVED | MEMBER_LEFT | ADMIN_MADE | ADMIN_DISMISSED | ADMIN_ASSIGNED | NAME_CHANGED | DESCRIPTION_CHANGED"),
+    C("system_target_user_id", ID, comment="SYSTEM notices: the member the notice is about"),
     C("content", "TEXT"),
     C("attachment_file_id", ID, comment="uploaded_files_lst_t.file_id for image / file messages"),
     C("reply_to_message_id", ID, comment="the message this one quotes (swipe to reply)"),
@@ -133,7 +139,8 @@ T("messages_lst_t", "chat", "messages; soft delete via is_deleted within the 15 
          ("fk_msg_type", ["message_type_id"], "message_type_master_t", ["message_type_id"], "NO ACTION", False),
          ("fk_msg_attachment", ["attachment_file_id"], "uploaded_files_lst_t", ["file_id"], "SET NULL", False),
          ("fk_msg_reply_to", ["reply_to_message_id"], "messages_lst_t", ["message_id"], "SET NULL", False),
-         ("fk_msg_forwarded_from", ["forwarded_from_message_id"], "messages_lst_t", ["message_id"], "SET NULL", False)],
+         ("fk_msg_forwarded_from", ["forwarded_from_message_id"], "messages_lst_t", ["message_id"], "SET NULL", False),
+         ("fk_msg_system_target", ["system_target_user_id"], "users_lst_t", ["user_id"], "NO ACTION", False)],
     fulltexts=[("ft_msg_content", ["content"])],
     layout=(1000, 400))
 
@@ -173,12 +180,13 @@ T("message_receipts_t", "chat", "one row per recipient per message (groups have 
     C("user_id", ID, False, comment="the recipient"),
     C("delivered_at", "DATETIME(3)"),
     C("seen_at", "DATETIME(3)"),
+    C("excluded_at", "DATETIME(3)", comment="set when the recipient left the group before seeing it; ticks stop waiting for them"),
     *STD(3)], "message_receipt_id",
     uniques=[("uq_receipt_msg_user", ["message_id", "user_id"])],
     indexes=[("idx_receipt_user_seen", ["user_id", "seen_at"])],
     fks=[("fk_receipt_message", ["message_id"], "messages_lst_t", ["message_id"], "NO ACTION", False),
          ("fk_receipt_user", ["user_id"], "users_lst_t", ["user_id"], "NO ACTION", False)],
-    layout=(520, 400))
+    layout=(520, 416))
 
 T("user_blocks_t", "chat", "blocker -> blocked; unblock sets is_active = 0", [
     C("block_id", ID, False, ai=True),
@@ -334,8 +342,8 @@ def ordered():
     return out
 
 def write_sql():
-    o = [f"-- chat_application schema (v1 plus the v2 additions). generated from the schema definition in gen_schema.py;",
-         "-- for a NEW database. an existing v1 database is upgraded with documents/database/migration-v2.sql instead.",
+    o = [f"-- chat_application schema (v1 plus the v2 and v3 additions). generated from the schema definition in gen_schema.py;",
+         "-- for a NEW database. an existing database is upgraded with documents/database/migration-v3.sql instead.",
          "-- every table carries is_active / created_at / updated_at with defaults.",
          "-- run as chatapp_admin:",
          "--   mysql -u chatapp_admin -p chat_application < documents/database/schema-v1.sql", "",

@@ -57,6 +57,17 @@ const registerRelay = (io) => {
     appEvents.on('conversation.created', ({ conversationId, memberIds }) => {
         for (const id of memberIds) io.to(room(id)).emit('conversation:new', { conversation_id: conversationId });
     });
+
+    // a group's members, roles, name or description changed: everyone concerned (the members, and the
+    // person who was removed or exited) reloads it, so a removed member's chat turns read-only at once
+    appEvents.on('group.updated', ({ conversationId, userIds }) => {
+        for (const id of userIds) io.to(room(id)).emit('group:updated', { conversation_id: conversationId });
+    });
+
+    // an exited group deleted from this user's list (their other devices drop it too)
+    appEvents.on('conversation.removed', ({ userId, conversationId }) => {
+        io.to(room(userId)).emit('conversation:removed', { conversation_id: conversationId });
+    });
 };
 
 module.exports = { registerRelay, room };

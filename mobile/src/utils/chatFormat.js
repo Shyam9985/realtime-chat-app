@@ -34,3 +34,42 @@ export const minutesSince = (v) => (Date.now() - asDate(v).getTime()) / 60000;
 export const DELETED_PLACEHOLDER = "This message was deleted";
 export const MESSAGE_MAX_LENGTH = 2000;
 export const DELETE_WINDOW_MINUTES = 15;
+// the server's GROUP_MAX_MEMBERS default (you included); the server has the final say
+export const GROUP_MAX_MEMBERS = 100;
+
+// ---- groups
+export const isGroup = (conversation) => conversation?.conversation_type === "GROUP";
+export const isNotice = (message) => message?.message_type === "SYSTEM";
+export const firstName = (name) => (name || "").split(" ")[0] || name || "";
+
+// a group notice in words, for the person reading it: "You added Noah", "Maya added you", "You left"
+export const noticeText = (m, myId) => {
+    const byMe = m.sender_id === myId;
+    const actor = byMe ? "You" : m.sender_name || "Someone";
+    const aboutMe = m.system_target_user_id === myId;
+    const target = aboutMe ? "you" : m.system_target_name || "someone";
+    switch (m.system_event) {
+        case "GROUP_CREATED": return `${actor} created the group “${m.content}”`;
+        case "MEMBER_ADDED": return `${actor} added ${target}`;
+        case "MEMBER_REMOVED": return `${actor} removed ${target}`;
+        case "MEMBER_LEFT": return `${actor} left`;
+        case "ADMIN_MADE": return `${actor} made ${target} an admin`;
+        case "ADMIN_DISMISSED": return `${actor} dismissed ${target} as admin`;
+        case "ADMIN_ASSIGNED": return aboutMe ? "You’re now an admin" : `${m.system_target_name || "Someone"} is now an admin`;
+        case "NAME_CHANGED": return `${actor} changed the group name to “${m.content}”`;
+        case "DESCRIPTION_CHANGED": return `${actor} changed the group description`;
+        default: return m.content || "";
+    }
+};
+
+// ---- dates of birth ('YYYY-MM-DD', the phone's own calendar day: no time zone can move it)
+export const toDateValue = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+export const fromDateValue = (value) => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || "");
+    return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
+};
+// "15 May 1995"
+export const birthDateLabel = (value) => {
+    const d = fromDateValue(value);
+    return d ? `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}` : "";
+};
