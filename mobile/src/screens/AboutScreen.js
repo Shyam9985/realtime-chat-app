@@ -1,5 +1,5 @@
 import React from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { Image, ScrollView, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { Screen, Muted } from '../components/ui';
@@ -111,11 +111,10 @@ export default function AboutScreen() {
       <ScrollView contentContainerStyle={{ paddingBottom: theme.space.xxl }} testID="about-scroll">
         <Card>
           <View style={{ alignItems: 'center' }}>
-            <View style={{ width: 72, height: 72, borderRadius: 22, backgroundColor: c.accent, alignItems: 'center', justifyContent: 'center' }}>
-              <Ionicons name="chatbubble-ellipses" size={38} color="#FFFFFF" />
-            </View>
-            <Text style={{ fontSize: theme.font.xl, fontWeight: '700', color: c.text, marginTop: theme.space.md }}>Chat App</Text>
-            <Muted style={{ marginTop: 2, textAlign: 'center' }}>Simple one-to-one messaging with the people you know.</Muted>
+            <Image source={require('../../assets/icon.png')} style={{ width: 96, height: 96, borderRadius: 24 }} accessibilityIgnoresInvertColors />
+            <Text style={{ fontSize: theme.font.xl, fontWeight: '700', color: c.text, marginTop: theme.space.md }}>YaapZone</Text>
+            <Text style={{ marginTop: 2, textAlign: 'center', fontSize: theme.font.md, fontWeight: '600', color: c.accent }}>More Gossip. More Giggles.</Text>
+            <Muted style={{ marginTop: theme.space.xs, textAlign: 'center' }}>Simple one-to-one messaging with the people you know.</Muted>
             <Muted style={{ marginTop: theme.space.sm, fontSize: theme.font.xs }}>Version 1.0.0</Muted>
           </View>
         </Card>

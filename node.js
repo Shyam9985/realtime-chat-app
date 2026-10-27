@@ -127,7 +127,7 @@ const sessionConfig = {
     secret: process.env.EXPRESS_SECRET,
     resave: false,
     saveUninitialized: false,
-    name: 'chat-app-cookie',
+    name: 'yaapzone-cookie',
     cookie: {
         maxAge: Number(process.env.EXPRESS_SESSION_EXPIRES),
         httpOnly: true,

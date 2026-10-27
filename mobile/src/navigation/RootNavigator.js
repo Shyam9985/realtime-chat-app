@@ -1,4 +1,5 @@
 import React from 'react';
+import { ImageBackground } from 'react-native';
 import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -80,7 +81,8 @@ export default function RootNavigator() {
     colors: { ...(isDark ? DarkTheme : DefaultTheme).colors, primary: c.accent, background: c.background, card: c.headerBackground, text: c.headerText, border: c.border, notification: c.accentBright },
   };
 
-  if (status === 'loading') return <Screen edges={['top', 'bottom']}><Spinner style={{ flex: 1 }} /></Screen>;
+  // while the stored sign-in is read: the YaapZone startup screen (it carries its own loading ring)
+  if (status === 'loading') return <ImageBackground source={require('../../assets/startup-screen.png')} resizeMode="cover" style={{ flex: 1, backgroundColor: '#FFFFFF' }} accessibilityLabel="YaapZone is starting" />;
 
   return (
     <NavigationContainer theme={navTheme}>

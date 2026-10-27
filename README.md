@@ -1,4 +1,6 @@
-# Chat App
+# YaapZone
+
+*More Gossip. More Giggles.*
 
 Real-time one-to-one chat application. The product requirements are in the SRS v1.1 and the ERD
 in `documents/`. Stack: Node.js, Express, MySQL, Redis and Socket.IO on the server; a React Native
@@ -303,7 +305,7 @@ its pages. Confirmations and alerts are centred dialogs; toasts appear at the to
 | Folder | Purpose |
 |---|---|
 | `src/theme/` | `palette.js` (the `lightColors` / `darkColors` sets and the token map built from them) and `ThemeContext` (light / dark and a 12 to 20 px font size, both persisted, as on the web client) |
-| `src/store/` | `interceptor.js` and `api.service.js` from the web client: token header, newest-token capture, sign-out on `TOKEN_EXPIRED` / `SESSION_EXPIRED`, envelope unwrapping, request de-duplication, raw-body upload, blob download. The token lives in the device keychain (`src/storage/tokenStore.js`) instead of localStorage |
+| `src/store/` | `interceptor.js` and `api.service.js` from the web client: token header, newest-token capture, sign-out on `TOKEN_EXPIRED` / `SESSION_EXPIRED`, envelope unwrapping, request de-duplication, raw-body upload, blob download. Also `tokenStore.js` (the token in the device keychain instead of localStorage) and `photoStore.js` (the profile photo in the app's private storage on the device) |
 | `src/services/` | `auth`, `profile`, `files`, `chat` and `socket` services from the web client. The auth, profile and files ones return the server envelope and never throw; the chat ones throw it |
 | `src/utils/` | `ValidateUtils.js` and `chatFormat.js` from the web client |
 | `src/contexts/` | `AuthContext` (`handleLogin` / `handleLogOut`, as on the web), `ChatContext` (the web client's chat reducer and socket wiring), `MessageContext` (toasts: `useToast().success / error / warning / info`) |

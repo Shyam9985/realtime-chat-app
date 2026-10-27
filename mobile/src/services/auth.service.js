@@ -1,5 +1,5 @@
 import { post, get } from "../store/api.service";
-import * as tokenStore from "../storage/tokenStore";
+import * as tokenStore from "../store/tokenStore";
 
 // Ported from the web client's services/auth.service.js: every function returns the server's
 // envelope on success and the error object on failure, and never throws.

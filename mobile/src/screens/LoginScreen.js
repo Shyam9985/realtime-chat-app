@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Image, Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -8,14 +8,13 @@ import { handleLogin } from '../services/auth.service';
 import * as validate from '../utils/ValidateUtils';
 import { Screen, TextField, Button, Title, Muted, IconButton, FormScroll } from '../components/ui';
 
-// the round green mark with a speech bubble, then title and subtitle
+// the YaapZone icon, then title and subtitle
 export function AuthHeader({ title, subtitle }) {
   const { theme } = useTheme();
   return (
     <View style={{ alignItems: 'center', marginBottom: theme.space.xxl }}>
-      <View style={{ width: 84, height: 84, borderRadius: 42, backgroundColor: theme.colors.accentBright, alignItems: 'center', justifyContent: 'center', marginBottom: theme.space.lg, shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 4 }}>
-        <Ionicons name="chatbubble-ellipses" size={44} color="#FFFFFF" />
-      </View>
+      <Image source={require('../../assets/icon.png')} accessibilityLabel="YaapZone" accessibilityIgnoresInvertColors
+        style={{ width: 104, height: 104, borderRadius: 26, marginBottom: theme.space.lg }} />
       <Title>{title}</Title>
       <Muted style={{ marginTop: theme.space.xs, fontSize: theme.font.md }}>{subtitle}</Muted>
     </View>

@@ -7,7 +7,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useChat } from '../contexts/ChatContext';
 import { useToast } from '../contexts/MessageContext';
 import { getProfile } from '../services/profile.service';
-import { loadPhoto, savePhoto } from '../storage/photoStore';
+import { loadPhoto, savePhoto } from '../store/photoStore';
 import { handleLogout, resetPasswordMail } from '../services/auth.service';
 import { listBlocked } from '../services/chat.service';
 import { Screen, Avatar, Button, Muted, Divider, Dialog, Spinner, IconButton, Section, FormScroll } from '../components/ui';
@@ -251,7 +251,7 @@ export default function ProfileScreen() {
             <Button title="Sign out" variant="danger" icon="log-out-outline" onPress={() => setConfirmSignOut(true)} />
           </View>
         </Section>
-        <Muted style={{ textAlign: 'center', marginTop: theme.space.xl }}>Chat App v1.0.0</Muted>
+        <Muted style={{ textAlign: 'center', marginTop: theme.space.xl }}>YaapZone v1.0.0</Muted>
       </FormScroll>
 
       <Dialog visible={confirmSignOut} icon="log-out-outline" tone="danger" title="Sign out?" message="You will need to sign in again to continue."

@@ -7,8 +7,8 @@ import * as SecureStore from 'expo-secure-store';
  * (used for development and ui testing) has no secure store, so it falls back to local storage.
  * The user object is not secret and always goes to async storage.
  */
-const TOKEN_KEY = 'chat-app.access-token';
-const USER_KEY = 'chat-app.user';
+const TOKEN_KEY = 'yaapzone.access-token';
+const USER_KEY = 'yaapzone.user';
 const secure = Platform.OS !== 'web';
 
 export async function getToken() {

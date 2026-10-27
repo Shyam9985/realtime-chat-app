@@ -1,7 +1,7 @@
 {
-  "name": "chat-app-server",
+  "name": "yaapzone-server",
   "version": "1.0.0",
-  "description": "Real-time chat application backend: Express, MySQL, Redis, Socket.IO",
+  "description": "YaapZone backend (More Gossip. More Giggles.): Express, MySQL, Redis, Socket.IO",
   "main": "server.js",
   "keywords": [
     "chat",

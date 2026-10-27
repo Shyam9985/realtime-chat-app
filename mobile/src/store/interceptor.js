@@ -1,5 +1,5 @@
 import axios from "axios";
-import * as tokenStore from "../storage/tokenStore";
+import * as tokenStore from "./tokenStore";
 import { API_URL, API_PREFIX } from "../config";
 
 const axiosInstance = axios.create({

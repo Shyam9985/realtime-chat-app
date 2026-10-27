@@ -6,7 +6,7 @@ const emailutils = require('../utils/email.utils');
 const { log } = require('../utils/log.utils');
 
 // shown in outgoing mails; set APP_NAME in .env
-const APP_NAME = process.env.APP_NAME || 'Chat App';
+const APP_NAME = process.env.APP_NAME || 'YaapZone';
 
 // builds the client facing user object from a user row; the same shape is used for the
 // jwt payload (login and refresh) and the profile response. credential and lock columns

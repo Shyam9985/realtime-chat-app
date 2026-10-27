@@ -4,12 +4,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 /*
  * The signed-in user's profile photo, kept on this device only (nothing is uploaded).
  *  - phone: a file in the app's private documents folder, profile-photo-<userId>.jpg. Android keeps it
- *    under the app's internal storage (/data/data/com.chatapp.mobile/files/...), outside the APK; it is
+ *    under the app's internal storage (/data/data/com.yaapzone.app/files/...), outside the APK; it is
  *    removed when the app is uninstalled or its data is cleared, and other apps cannot read it.
  *  - browser build: a data URI in local storage.
  * One file per user id, so two accounts on the same phone keep their own photos.
  */
-const webKey = (userId) => `chat-app.profile-photo.${userId}`;
+const webKey = (userId) => `yaapzone.profile-photo.${userId}`;
 
 const nativeFile = (userId) => {
   const { File, Paths } = require('expo-file-system');

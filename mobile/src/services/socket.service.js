@@ -1,6 +1,6 @@
 import { io } from "socket.io-client";
 import { get } from "../store/api.service";
-import * as tokenStore from "../storage/tokenStore";
+import * as tokenStore from "../store/tokenStore";
 import { API_URL } from "../config";
 
 /*

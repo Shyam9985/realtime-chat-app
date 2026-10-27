@@ -9,8 +9,8 @@ import { light, dark } from './palette';
  *  - font size: 12 to 20 px in steps of 2, 16 by default, persisted. The web scaled the root font
  *    size; here every theme.font value is scaled by fontSize / 16, which every screen reads.
  */
-const THEME_KEY = 'chat-app.theme';
-const FONT_KEY = 'chat-app.font-size';
+const THEME_KEY = 'yaapzone.theme';
+const FONT_KEY = 'yaapzone.font-size';
 export const DEFAULT_FONT = 16;
 export const MIN_FONT = 12;
 export const MAX_FONT = 20;

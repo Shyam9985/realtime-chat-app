@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { registerLogoutHandler } from '../store/interceptor';
-import * as tokenStore from '../storage/tokenStore';
+import * as tokenStore from '../store/tokenStore';
 import * as socket from '../services/socket.service';
 
 /*

@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "Chat App",
-    "slug": "chat-app",
-    "scheme": "chatapp",
+    "name": "YaapZone",
+    "slug": "yaapzone",
+    "scheme": "yaapzone",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -10,16 +10,16 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#128C5E"
+      "backgroundColor": "#FFFFFF"
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.chatapp.mobile"
+      "bundleIdentifier": "com.yaapzone.app"
     },
     "android": {
-      "package": "com.chatapp.mobile",
+      "package": "com.yaapzone.app",
       "adaptiveIcon": {
-        "backgroundColor": "#128C5E",
+        "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -35,11 +35,12 @@
         "expo-splash-screen",
         {
           "image": "./assets/splash-icon.png",
-          "imageWidth": 200,
+          "imageWidth": 220,
           "resizeMode": "contain",
-          "backgroundColor": "#128C5E"
+          "backgroundColor": "#FFFFFF"
         }
       ]
-    ]
+    ],
+    "description": "More Gossip. More Giggles."
   }
 }
