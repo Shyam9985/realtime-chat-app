@@ -132,10 +132,14 @@ exports.expireExpressSession = (sessionId) => {
     return dbutils.executeQuery(qry, [sessionId], 'expire express session');
 }
 // slide the express session time 
+// a session lives EXPRESS_SESSION_EXPIRES milliseconds after its last renewal (30 minutes if unset),
+// the same lifetime the login gives it
+const sessionSeconds = () => Math.round((Number(process.env.EXPRESS_SESSION_EXPIRES) || 1800000) / 1000);
+
 exports.slideExpressSession = (sessionId) => {
     log('in slideExpressSession');
-    const qry = 'update user_sessions_t set expires_at = DATE_ADD(NOW(), INTERVAL 30 MINUTE) where is_active = 1 and session_id = ? ';
-    return dbutils.executeQuery(qry, [sessionId], 'slide express session');
+    const qry = 'update user_sessions_t set expires_at = DATE_ADD(NOW(), INTERVAL ? SECOND) where is_active = 1 and session_id = ? ';
+    return dbutils.executeQuery(qry, [sessionSeconds(), sessionId], 'slide express session');
 }
 
 // unlock locked users

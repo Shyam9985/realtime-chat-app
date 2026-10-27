@@ -7,7 +7,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useChat } from '../contexts/ChatContext';
 import { useToast } from '../contexts/MessageContext';
 import { getProfile } from '../services/profile.service';
-import { getProfilePhoto, uploadFile } from '../services/files.service';
+import { loadPhoto, savePhoto } from '../storage/photoStore';
 import { handleLogout, resetPasswordMail } from '../services/auth.service';
 import { listBlocked } from '../services/chat.service';
 import { Screen, Avatar, Button, Muted, Divider, Dialog, Spinner, IconButton, Section, FormScroll } from '../components/ui';
@@ -73,7 +73,7 @@ function Segmented({ options }) {
  * font size, and sign out. The blocked-users list is the app's own addition.
  */
 export default function ProfileScreen() {
-  const { theme, isDark, setLightTheme, setDarkTheme, fontSize, setFontSize } = useTheme();
+  const { theme, isDark, mode, setLightTheme, setDarkTheme, setSystemTheme, fontSize, setFontSize } = useTheme();
   const c = theme.colors;
   const authCtx = useAuth();
   const toast = useToast();
@@ -86,7 +86,6 @@ export default function ProfileScreen() {
   const [photoUrl, setPhotoUrl] = useState(null);
   const [showPhotoView, setShowPhotoView] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
   const [confirmSignOut, setConfirmSignOut] = useState(false);
   const [blocked, setBlocked] = useState(null);
 
@@ -96,11 +95,9 @@ export default function ProfileScreen() {
       const response = await getProfile();
       if (response?.success) {
         setUser(response.data);
-        // profile data says a photo exists; fetch its bytes and show them
-        if (response.data?.profile_photo) {
-          const uri = await getProfilePhoto();
-          if (uri) setPhotoUrl(uri);
-        }
+        // the photo lives on this device, not on the server
+        const uri = await loadPhoto(response.data?.user_id).catch(() => null);
+        if (uri) setPhotoUrl(uri);
       } else {
         toast.error(response?.error || response?.message);
       }
@@ -120,15 +117,15 @@ export default function ProfileScreen() {
     if (!ALLOWED_TYPES.includes(type)) { toast.warning('Please choose a JPG, PNG or WEBP image.'); return; }
     if ((asset.fileSize || blob.size) > MAX_BYTES) { toast.warning('The photo must be 10 MB or smaller.'); return; }
 
+    // kept in this app's own storage on the device; nothing is uploaded
     setUploading(true);
-    setUploadProgress(0);
-    const response = await uploadFile(blob, setUploadProgress, { name: asset.fileName, type });
-    setUploading(false);
-    if (response?.success) {
-      setPhotoUrl(asset.uri);
+    try {
+      setPhotoUrl(await savePhoto(user?.user_id, asset.uri));
       toast.success('Profile photo updated.');
-    } else {
-      toast.error(response?.error || response?.message || 'Unable to upload the photo.');
+    } catch (e) {
+      toast.error('Unable to save the photo on this device.');
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -180,7 +177,6 @@ export default function ProfileScreen() {
             {uploading ? (
               <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 56, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center' }}>
                 <Spinner size="small" />
-                <Text style={{ color: '#FFFFFF', fontWeight: '700', marginTop: 4 }}>{uploadProgress}%</Text>
               </View>
             ) : null}
             <View style={{ position: 'absolute', right: 0, bottom: 0, width: 34, height: 34, borderRadius: 17, backgroundColor: c.accent, alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: c.background }}>
@@ -214,10 +210,11 @@ export default function ProfileScreen() {
         </Section>
 
         <Section title="Appearance">
-          <Row icon="sunny-outline" title="Theme" text="Light or dark, applied everywhere.">
+          <Row icon="sunny-outline" title="Theme" text="Light, dark, or follow your phone's setting.">
             <Segmented options={[
-              { key: 'light', label: 'Light', icon: 'sunny-outline', active: !isDark, onPress: setLightTheme, testID: 'theme-light' },
-              { key: 'dark', label: 'Dark', icon: 'moon-outline', active: isDark, onPress: setDarkTheme, testID: 'theme-dark' },
+              { key: 'system', label: 'System', icon: 'phone-portrait-outline', active: mode === 'system', onPress: setSystemTheme, testID: 'theme-system' },
+              { key: 'light', label: 'Light', icon: 'sunny-outline', active: mode === 'light', onPress: setLightTheme, testID: 'theme-light' },
+              { key: 'dark', label: 'Dark', icon: 'moon-outline', active: mode === 'dark', onPress: setDarkTheme, testID: 'theme-dark' },
             ]} />
           </Row>
           <Divider />

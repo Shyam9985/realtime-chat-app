@@ -4,7 +4,20 @@ import { useTheme } from '../theme/ThemeContext';
 import { useChat } from '../contexts/ChatContext';
 import { Screen, Spinner, Banner, IconButton, Button, EmptyState, Avatar, Dialog, PopupMenu, KeyboardAvoider, webNoOutline } from '../components/ui';
 import { MessageBubble, DaySeparator } from '../components/MessageBubble';
-import { DELETE_WINDOW_MINUTES, MESSAGE_MAX_LENGTH, dayLabel, fullName, isSameDay, minutesSince } from '../utils/chatFormat';
+import { DELETE_WINDOW_MINUTES, MESSAGE_MAX_LENGTH, dayLabel, fullName, fullStamp, isSameDay, minutesSince } from '../utils/chatFormat';
+import { StatusTicks } from '../components/MessageBubble';
+
+// one line of message info: the tick, what it means and when it happened
+function InfoLine({ status, label, at, theme }) {
+  const c = theme.colors;
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.space.md, paddingVertical: theme.space.sm }}>
+      <View style={{ width: 22, alignItems: 'center' }}><StatusTicks status={status} color={c.textMuted} seenColor={c.seen} /></View>
+      <Text style={{ flex: 1, color: c.text, fontSize: theme.font.md, fontWeight: '600' }}>{label}</Text>
+      <Text style={{ color: at ? c.text : c.textMuted, fontSize: theme.font.sm }}>{at || 'Not yet'}</Text>
+    </View>
+  );
+}
 
 // whatsapp-style header: avatar, name and the email underneath; tapping it opens the contact's profile
 function HeaderTitle({ user, title, color, onPress }) {
@@ -37,7 +50,7 @@ export default function ChatScreen({ route, navigation }) {
   const [draft, setDraft] = useState('');
   const [sendError, setSendError] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [confirm, setConfirm] = useState(null);   // { kind: 'block' } | { kind: 'delete', message, allowed } | { kind: 'failed', message }
+  const [confirm, setConfirm] = useState(null);   // { kind: 'block' } | { kind: 'info', message } | { kind: 'delete', message, allowed } | { kind: 'failed', message }
 
   useEffect(() => {
     chat.openConversation(conversationId);
@@ -75,7 +88,7 @@ export default function ChatScreen({ route, navigation }) {
 
   const onMessageLongPress = (message) => {
     if (message.sender_id !== chat.myId || message.is_deleted || message.local || message.status === 'FAILED') return;
-    setConfirm({ kind: 'delete', message, allowed: minutesSince(message.created_at) < DELETE_WINDOW_MINUTES });
+    setConfirm({ kind: 'info', message });
   };
 
   const onMessagePress = (message) => {
@@ -98,6 +111,26 @@ export default function ChatScreen({ route, navigation }) {
         actions: [{ label: 'Cancel' }, { label: 'Block', style: 'destructive', testID: 'confirm-block', onPress: () => chat.blockUser(other.user_id).catch(actionFailed) }],
       };
     }
+    if (confirm.kind === 'info') {
+      // read the message from the thread each render, so delivered / read times appear live while open
+      const m = (thread?.messages || []).find((x) => x.message_id === confirm.message.message_id) || confirm.message;
+      const allowed = minutesSince(m.created_at) < DELETE_WINDOW_MINUTES;
+      return {
+        visible: true, icon: 'information-circle-outline', title: 'Message info',
+        children: (
+          <View style={{ marginTop: theme.space.md }} testID="message-info">
+            <Text numberOfLines={3} style={{ color: c.textMuted, fontSize: theme.font.sm, textAlign: 'center', marginBottom: theme.space.md }}>{m.content}</Text>
+            <InfoLine status="SENT" label="Sent" at={fullStamp(m.created_at)} theme={theme} />
+            <InfoLine status="DELIVERED" label="Delivered" at={fullStamp(m.delivered_at)} theme={theme} />
+            <InfoLine status="SEEN" label="Read" at={fullStamp(m.seen_at)} theme={theme} />
+          </View>
+        ),
+        actions: [
+          { label: 'Delete', style: 'destructive', testID: 'info-delete', onPress: () => setConfirm({ kind: 'delete', message: m, allowed }) },
+          { label: 'Close', style: 'primary', testID: 'info-close' },
+        ],
+      };
+    }
     if (confirm.kind === 'delete') {
       return confirm.allowed ? {
         visible: true, icon: 'trash-outline', tone: 'danger', title: 'Delete for everyone?',
@@ -118,7 +151,7 @@ export default function ChatScreen({ route, navigation }) {
       ],
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [confirm, other, chat]);
+  }, [confirm, other, chat, thread, theme]);
 
   const messages = thread?.messages || [];
   const renderItem = ({ item, index }) => {
@@ -145,6 +178,8 @@ export default function ChatScreen({ route, navigation }) {
             action={<Button title="Unblock" variant="ghost" onPress={() => chat.unblockUser(other.user_id).catch(actionFailed)} style={{ paddingVertical: 6, paddingHorizontal: 10 }} />} />
         ) : null}
 
+        {/* the message area takes all the height, so the composer stays at the bottom while loading */}
+        <View style={{ flex: 1 }}>
         {thread?.status === 'loading' && messages.length === 0 ? (
           <Spinner style={{ marginTop: theme.space.xxl }} />
         ) : thread?.status === 'error' && messages.length === 0 ? (
@@ -164,6 +199,7 @@ export default function ChatScreen({ route, navigation }) {
             testID="message-list"
           />
         )}
+        </View>
 
         {sendError ? <Banner kind="danger" text={sendError} action={<IconButton name="close" size={18} color={c.danger} onPress={() => setSendError(null)} accessibilityLabel="Dismiss" />} /> : null}
 

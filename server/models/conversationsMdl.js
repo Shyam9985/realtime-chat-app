@@ -52,6 +52,10 @@ exports.getMemberIds = async (conversationId) => {
 const SUMMARY_SELECT = `select c.conversation_id, ct.type_code as conversation_type, c.title, c.created_at, c.last_message_at,
             lm.message_id as last_message_id, lm.sender_id as last_sender_id, lm.is_deleted as last_is_deleted,
             case when lm.is_deleted = 1 then null else lm.content end as last_content, lm.created_at as last_created_at,
+            -- the last message's ticks, aggregated over its recipients exactly like the message history does
+            (select case when count(*) > 0 and sum(r2.seen_at is null) = 0 then 'SEEN'
+                         when count(*) > 0 and sum(r2.delivered_at is null) = 0 then 'DELIVERED' else 'SENT' end
+                from message_receipts_t r2 where r2.message_id = lm.message_id and r2.is_active = 1) as last_status,
             ou.user_id as other_user_id, ou.first_nm as other_first_nm, ou.last_nm as other_last_nm, ou.email as other_email,
             ou.profile_photo_url as other_profile_photo_url,
             (select count(*) from message_receipts_t r join messages_lst_t m2 on m2.message_id = r.message_id

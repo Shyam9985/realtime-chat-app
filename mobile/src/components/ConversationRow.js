@@ -3,6 +3,7 @@ import { Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { Avatar, Badge } from './ui';
+import { StatusTicks } from './MessageBubble';
 import { DELETED_PLACEHOLDER, fullName, listStamp } from '../utils/chatFormat';
 
 // the avatar (opens the contact's profile) and the rest of the row (opens the chat) are two sibling
@@ -34,7 +35,8 @@ export function ConversationRow({ conversation, myId, onPress, onAvatarPress }) 
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.space.sm, marginTop: 3 }}>
           <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 4, minWidth: 0 }}>
             {conversation.blocked_by_me ? <Ionicons name="ban" size={13} color={c.danger} /> : null}
-            {mine && !last.is_deleted ? <Ionicons name="checkmark-done" size={15} color={c.textMuted} /> : null}
+            {/* the same ticks as the chat window: one when sent, two when delivered, green when seen */}
+            {mine && !last.is_deleted ? <StatusTicks status={last.status || 'SENT'} color={c.textMuted} seenColor={c.seen} /> : null}
             <Text numberOfLines={1} style={{ flexShrink: 1, fontSize: theme.font.sm, color: unread ? c.text : c.textMuted, fontStyle: last?.is_deleted ? 'italic' : 'normal' }}>
               {preview}
             </Text>

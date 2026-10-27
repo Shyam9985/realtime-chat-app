@@ -26,6 +26,7 @@ const toSummaryDto = (row) => ({
         sender_id: row.last_sender_id,
         content: row.last_content,
         is_deleted: !!row.last_is_deleted,
+        status: row.last_status,
         created_at: toIso(row.last_created_at)
     } : null,
     unread_count: Number(row.unread_count) || 0,

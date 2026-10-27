@@ -81,7 +81,7 @@ const toTheme = (p, isDark) => ({
     dangerSoft: isDark ? '#3B1D22' : '#FDE8EC',
     warning: isDark ? '#FBBF24' : '#D97706',
     warningSoft: isDark ? '#3A2E0A' : '#FEF3C7',
-    seen: p.online,          // seen ticks use the palette green, no blue anywhere
+    seen: '#53BDEB',         // read ticks are blue, as in whatsapp: the one blue the user asked for
     overlay: isDark ? 'rgba(0, 0, 0, 0.6)' : 'rgba(17, 27, 33, 0.45)',
     inputBackground: p.surface,
     placeholder: p.textSecondary,

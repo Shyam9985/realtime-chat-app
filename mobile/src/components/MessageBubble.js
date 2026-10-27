@@ -6,11 +6,11 @@ import { timeOf, DELETED_PLACEHOLDER } from '../utils/chatFormat';
 
 // SRS: sent = one tick, delivered = two, seen = two in colour. sending shows a clock, failed a warning
 export function StatusTicks({ status, color, seenColor }) {
-  if (status === 'SENDING') return <Ionicons name="time-outline" size={13} color={color} />;
-  if (status === 'FAILED') return <Ionicons name="alert-circle" size={14} color="#F15C6D" />;
-  if (status === 'SENT') return <Ionicons name="checkmark" size={15} color={color} />;
-  if (status === 'DELIVERED') return <Ionicons name="checkmark-done" size={15} color={color} />;
-  if (status === 'SEEN') return <Ionicons name="checkmark-done" size={15} color={seenColor} />;
+  if (status === 'SENDING') return <Ionicons name="time-outline" size={13} color={color} accessibilityLabel="Sending" />;
+  if (status === 'FAILED') return <Ionicons name="alert-circle" size={14} color="#F15C6D" accessibilityLabel="Not sent" />;
+  if (status === 'SENT') return <Ionicons name="checkmark" size={15} color={color} accessibilityLabel="Sent" />;
+  if (status === 'DELIVERED') return <Ionicons name="checkmark-done" size={15} color={color} accessibilityLabel="Delivered" />;
+  if (status === 'SEEN') return <Ionicons name="checkmark-done" size={15} color={seenColor} accessibilityLabel="Seen" />;
   return null;
 }
 

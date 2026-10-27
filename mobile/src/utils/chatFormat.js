@@ -25,6 +25,8 @@ export const dayLabel = (v) => {
     return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
 };
 
+// "Today, 14:05" / "Yesterday, 09:30" / "12 Oct 2026, 18:00", for message info
+export const fullStamp = (v) => (v ? `${dayLabel(v)}, ${timeOf(v)}` : null);
 export const isSameDay = (a, b) => sameDay(asDate(a), asDate(b));
 export const fullName = (u) => [u?.first_nm, u?.last_nm].filter(Boolean).join(" ") || u?.email || "Unknown";
 export const initials = (u) => fullName(u).split(" ").slice(0, 2).map((p) => p[0]?.toUpperCase() || "").join("") || "?";

@@ -16,9 +16,9 @@ const FEATURES = [
   { icon: 'chatbubbles-outline', title: 'Chat one-to-one', text: 'Tap the green button in Chats, then search by name or email to start a conversation.' },
   { icon: 'flash-outline', title: 'Messages arrive instantly', text: 'If the other person is offline, your message waits and reaches them as soon as they’re back online.' },
   { icon: 'person-circle-outline', title: 'See who you’re talking to', text: 'Tap someone’s photo in Chats, or their name at the top of a chat, to see their profile.' },
-  { icon: 'trash-outline', title: 'Delete for everyone', text: `Sent something by mistake? Press and hold the message to delete it for both of you. You have ${DELETE_WINDOW_MINUTES} minutes after sending.` },
+  { icon: 'trash-outline', title: 'Delete for everyone', text: `Press and hold a message you sent to see when it was delivered and read, or to delete it for both of you. You have ${DELETE_WINDOW_MINUTES} minutes after sending.` },
   { icon: 'ban-outline', title: 'Block someone', text: 'Tap the three dots at the top right of a chat and choose “Block user”. They can’t message you any more, and you can unblock them at any time.' },
-  { icon: 'color-palette-outline', title: 'Make it yours', text: 'In Profile, add a photo, switch between light and dark, and make the text bigger or smaller.' },
+  { icon: 'color-palette-outline', title: 'Make it yours', text: 'In Profile, add a photo, choose light, dark or your phone’s theme, and make the text bigger or smaller.' },
 ];
 
 // the same icons the chat shows next to the time on your messages
@@ -26,7 +26,7 @@ const TICKS = [
   { status: 'SENDING', label: 'Sending' },
   { status: 'SENT', label: 'Sent' },
   { status: 'DELIVERED', label: 'Delivered to their phone' },
-  { status: 'SEEN', label: 'Seen' },
+  { status: 'SEEN', label: 'Read' },
   { status: 'FAILED', label: 'Not sent. Tap the message to try again.' },
 ];
 

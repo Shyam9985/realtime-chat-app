@@ -312,7 +312,7 @@ its pages. Confirmations and alerts are centred dialogs; toasts appear at the to
 | `src/components/` | `ui.js` kit (Screen, Button, TextField, Fab, Banner, EmptyState, Avatar, Badge, the centred `Dialog` used for every confirmation and alert, `PopupMenu`, and `KeyboardAvoider` / `FormScroll`, which keep the focused field and the chat composer above the on-screen keyboard; Android draws edge-to-edge and no longer makes room by itself), `OtpInput`, `VerifyOtp`, `UpdatePassword`, `MessageBubble`, `ConversationRow` |
 
 Behaviour worth knowing: a sent message appears at once with a clock, then one tick (stored), two
-ticks (delivered), green ticks (seen); a failed send is tappable to retry or discard. Opening a chat
+ticks (delivered), blue ticks (read); a failed send is tappable to retry or discard. Opening a chat
 marks it seen; an incoming message in an open chat is acknowledged as delivered and seen in one
 go. When the socket is down the app sends through REST and a banner says so.
 

@@ -189,6 +189,25 @@ test('AT-009 seen marks the whole conversation and clears unread', async () => {
     assert.equal(unreadAfter, 0);
 });
 
+test("the chat list reports the last message's ticks: sent, then delivered, then seen", async () => {
+    const lastOf = async (u) => (await as(u).get('/conversations')).body.data.conversations.find((c) => c.conversation_id === convId).last_message;
+    const sent = await h.emitWithAck(sA, 'message:send', { conversation_id: convId, content: 'tick check' });
+    assert.equal(sent.ok, true);
+    const id = sent.message.message_id;
+
+    let last = await lastOf(A);
+    assert.equal(last.message_id, id);
+    assert.equal(last.status, 'SENT', "one tick until the recipient's device has it");
+
+    await h.emitWithAck(sB, 'message:delivered', { message_id: id });
+    last = await lastOf(A);
+    assert.equal(last.status, 'DELIVERED');
+
+    await h.emitWithAck(sB, 'message:seen', { conversation_id: convId });
+    last = await lastOf(A);
+    assert.equal(last.status, 'SEEN');
+});
+
 test('AT-006 / FR-011 an offline recipient recovers messages and they are marked delivered on reconnect', async () => {
     sB.close();
     await h.sleep(200);

@@ -21,17 +21,31 @@ const ts = (v) => (v ? new Date(v).getTime() : 0);
 const sortConversations = (list) => [...list].sort((a, b) => (ts(b.last_message_at || b.created_at) - ts(a.last_message_at || a.created_at)) || (b.conversation_id - a.conversation_id));
 const sameMessage = (a, b) => (a.message_id && a.message_id === b.message_id) || (a.client_message_id && a.client_message_id === b.client_message_id);
 
+// ticks only move forward: sending -> sent -> delivered -> seen. socket events and api answers can
+// arrive in any order (a delivered event can beat the send acknowledgement), so a later, older
+// state never overwrites a newer one
+const STATUS_RANK = { FAILED: 0, SENDING: 1, SENT: 2, DELIVERED: 3, SEEN: 4 };
+const rank = (status) => STATUS_RANK[status] ?? 0;
+
 const mergeMessage = (messages, incoming) => {
     const index = messages.findIndex((m) => sameMessage(m, incoming));
     if (index >= 0) {
+        const prev = messages[index];
+        const merged = { ...prev, ...incoming, local: undefined };
+        if (rank(prev.status) > rank(merged.status)) {
+            merged.status = prev.status;
+            merged.delivered_at = prev.delivered_at ?? merged.delivered_at;
+            merged.seen_at = prev.seen_at ?? merged.seen_at;
+        }
         const next = [...messages];
-        next[index] = { ...next[index], ...incoming, local: undefined };
+        next[index] = merged;
         return next;
     }
     return [incoming, ...messages].sort((a, b) => (ts(b.created_at) - ts(a.created_at)) || ((b.message_id || 0) - (a.message_id || 0)));
 };
 
-const patch = (messages, predicate, fields) => messages.map((m) => (predicate(m) ? { ...m, ...fields } : m));
+// fields may be a function of the message, for updates that depend on what it already holds
+const patch = (messages, predicate, fields) => messages.map((m) => (predicate(m) ? { ...m, ...(typeof fields === "function" ? fields(m) : fields) } : m));
 
 function reducer(state, action) {
     switch (action.type) {
@@ -47,10 +61,19 @@ function reducer(state, action) {
                 ...state,
                 conversations: sortConversations(state.conversations.map((c) => c.conversation_id !== message.conversation_id ? c : {
                     ...c,
-                    last_message: { message_id: message.message_id, sender_id: message.sender_id, content: message.content, is_deleted: message.is_deleted, created_at: message.created_at },
+                    last_message: { message_id: message.message_id, sender_id: message.sender_id, content: message.content, is_deleted: message.is_deleted, created_at: message.created_at, status: message.status },
                     last_message_at: message.created_at,
                     unread_count: incrementUnread ? (c.unread_count || 0) + 1 : c.unread_count,
                 })),
+            };
+        }
+        // a delivered / seen event for the message the chat list shows as the last one
+        case "PREVIEW_STATUS": {
+            const ids = new Set(action.messageIds);
+            return {
+                ...state,
+                conversations: state.conversations.map((c) => (c.conversation_id !== action.conversationId || !c.last_message || !ids.has(c.last_message.message_id) || rank(c.last_message.status) >= rank(action.status)
+                    ? c : { ...c, last_message: { ...c.last_message, status: action.status } })),
             };
         }
         case "THREAD_LOADING": { const t = state.threads[action.id] || emptyThread(); return { ...state, threads: { ...state.threads, [action.id]: { ...t, status: "loading", error: null } } }; }
@@ -58,7 +81,8 @@ function reducer(state, action) {
             const t = state.threads[action.id] || emptyThread();
             let messages = t.messages;
             for (const m of action.messages) messages = mergeMessage(messages, m);
-            return { ...state, threads: { ...state.threads, [action.id]: { ...t, messages, nextCursor: action.nextCursor, hasMore: action.hasMore, status: "ready", error: null } } };
+            const keep = action.refresh && t.nextCursor !== undefined && t.messages.length > action.messages.length;
+            return { ...state, threads: { ...state.threads, [action.id]: { ...t, messages, nextCursor: keep ? t.nextCursor : action.nextCursor, hasMore: keep ? t.hasMore : action.hasMore, status: "ready", error: null } } };
         }
         case "THREAD_ERROR": { const t = state.threads[action.id] || emptyThread(); return { ...state, threads: { ...state.threads, [action.id]: { ...t, status: t.messages.length ? "ready" : "error", error: action.error } } }; }
         case "MESSAGE_MERGE": { const id = action.message.conversation_id; const t = state.threads[id] || emptyThread(); return { ...state, threads: { ...state.threads, [id]: { ...t, messages: mergeMessage(t.messages, action.message) } } }; }
@@ -83,11 +107,12 @@ export function ChatProvider({ children }) {
         catch (error) { dispatch({ type: "CONVERSATIONS_ERROR", error: error?.error || error?.message || "Could not load chats." }); }
     }, []);
 
-    const loadHistory = useCallback(async (conversationId, cursor = null) => {
+    // refresh: reload the newest page of a thread that is already on screen (merged, pagination kept)
+    const loadHistory = useCallback(async (conversationId, cursor = null, refresh = false) => {
         dispatch({ type: "THREAD_LOADING", id: conversationId });
         try {
             const page = await chatApi.getHistory(conversationId, cursor);
-            dispatch({ type: "THREAD_LOADED", id: conversationId, messages: page.messages, nextCursor: page.next_cursor, hasMore: page.has_more });
+            dispatch({ type: "THREAD_LOADED", id: conversationId, messages: page.messages, nextCursor: page.next_cursor, hasMore: page.has_more, refresh });
         } catch (error) {
             dispatch({ type: "THREAD_ERROR", id: conversationId, error: error?.error || error?.message || "Could not load messages." });
         }
@@ -112,7 +137,9 @@ export function ChatProvider({ children }) {
 
     const openConversation = useCallback(async (conversationId) => {
         active.current = conversationId;
-        if (!state.threads[conversationId]?.messages.length) await loadHistory(conversationId);
+        // always fetch the newest page: ticks that changed while this phone's socket was down
+        // (app in the background) would otherwise stay stale until the next send
+        await loadHistory(conversationId, null, !!state.threads[conversationId]?.messages.length);
         sendSeen(conversationId);
     }, [state.threads, loadHistory, sendSeen]);
 
@@ -166,7 +193,7 @@ export function ChatProvider({ children }) {
         const offs = [
             socket.onStatus((s) => {
                 dispatch({ type: "SOCKET_STATUS", status: s });
-                if (s === "connected") { refreshConversations(); if (active.current) { loadHistory(active.current); sendSeen(active.current); } }
+                if (s === "connected") { refreshConversations(); if (active.current) { loadHistory(active.current, null, true); sendSeen(active.current); } }
             }),
             socket.on("message:new", (message) => {
                 const isOpen = active.current === message.conversation_id;
@@ -177,8 +204,15 @@ export function ChatProvider({ children }) {
                 if (isOpen) sendSeen(message.conversation_id);
             }),
             socket.on("message:sent", (message) => { dispatch({ type: "MESSAGE_MERGE", message }); dispatch({ type: "CONVERSATION_PREVIEW", message, incrementUnread: false }); }),
-            socket.on("message:delivered", ({ message_id, conversation_id, delivered_at }) => dispatch({ type: "MESSAGE_PATCH", conversationId: conversation_id, predicate: (m) => m.message_id === message_id, fields: { delivered_at, status: "DELIVERED" } })),
-            socket.on("message:seen", ({ conversation_id, message_ids, seen_at }) => { const ids = new Set(message_ids); dispatch({ type: "MESSAGE_PATCH", conversationId: conversation_id, predicate: (m) => ids.has(m.message_id), fields: { seen_at, delivered_at: seen_at, status: "SEEN" } }); }),
+            socket.on("message:delivered", ({ message_id, conversation_id, delivered_at }) => {
+                dispatch({ type: "MESSAGE_PATCH", conversationId: conversation_id, predicate: (m) => m.message_id === message_id && rank(m.status) < rank("DELIVERED"), fields: { delivered_at, status: "DELIVERED" } });
+                dispatch({ type: "PREVIEW_STATUS", conversationId: conversation_id, messageIds: [message_id], status: "DELIVERED" });
+            }),
+            socket.on("message:seen", ({ conversation_id, message_ids, seen_at }) => {
+                const ids = new Set(message_ids);
+                dispatch({ type: "MESSAGE_PATCH", conversationId: conversation_id, predicate: (m) => ids.has(m.message_id), fields: (m) => ({ seen_at, delivered_at: m.delivered_at || seen_at, status: "SEEN" }) });
+                dispatch({ type: "PREVIEW_STATUS", conversationId: conversation_id, messageIds: message_ids, status: "SEEN" });
+            }),
             socket.on("message:deleted", ({ message_id, conversation_id, deleted_at }) => { dispatch({ type: "MESSAGE_PATCH", conversationId: conversation_id, predicate: (m) => m.message_id === message_id, fields: { is_deleted: true, content: null, deleted_at } }); refreshConversations(); }),
             socket.on("conversation:new", () => refreshConversations()),
         ];
