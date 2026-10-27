@@ -101,6 +101,21 @@ export async function put(relativeUrl, payload) {
     }
 }
 
+// same de-duplication as put, for partial updates
+export async function patch(relativeUrl, payload) {
+    const requestId = generateRequestId({ method: 'PATCH', path: relativeUrl, params: '', payload: payload });
+    if (checkIfRequestExists(requestId)) {
+        return getExistingRequestPromise(requestId);
+    }
+    const requestPromise = axios.patch(relativeUrl, payload);
+    upsertPendingRequest(requestId, requestPromise);
+    try {
+        return await requestPromise;
+    } finally {
+        removePendingRequest(requestId);
+    }
+}
+
 export async function remove(relativeUrl, queryParams = {}) {
     const requestId = generateRequestId({ method: 'DELETE', path: relativeUrl, params: queryParams, payload: '' });
 

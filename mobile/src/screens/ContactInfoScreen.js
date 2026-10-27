@@ -5,7 +5,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { useChat } from '../contexts/ChatContext';
 import { useToast } from '../contexts/MessageContext';
 import { getUserProfile } from '../services/chat.service';
-import { Screen, Avatar, Button, Muted, Dialog, Spinner, EmptyState, IconButton, Section, Divider, useUserPhoto } from '../components/ui';
+import { Screen, Avatar, Button, Muted, Dialog, ProfileSkeleton, EmptyState, IconButton, Section, Divider, useUserPhoto } from '../components/ui';
 import { fullName } from '../utils/chatFormat';
 
 const memberSince = (value) => {
@@ -90,7 +90,7 @@ export default function ContactInfoScreen({ route, navigation }) {
     }
   };
 
-  if (status === 'loading' && !profile) return <Screen><Spinner style={{ marginTop: theme.space.xxl }} /></Screen>;
+  if (status === 'loading' && !profile) return <Screen><ProfileSkeleton rows={2} /></Screen>;
   if (status === 'error') {
     return <Screen><EmptyState icon="person-circle-outline" title="Profile unavailable" subtitle={error} action={<Button title="Try again" onPress={load} />} /></Screen>;
   }

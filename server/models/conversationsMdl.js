@@ -22,9 +22,11 @@ exports.createDirectConversation = (typeId, createdBy, otherUserId, pairKey) => 
             'insert into conversations_lst_t (conversation_type_id, created_by, user_pair_key) values (?, ?, ?)',
             [typeId, createdBy, pairKey]);
         const conversationId = result.insertId;
-        await connection.execute(
-            'insert into conversation_members_t (conversation_id, user_id, member_role) values (?, ?, ?), (?, ?, ?)',
-            [conversationId, createdBy, 'MEMBER', conversationId, otherUserId, 'MEMBER']);
+        // each member's title starts as the other person's name (renamable per member later)
+        const memberWithTitle = `insert into conversation_members_t (conversation_id, user_id, member_role, custom_title)
+            select ?, ?, 'MEMBER', left(trim(concat(first_nm, ' ', ifnull(last_nm, ''))), 100) from users_lst_t where user_id = ?`;
+        await connection.execute(memberWithTitle, [conversationId, createdBy, otherUserId]);
+        await connection.execute(memberWithTitle, [conversationId, otherUserId, createdBy]);
         return conversationId;
     }, 'create direct conversation');
 };
@@ -50,6 +52,7 @@ exports.getMemberIds = async (conversationId) => {
 
 // one conversation as the list shows it (same shape as listForUser, for a single id)
 const SUMMARY_SELECT = `select c.conversation_id, ct.type_code as conversation_type, c.title, c.created_at, c.last_message_at,
+            me.custom_title, me.is_pinned, me.pinned_at, me.is_archived, me.archived_at,
             lm.message_id as last_message_id, lm.sender_id as last_sender_id, lm.is_deleted as last_is_deleted,
             case when lm.is_deleted = 1 then null else lm.content end as last_content, lm.created_at as last_created_at,
             -- the last message's ticks, aggregated over its recipients exactly like the message history does
@@ -71,7 +74,8 @@ const SUMMARY_SELECT = `select c.conversation_id, ct.type_code as conversation_t
 
 exports.listForUser = (userId) => {
     log('in listForUser');
-    const qry = `${SUMMARY_SELECT} order by coalesce(c.last_message_at, c.created_at) desc, c.conversation_id desc`;
+    // pinned chats first, the most recently pinned on top; then everything by latest activity
+    const qry = `${SUMMARY_SELECT} order by me.is_pinned desc, me.pinned_at desc, coalesce(c.last_message_at, c.created_at) desc, c.conversation_id desc`;
     return dbutils.executeQuery(qry, [userId], 'list conversations');
 };
 
@@ -79,4 +83,44 @@ exports.getSummaryForUser = (userId, conversationId) => {
     log('in getSummaryForUser');
     const qry = `${SUMMARY_SELECT} and c.conversation_id = ?`;
     return dbutils.executeQuery(qry, [userId, conversationId], 'get conversation summary');
+};
+
+// this member's own settings for a chat. only the fields given are changed; pinning and archiving
+// stamp their time, and archiving a chat also unpins it
+exports.updateMemberSettings = (conversationId, userId, { isPinned, isArchived, customTitle }) => {
+    log('in updateMemberSettings');
+    const sets = [];
+    const params = [];
+    if (isArchived !== undefined) {
+        sets.push('is_archived = ?', 'archived_at = case when ? = 1 then now(3) else null end');
+        params.push(isArchived ? 1 : 0, isArchived ? 1 : 0);
+        if (isArchived) sets.push('is_pinned = 0', 'pinned_at = null');
+    }
+    if (isPinned !== undefined && !isArchived) {
+        sets.push('is_pinned = ?', 'pinned_at = case when ? = 1 then now(3) else null end');
+        params.push(isPinned ? 1 : 0, isPinned ? 1 : 0);
+    }
+    if (customTitle !== undefined) { sets.push('custom_title = ?'); params.push(customTitle); }
+    if (!sets.length) return Promise.resolve({ affectedRows: 0 });
+    const qry = `update conversation_members_t set ${sets.join(', ')} where conversation_id = ? and user_id = ? and is_active = 1 and left_at is null`;
+    return dbutils.executeQuery(qry, [...params, conversationId, userId], 'update member settings');
+};
+
+// the default title of a one-to-one chat for this member: the other person's name
+exports.getDefaultDirectTitle = (conversationId, userId) => {
+    log('in getDefaultDirectTitle');
+    const qry = `select left(trim(concat(u.first_nm, ' ', ifnull(u.last_nm, ''))), 100) as title
+        from conversation_members_t om join users_lst_t u on u.user_id = om.user_id
+        where om.conversation_id = ? and om.user_id <> ? and om.is_active = 1 limit 1`;
+    return dbutils.executeQuery(qry, [conversationId, userId], 'default direct title');
+};
+
+// conversations where this member has unseen messages (read all)
+exports.listWithUnread = (userId) => {
+    log('in listWithUnread');
+    const qry = `select distinct m.conversation_id from message_receipts_t r
+        join messages_lst_t m on m.message_id = r.message_id
+        join conversation_members_t me on me.conversation_id = m.conversation_id and me.user_id = r.user_id and me.is_active = 1 and me.left_at is null
+        where r.user_id = ? and r.seen_at is null and r.is_active = 1 and m.is_deleted = 0`;
+    return dbutils.executeQuery(qry, [userId], 'list conversations with unread');
 };

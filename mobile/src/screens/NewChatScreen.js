@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { useChat } from '../contexts/ChatContext';
 import * as chatApi from '../services/chat.service';
-import { Screen, TextField, Spinner, EmptyState, Avatar, Muted, Divider, KeyboardAvoider } from '../components/ui';
+import { Screen, TextField, Spinner, EmptyState, Avatar, Muted, Divider, KeyboardAvoider, PeopleListSkeleton } from '../components/ui';
 import { fullName } from '../utils/chatFormat';
 
 export default function NewChatScreen({ navigation }) {
@@ -54,7 +54,9 @@ export default function NewChatScreen({ navigation }) {
           right={status === 'searching' ? <Spinner size="small" style={{ marginRight: 12 }} /> : null} />
       </View>
       <KeyboardAvoider>
-        {status === 'idle' ? (
+        {status === 'searching' && results.length === 0 ? (
+          <PeopleListSkeleton />
+        ) : status === 'idle' ? (
           <EmptyState icon="people-outline" title="Find someone to talk to" subtitle="Type at least one letter of their name or email." />
         ) : status === 'error' ? (
           <EmptyState icon="alert-circle-outline" title="Search failed" subtitle={error} />

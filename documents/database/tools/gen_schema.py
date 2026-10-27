@@ -30,9 +30,9 @@ def STD(precision=None):
 
 ID = "BIGINT UNSIGNED"
 TABLES = []
-def T(name, group, comment, cols, pk, uniques=(), indexes=(), fks=(), checks=(), seeds=None, layout=(0, 0)):
+def T(name, group, comment, cols, pk, uniques=(), indexes=(), fks=(), checks=(), seeds=None, layout=(0, 0), fulltexts=()):
     TABLES.append(dict(name=name, group=group, comment=comment, cols=cols, pk=pk, uniques=list(uniques),
-                       indexes=list(indexes), fks=list(fks), checks=list(checks), seeds=seeds, layout=layout))
+                       indexes=list(indexes), fks=list(fks), checks=list(checks), seeds=seeds, layout=layout, fulltexts=list(fulltexts)))
 
 # fks: (name, [cols], ref_table, [ref_cols], on_delete, deferred)
 T("users_lst_t", "core", "accounts; user_nm holds the login id (the email)", [
@@ -96,11 +96,16 @@ T("conversation_members_t", "chat", "who is in a conversation; last_read_message
     C("user_id", ID, False),
     C("member_role", "VARCHAR(20)", False, "'MEMBER'", comment="MEMBER | ADMIN (groups)"),
     C("last_read_message_id", ID),
+    C("is_pinned", "TINYINT(1)", False, "0", comment="1 = pinned to the top of this member's chat list"),
+    C("pinned_at", "DATETIME(3)", comment="when pinned; orders pinned chats"),
+    C("is_archived", "TINYINT(1)", False, "0", comment="1 = shown in this member's archive instead of the list"),
+    C("archived_at", "DATETIME(3)"),
+    C("custom_title", "VARCHAR(100)", comment="the name this member sees; one-to-one: the other person's name at creation, renamable"),
     C("joined_at", "DATETIME", False, "CURRENT_TIMESTAMP"),
     C("left_at", "DATETIME"),
     *STD()], "conversation_member_id",
     uniques=[("uq_member_conv_user", ["conversation_id", "user_id"])],
-    indexes=[("idx_member_user", ["user_id"])],
+    indexes=[("idx_member_user", ["user_id"]), ("idx_member_user_list", ["user_id", "is_archived", "is_pinned", "pinned_at"])],
     fks=[("fk_member_conversation", ["conversation_id"], "conversations_lst_t", ["conversation_id"], "NO ACTION", False),
          ("fk_member_user", ["user_id"], "users_lst_t", ["user_id"], "NO ACTION", False),
          ("fk_member_last_read", ["last_read_message_id"], "messages_lst_t", ["message_id"], "SET NULL", True)],
@@ -113,7 +118,11 @@ T("messages_lst_t", "chat", "messages; soft delete via is_deleted within the 15 
     C("message_type_id", "INT UNSIGNED", False, "1"),
     C("content", "TEXT"),
     C("attachment_file_id", ID, comment="uploaded_files_lst_t.file_id for image / file messages"),
+    C("reply_to_message_id", ID, comment="the message this one quotes (swipe to reply)"),
+    C("forwarded_from_message_id", ID, comment="the message this one is a forwarded copy of"),
     C("client_message_id", "CHAR(36)", comment="uuid from the sender; makes a socket retry idempotent"),
+    C("is_edited", "TINYINT(1)", False, "0", comment="1 = content changed after sending; history in message_edits_t"),
+    C("edited_at", "DATETIME(3)", comment="time of the latest edit"),
     C("is_deleted", "TINYINT(1)", False, "0"),
     C("deleted_at", "DATETIME(3)"),
     *STD(3)], "message_id",
@@ -122,8 +131,41 @@ T("messages_lst_t", "chat", "messages; soft delete via is_deleted within the 15 
     fks=[("fk_msg_conversation", ["conversation_id"], "conversations_lst_t", ["conversation_id"], "NO ACTION", False),
          ("fk_msg_sender", ["sender_id"], "users_lst_t", ["user_id"], "NO ACTION", False),
          ("fk_msg_type", ["message_type_id"], "message_type_master_t", ["message_type_id"], "NO ACTION", False),
-         ("fk_msg_attachment", ["attachment_file_id"], "uploaded_files_lst_t", ["file_id"], "SET NULL", False)],
+         ("fk_msg_attachment", ["attachment_file_id"], "uploaded_files_lst_t", ["file_id"], "SET NULL", False),
+         ("fk_msg_reply_to", ["reply_to_message_id"], "messages_lst_t", ["message_id"], "SET NULL", False),
+         ("fk_msg_forwarded_from", ["forwarded_from_message_id"], "messages_lst_t", ["message_id"], "SET NULL", False)],
+    fulltexts=[("ft_msg_content", ["content"])],
     layout=(1000, 400))
+
+T("message_edits_t", "chat", "previous versions of edited messages", [
+    C("message_edit_id", ID, False, ai=True),
+    C("message_id", ID, False),
+    C("old_content", "TEXT", comment="the text before this edit"),
+    C("edited_by", ID, False, comment="always the sender; kept for audits"),
+    C("edited_at", "DATETIME(3)", False, "CURRENT_TIMESTAMP(3)"),
+    *STD(3)], "message_edit_id",
+    indexes=[("idx_edit_message", ["message_id", "edited_at"])],
+    fks=[("fk_edit_message", ["message_id"], "messages_lst_t", ["message_id"], "NO ACTION", False),
+         ("fk_edit_user", ["edited_by"], "users_lst_t", ["user_id"], "NO ACTION", False)],
+    layout=(40, 620))
+
+T("scheduled_messages_t", "chat", "messages scheduled for a later date and time", [
+    C("scheduled_message_id", ID, False, ai=True),
+    C("conversation_id", ID, False),
+    C("sender_id", ID, False),
+    C("content", "TEXT", False),
+    C("reply_to_message_id", ID),
+    C("send_at", "DATETIME(3)", False, comment="date and time to send, server time"),
+    C("status", "VARCHAR(20)", False, "'PENDING'", comment="PENDING | SENDING | SENT | CANCELLED | FAILED"),
+    C("sent_message_id", ID, comment="the message created when it was sent"),
+    C("failure_reason", "VARCHAR(255)", comment="e.g. blocked by the recipient"),
+    *STD(3)], "scheduled_message_id",
+    indexes=[("idx_sched_due", ["status", "send_at"]), ("idx_sched_conv_sender", ["conversation_id", "sender_id", "status"])],
+    fks=[("fk_sched_conversation", ["conversation_id"], "conversations_lst_t", ["conversation_id"], "NO ACTION", False),
+         ("fk_sched_sender", ["sender_id"], "users_lst_t", ["user_id"], "NO ACTION", False),
+         ("fk_sched_sent_msg", ["sent_message_id"], "messages_lst_t", ["message_id"], "SET NULL", False),
+         ("fk_sched_reply", ["reply_to_message_id"], "messages_lst_t", ["message_id"], "SET NULL", False)],
+    layout=(520, 640))
 
 T("message_receipts_t", "chat", "one row per recipient per message (groups have many)", [
     C("message_receipt_id", ID, False, ai=True),
@@ -180,7 +222,7 @@ T("user_sessions_t", "auth", "application sessions issued at login", [
     uniques=[("uq_sessions_session_id", ["session_id"])],
     indexes=[("idx_sessions_user", ["user_id", "is_active"])],
     fks=[("fk_sessions_user", ["user_id"], "users_lst_t", ["user_id"], "NO ACTION", False)],
-    layout=(40, 920))
+    layout=(40, 950))
 
 T("user_login_history_t", "auth", "one row per login attempt that reached a session", [
     C("login_history_id", ID, False, ai=True),
@@ -192,14 +234,14 @@ T("user_login_history_t", "auth", "one row per login attempt that reached a sess
     *STD()], "login_history_id",
     indexes=[("idx_login_hist_user", ["user_id", "login_timestamp"])],
     fks=[("fk_login_hist_user", ["user_id"], "users_lst_t", ["user_id"], "NO ACTION", False)],
-    layout=(340, 920))
+    layout=(340, 950))
 
 T("sessions", "auth", "express-mysql-session store (library owned column names)", [
     C("session_id", "VARCHAR(128)", False),
     C("expires", "INT UNSIGNED", False),
     C("data", "MEDIUMTEXT"),
     *STD()], "session_id",
-    layout=(640, 920))
+    layout=(640, 950))
 
 T("email_audit_logs_t", "auth", "every outgoing mail; otp rows carry verify_key and expiry", [
     C("email_audit_id", ID, False, ai=True),
@@ -217,7 +259,7 @@ T("email_audit_logs_t", "auth", "every outgoing mail; otp rows carry verify_key 
     C("create_user", "VARCHAR(255)"),
     *STD()], "email_audit_id",
     indexes=[("idx_email_audit_lookup", ["recipient_email", "used_for", "email_audit_id"])],
-    layout=(940, 920))
+    layout=(940, 950))
 
 T("audit_logs_t", "auth", "one row per audited business action", [
     C("audit_log_id", ID, False, ai=True),
@@ -238,7 +280,7 @@ T("audit_logs_t", "auth", "one row per audited business action", [
     *STD()], "audit_log_id",
     indexes=[("idx_audit_user_time", ["user_id", "created_at"]), ("idx_audit_request", ["request_id"])],
     fks=[("fk_audit_user", ["user_id"], "users_lst_t", ["user_id"], "SET NULL", False)],
-    layout=(1240, 920))
+    layout=(1240, 950))
 
 BY = {t["name"]: t for t in TABLES}
 def col(t, name):
@@ -269,6 +311,7 @@ def ddl_table(t):
     lines.append(f"  PRIMARY KEY ({q(t['pk'])})")
     for n, cols in t["uniques"]: lines.append(f"  UNIQUE KEY {q(n)} ({', '.join(map(q, cols))})")
     for n, cols in t["indexes"]: lines.append(f"  KEY {q(n)} ({', '.join(map(q, cols))})")
+    for n, cols in t["fulltexts"]: lines.append(f"  FULLTEXT KEY {q(n)} ({', '.join(map(q, cols))})")
     for n, cols, rt, rc, od, deferred in t["fks"]:
         if deferred: continue
         lines.append(f"  CONSTRAINT {q(n)} FOREIGN KEY ({', '.join(map(q, cols))}) REFERENCES {q(rt)} ({', '.join(map(q, rc))}) ON DELETE {od} ON UPDATE NO ACTION")
@@ -291,7 +334,8 @@ def ordered():
     return out
 
 def write_sql():
-    o = [f"-- chat_application schema v1. generated from the schema definition in gen_schema.py;",
+    o = [f"-- chat_application schema (v1 plus the v2 additions). generated from the schema definition in gen_schema.py;",
+         "-- for a NEW database. an existing v1 database is upgraded with documents/database/migration-v2.sql instead.",
          "-- every table carries is_active / created_at / updated_at with defaults.",
          "-- run as chatapp_admin:",
          "--   mysql -u chatapp_admin -p chat_application < documents/database/schema-v1.sql", "",
@@ -318,7 +362,7 @@ def write_sql():
 
 # ----------------------------------------------------------------------------- SVG
 def write_svg():
-    W, H = 1780, 1290; ROW, HEAD, PAD, BW = 16, 24, 8, 280
+    W, H = 1780, 1330; ROW, HEAD, PAD, BW = 16, 24, 8, 280
     FONT = "Consolas, 'Courier New', monospace"
     HEADFILL = {"core": "#1d4ed8", "chat": "#0f766e", "master": "#7c3aed", "auth": "#475569"}
     def rows_of(t):
@@ -346,10 +390,10 @@ def write_svg():
            '<defs><marker id="one" markerWidth="12" markerHeight="12" refX="11" refY="6" orient="auto"><path d="M5 1 V11 M8 1 V11" stroke="#334155" stroke-width="1.6" fill="none"/></marker>'
            '<marker id="many" markerWidth="14" markerHeight="14" refX="1" refY="7" orient="auto"><path d="M1 7 L13 1 M1 7 L13 13 M1 7 L13 7 M10 1 V13" stroke="#334155" stroke-width="1.6" fill="none"/></marker></defs>',
            f'<rect width="{W}" height="{H}" fill="#f8fafc"/>',
-           '<rect x="20" y="20" width="1740" height="860" rx="10" fill="#ecfeff" stroke="#a5f3fc"/>',
-           '<text x="36" y="46" font-size="15" font-weight="bold" fill="#155e75">CHAT  -  ONE_TO_ONE / GROUP conversations, one receipt per recipient, blocks, seeded masters</text>',
-           '<rect x="20" y="895" width="1740" height="365" rx="10" fill="#f1f5f9" stroke="#cbd5e1"/>',
-           '<text x="36" y="915" font-size="15" font-weight="bold" fill="#334155">AUTH &amp; PLATFORM  -  tables the existing login / session / otp / audit / upload code reads</text>',
+           '<rect x="20" y="20" width="1740" height="890" rx="10" fill="#ecfeff" stroke="#a5f3fc"/>',
+           '<text x="36" y="46" font-size="15" font-weight="bold" fill="#155e75">CHAT  -  ONE_TO_ONE / GROUP conversations, one receipt per recipient, blocks, edits, scheduled messages, seeded masters</text>',
+           '<rect x="20" y="925" width="1740" height="375" rx="10" fill="#f1f5f9" stroke="#cbd5e1"/>',
+           '<text x="36" y="945" font-size="15" font-weight="bold" fill="#334155">AUTH &amp; PLATFORM  -  tables the existing login / session / otp / audit / upload code reads</text>',
            f'<text x="36" y="{H-10}" font-size="12" fill="#64748b">Every table: is_active TINYINT(1) NOT NULL DEFAULT 1, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP. Ids BIGINT UNSIGNED. InnoDB, utf8mb4.</text>']
     for t in TABLES:
         for n, cols, rt, rc, od, deferred in t["fks"]:
@@ -501,6 +545,8 @@ def xml_table(t, ids, schema_id, fk_ids):
         i = gid(); idx_ids[tuple(c)] = idx_ids.get(tuple(c), i); ix += xml_index(n, "UNIQUE", c, tid, colids, i)
     for n, c in t["indexes"]:
         i = gid(); idx_ids.setdefault(tuple(c), i); ix += xml_index(n, "INDEX", c, tid, colids, i)
+    for n, c in t["fulltexts"]:
+        ix += xml_index(n, "FULLTEXT", c, tid, colids, gid())
     def covering(cols):
         if cols == [t["pk"]]: return pk_id
         for k, v in idx_ids.items():

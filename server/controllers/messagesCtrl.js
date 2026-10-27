@@ -36,3 +36,22 @@ exports.markDelivered = async (req, res) => {
         return sendChatError(req, res, error, 'messages mark delivered');
     }
 };
+
+// shared shape of every chat controller: run the service, answer with its result, map named errors
+const handle = (fname, status, run) => async (req, res) => {
+    log(`in ${fname}`);
+    try {
+        return resutils.sendSuccessResponse(req, res, await run(req), status, { function: fname });
+    } catch (error) {
+        return sendChatError(req, res, error, fname);
+    }
+};
+
+// PATCH /messages/:id  { content }  - edit own message within the window
+exports.edit = handle('messages edit', RESPONSE_STATUS.UPDATED, (req) => messagesService.editSrvc(req.user.user_id, req.params.id, req.body?.content));
+
+// GET /messages/:id/edits  - every version of own message, oldest first
+exports.editHistory = handle('messages edit history', RESPONSE_STATUS.DATA_FOUND, (req) => messagesService.editHistorySrvc(req.user.user_id, req.params.id));
+
+// POST /messages/:id/forward  { conversation_ids: [] }  - per-target results
+exports.forward = handle('messages forward', RESPONSE_STATUS.SUCCESS, (req) => messagesService.forwardSrvc(req.user.user_id, req.params.id, req.body?.conversation_ids));

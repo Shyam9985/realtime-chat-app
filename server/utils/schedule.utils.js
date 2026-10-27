@@ -33,6 +33,20 @@ function registerJobs() {
     });
     logUpcomingJobTime('Unlock users', unlockJob);
 
+    // scheduled messages: at the start of every minute send whatever is due, and once at start-up so
+    // messages that fell due while the server was asleep (Render's free plan) go out on wake
+    const scheduledService = require('../services/scheduledService');
+    const runScheduled = async () => {
+        try {
+            await scheduledService.runDueSrvc();
+        } catch (error) {
+            console.error('Scheduled messages job failed:', error.message);
+        }
+    };
+    const scheduledJob = scheduler.scheduleJob('0 * * * * *', runScheduled);
+    logUpcomingJobTime('Scheduled messages', scheduledJob);
+    setTimeout(runScheduled, 5000);
+
     // register further jobs (e.g. purging expired OTPs) in the same shape
 
     log('\n', '=============== end of schedules registry ===============', '\n');

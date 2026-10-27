@@ -82,6 +82,9 @@ const toTheme = (p, isDark) => ({
     warning: isDark ? '#FBBF24' : '#D97706',
     warningSoft: isDark ? '#3A2E0A' : '#FEF3C7',
     seen: '#53BDEB',         // read ticks are blue, as in whatsapp: the one blue the user asked for
+    selection: isDark ? 'rgba(0,168,132,0.22)' : 'rgba(37,211,102,0.16)',   // a long-pressed message
+    highlight: isDark ? 'rgba(0,168,132,0.55)' : 'rgba(37,211,102,0.35)',   // search matches inside a bubble
+    overlaySoft: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)',    // quoted message inside a reply
     overlay: isDark ? 'rgba(0, 0, 0, 0.6)' : 'rgba(17, 27, 33, 0.45)',
     inputBackground: p.surface,
     placeholder: p.textSecondary,

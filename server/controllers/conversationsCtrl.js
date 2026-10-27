@@ -3,6 +3,7 @@ const RESPONSE_STATUS = require('../utils/standard.messages');
 const validutils = require('../utils/validate.utils');
 const conversationsService = require('../services/conversationsService');
 const messagesService = require('../services/messagesService');
+const scheduledService = require('../services/scheduledService');
 const { sendChatError } = require('./usersCtrl');
 const { log } = require('../utils/log.utils');
 
@@ -54,3 +55,30 @@ exports.markSeen = async (req, res) => {
         return sendChatError(req, res, error, 'conversations mark seen');
     }
 };
+
+// shared shape of every chat controller: run the service, answer with its result, map named errors
+const handle = (fname, status, run) => async (req, res) => {
+    log(`in ${fname}`);
+    try {
+        return resutils.sendSuccessResponse(req, res, await run(req), status, { function: fname });
+    } catch (error) {
+        return sendChatError(req, res, error, fname);
+    }
+};
+
+// PATCH /conversations/:id/settings  { is_pinned?, is_archived?, custom_title? }  - this member only
+exports.updateSettings = handle('conversations settings', RESPONSE_STATUS.UPDATED, (req) => conversationsService.updateSettingsSrvc(req.user.user_id, req.params.id, req.body || {}));
+
+// POST /conversations/read-all  - mark every conversation with unread messages as seen
+exports.readAll = handle('conversations read all', RESPONSE_STATUS.SUCCESS, (req) => messagesService.markAllSeenSrvc(req.user.user_id));
+
+// GET /conversations/:id/messages/search?q=&limit=
+exports.search = handle('conversations search', RESPONSE_STATUS.DATA_FOUND, (req) => messagesService.searchSrvc(req.user.user_id, req.params.id, req.query.q, req.query.limit));
+
+// GET / POST /conversations/:id/scheduled  - the caller's scheduled messages in this conversation
+exports.listScheduled = handle('scheduled list', RESPONSE_STATUS.DATA_FOUND, (req) => scheduledService.listSrvc(req.user.user_id, req.params.id));
+exports.createScheduled = handle('scheduled create', RESPONSE_STATUS.CREATED, (req) => scheduledService.createSrvc(req.user.user_id, req.params.id, req.body || {}));
+
+// PATCH / DELETE /scheduled/:id  - change or cancel a pending scheduled message
+exports.updateScheduled = handle('scheduled update', RESPONSE_STATUS.UPDATED, (req) => scheduledService.updateSrvc(req.user.user_id, req.params.id, req.body || {}));
+exports.cancelScheduled = handle('scheduled cancel', RESPONSE_STATUS.DELETED, (req) => scheduledService.cancelSrvc(req.user.user_id, req.params.id));

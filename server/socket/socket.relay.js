@@ -39,6 +39,21 @@ const registerRelay = (io) => {
         }
     });
 
+    // an edited message: every member sees the new text and the "Edited" label live
+    appEvents.on('message.edited', ({ message, memberIds }) => {
+        for (const id of memberIds) io.to(room(id)).emit('message:edited', message);
+    });
+
+    // pin / archive / rename are personal: only this member's own devices hear about them
+    appEvents.on('conversation.updated', ({ userId, conversation }) => {
+        io.to(room(userId)).emit('conversation:updated', conversation);
+    });
+
+    // the sender's scheduled list for a conversation changed (created, edited, cancelled, sent, failed)
+    appEvents.on('scheduled.changed', ({ sender_id, conversation_id }) => {
+        io.to(room(sender_id)).emit('scheduled:changed', { conversation_id });
+    });
+
     appEvents.on('conversation.created', ({ conversationId, memberIds }) => {
         for (const id of memberIds) io.to(room(id)).emit('conversation:new', { conversation_id: conversationId });
     });

@@ -276,6 +276,11 @@ const RESPONSE_STATUS = {
         statusKey: "DELETE_WINDOW_EXPIRED",
         message: "Messages can only be deleted for everyone within 15 minutes of sending."
     },
+    EDIT_WINDOW_EXPIRED: {
+        code: 403,
+        statusKey: "EDIT_WINDOW_EXPIRED",
+        message: "Messages can only be edited within 15 minutes of sending."
+    },
 
     ACCOUNT_INACTIVE: {
         code: 403,

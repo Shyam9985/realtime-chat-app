@@ -240,6 +240,18 @@ transport, the rule, or the sql.
 | `POST /messages` `{ conversation_id, content, client_message_id? }` | rest fallback for `message:send` |
 | `POST /messages/:id/delivered` | rest fallback for `message:delivered` |
 | `DELETE /messages/:id` | delete own message for everyone within the window |
+| `PATCH /messages/:id` `{ content }` | edit own message within 15 minutes (server clock), whatever its ticks; the previous text goes to `message_edits_t` in the same transaction; members get `message:edited` |
+| `GET /messages/:id/edits` | every version of own message, oldest first |
+| `POST /messages/:id/forward` `{ conversation_ids }` | up to 10 chats; each gets its own copy marked forwarded (`forwarded_from_message_id`), refused targets (e.g. blocked) are reported per chat; recipients never see the source |
+| `POST /conversations/read-all` | mark every chat with unread messages as seen, archived ones included |
+| `PATCH /conversations/:id/settings` `{ is_pinned?, is_archived?, custom_title? }` | personal to the caller; archiving unpins; a blank title restores the other person's name; the caller's devices get `conversation:updated` |
+| `GET /conversations/:id/messages/search?q=` | text search in one chat, newest first; full-text index for words of 3+ characters, LIKE otherwise; deleted messages never match |
+| `GET` / `POST /conversations/:id/scheduled` `{ content, send_at, reply_to_message_id? }` | the caller's scheduled messages; `send_at` is an ISO time at least a minute and at most a year ahead |
+| `PATCH` / `DELETE /scheduled/:id` | change or cancel a pending scheduled message |
+
+Replies: `POST /messages` and `message:send` take an optional `reply_to_message_id` (a live message of the same chat); every message carries `reply_to` (quoted text, null once deleted), `is_edited`, `edited_at` and `is_forwarded`.
+
+Scheduled messages are sent by a job that runs every minute (and once at start-up, so messages due while Render was asleep go out on wake) when `SCHEDULE_RUN=true`. Each run claims a due row atomically and sends it through the normal send path with the client id `sched-<id>`, so validation, block rules, receipts and the live push are those of a normal send, and a message is never sent twice.
 
 Chat-specific status keys: `BLOCKED`, `NOT_A_MEMBER`, `SELF_ACTION`, `DELETE_WINDOW_EXPIRED`,
 `ACCOUNT_INACTIVE`. A missing conversation and a foreign one both answer `NOT_A_MEMBER` so an id
@@ -261,6 +273,9 @@ receipt of the user is marked delivered and the senders are told (offline recove
 | server to sender | `message:delivered`, `message:seen` | `{ message_id or message_ids, conversation_id, user_id, timestamp }` |
 | server to members | `message:deleted` | `{ message_id, conversation_id, deleted_at }` |
 | server to members | `conversation:new` | `{ conversation_id }` |
+| server to members | `message:edited` | the edited message |
+| server to the user's devices | `conversation:updated` | the conversation summary after pin / archive / rename |
+| server to the sender's devices | `scheduled:changed` | `{ conversation_id }`: refetch the scheduled list |
 | server to caller | `error` | `{ event, statusKey, code, message }`, also returned in the ack |
 
 The sender is always the socket's user; a `sender_id` in the payload is ignored. Limits:

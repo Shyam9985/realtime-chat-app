@@ -17,6 +17,8 @@ import AboutScreen from '../screens/AboutScreen';
 import NewChatScreen from '../screens/NewChatScreen';
 import ChatScreen from '../screens/ChatScreen';
 import ContactInfoScreen from '../screens/ContactInfoScreen';
+import ArchivedScreen from '../screens/ArchivedScreen';
+import ForwardScreen from '../screens/ForwardScreen';
 
 const Stack = createNativeStackNavigator();
 const Tabs = createBottomTabNavigator();
@@ -93,6 +95,8 @@ export default function RootNavigator() {
             <Stack.Screen name="NewChat" component={NewChatScreen} options={{ title: 'Select contact' }} />
             <Stack.Screen name="Chat" component={ChatScreen} options={({ route }) => ({ title: route.params?.title || 'Chat' })} />
             <Stack.Screen name="ContactInfo" component={ContactInfoScreen} options={{ title: 'Contact info' }} />
+            <Stack.Screen name="Archived" component={ArchivedScreen} options={{ title: 'Archived' }} />
+            <Stack.Screen name="Forward" component={ForwardScreen} options={{ title: 'Forward to…' }} />
           </>
         ) : (
           <>

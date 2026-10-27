@@ -14,11 +14,14 @@ import { useAuth } from "./AuthContext";
  */
 const ChatContext = createContext(null);
 
-const initialState = { conversations: [], conversationsStatus: "idle", conversationsError: null, threads: {}, socketStatus: "disconnected" };
+// scheduledVersion: per conversation, bumped when the sender's scheduled messages change (screens refetch)
+const initialState = { conversations: [], conversationsStatus: "idle", conversationsError: null, threads: {}, socketStatus: "disconnected", scheduledVersion: {} };
 const emptyThread = () => ({ messages: [], nextCursor: null, hasMore: true, status: "idle", error: null });
 
 const ts = (v) => (v ? new Date(v).getTime() : 0);
-const sortConversations = (list) => [...list].sort((a, b) => (ts(b.last_message_at || b.created_at) - ts(a.last_message_at || a.created_at)) || (b.conversation_id - a.conversation_id));
+// pinned chats first (most recently pinned on top), then everything by latest activity: the same order the server uses
+const sortConversations = (list) => [...list].sort((a, b) => ((b.is_pinned ? 1 : 0) - (a.is_pinned ? 1 : 0)) || (ts(b.pinned_at) - ts(a.pinned_at))
+    || (ts(b.last_message_at || b.created_at) - ts(a.last_message_at || a.created_at)) || (b.conversation_id - a.conversation_id));
 const sameMessage = (a, b) => (a.message_id && a.message_id === b.message_id) || (a.client_message_id && a.client_message_id === b.client_message_id);
 
 // ticks only move forward: sending -> sent -> delivered -> seen. socket events and api answers can
@@ -86,6 +89,11 @@ function reducer(state, action) {
         }
         case "THREAD_ERROR": { const t = state.threads[action.id] || emptyThread(); return { ...state, threads: { ...state.threads, [action.id]: { ...t, status: t.messages.length ? "ready" : "error", error: action.error } } }; }
         case "MESSAGE_MERGE": { const id = action.message.conversation_id; const t = state.threads[id] || emptyThread(); return { ...state, threads: { ...state.threads, [id]: { ...t, messages: mergeMessage(t.messages, action.message) } } }; }
+        case "MESSAGE_UPDATE": { const id = action.message.conversation_id; const t = state.threads[id]; if (!t) return state; return { ...state, threads: { ...state.threads, [id]: { ...t, messages: mergeMessage(t.messages, action.message) } } }; }
+        // an edited message that the chat list shows as the last one
+        case "PREVIEW_CONTENT": return { ...state, conversations: state.conversations.map((c) => (c.conversation_id === action.message.conversation_id && c.last_message?.message_id === action.message.message_id ? { ...c, last_message: { ...c.last_message, content: action.message.content } } : c)) };
+        case "UNREAD_CLEARED": return { ...state, conversations: state.conversations.map((c) => (c.unread_count ? { ...c, unread_count: 0 } : c)) };
+        case "SCHEDULED_CHANGED": return { ...state, scheduledVersion: { ...state.scheduledVersion, [action.id]: (state.scheduledVersion[action.id] || 0) + 1 } };
         case "MESSAGE_PATCH": { const t = state.threads[action.conversationId]; if (!t) return state; return { ...state, threads: { ...state.threads, [action.conversationId]: { ...t, messages: patch(t.messages, action.predicate, action.fields) } } }; }
         case "MESSAGE_REMOVE": { const t = state.threads[action.conversationId]; if (!t) return state; return { ...state, threads: { ...state.threads, [action.conversationId]: { ...t, messages: t.messages.filter((m) => !action.predicate(m)) } } }; }
         case "RESET": return initialState;
@@ -145,15 +153,18 @@ export function ChatProvider({ children }) {
 
     const closeConversation = useCallback((conversationId) => { if (active.current === conversationId) active.current = null; }, []);
 
-    const sendMessage = useCallback(async (conversationId, text) => {
+    // replyTo: the message being quoted ({ message_id, sender_id, content }), or null
+    const sendMessage = useCallback(async (conversationId, text, replyTo = null) => {
         const content = text.trim();
         if (!content) return;
         const clientMessageId = uuid();
-        dispatch({ type: "MESSAGE_MERGE", message: { message_id: null, client_message_id: clientMessageId, conversation_id: conversationId, sender_id: myId, content, is_deleted: false, created_at: new Date().toISOString(), status: "SENDING", local: true } });
+        const replyPreview = replyTo ? { message_id: replyTo.message_id, sender_id: replyTo.sender_id, content: replyTo.content, is_deleted: false } : null;
+        dispatch({ type: "MESSAGE_MERGE", message: { message_id: null, client_message_id: clientMessageId, conversation_id: conversationId, sender_id: myId, content, is_deleted: false, created_at: new Date().toISOString(), status: "SENDING", local: true, reply_to: replyPreview } });
         try {
+            const replyToId = replyTo?.message_id ?? null;
             const result = socket.isConnected()
-                ? await socket.emitWithAck("message:send", { conversation_id: conversationId, content, client_message_id: clientMessageId })
-                : await chatApi.sendMessage(conversationId, content, clientMessageId);
+                ? await socket.emitWithAck("message:send", { conversation_id: conversationId, content, client_message_id: clientMessageId, ...(replyToId ? { reply_to_message_id: replyToId } : {}) })
+                : await chatApi.sendMessage(conversationId, content, clientMessageId, replyToId);
             dispatch({ type: "MESSAGE_MERGE", message: result.message });
             dispatch({ type: "CONVERSATION_PREVIEW", message: result.message, incrementUnread: false });
             return result.message;
@@ -165,7 +176,7 @@ export function ChatProvider({ children }) {
 
     const retryMessage = useCallback(async (message) => {
         dispatch({ type: "MESSAGE_REMOVE", conversationId: message.conversation_id, predicate: (m) => m.client_message_id === message.client_message_id });
-        return sendMessage(message.conversation_id, message.content);
+        return sendMessage(message.conversation_id, message.content, message.reply_to?.message_id ? message.reply_to : null);
     }, [sendMessage]);
 
     const discardMessage = useCallback((message) => dispatch({ type: "MESSAGE_REMOVE", conversationId: message.conversation_id, predicate: (m) => m.client_message_id === message.client_message_id }), []);
@@ -175,6 +186,53 @@ export function ChatProvider({ children }) {
         dispatch({ type: "MESSAGE_MERGE", message: result.message });
         return result.message;
     }, []);
+
+    // edit own message (within the server's window); the other member's screen updates through message:edited
+    const editMessage = useCallback(async (message, text) => {
+        const result = await chatApi.editMessage(message.message_id, text.trim());
+        dispatch({ type: "MESSAGE_UPDATE", message: result.message });
+        dispatch({ type: "PREVIEW_CONTENT", message: result.message });
+        return result;
+    }, []);
+
+    // forward to several chats; the results say which ones were refused (e.g. blocked)
+    const forwardMessage = useCallback(async (message, conversationIds) => {
+        const result = await chatApi.forwardMessage(message.message_id, conversationIds);
+        for (const r of result.results) {
+            if (!r.ok) continue;
+            dispatch({ type: "MESSAGE_UPDATE", message: r.message });
+            dispatch({ type: "CONVERSATION_PREVIEW", message: r.message, incrementUnread: false });
+        }
+        return result;
+    }, []);
+
+    // pin / archive / rename: personal to this member
+    const updateConversationSettings = useCallback(async (conversationId, settings) => {
+        const conversation = await chatApi.updateConversationSettings(conversationId, settings);
+        dispatch({ type: "CONVERSATION_UPSERT", conversation });
+        return conversation;
+    }, []);
+
+    const readAll = useCallback(async () => {
+        const result = await chatApi.readAll();
+        dispatch({ type: "UNREAD_CLEARED" });
+        return result;
+    }, []);
+
+    // loads older pages until the message is in the thread (search results, reply quotes). gives up
+    // after `maxPages` pages so a missing message never loops forever
+    const threadsRef = useRef(state.threads);
+    threadsRef.current = state.threads;
+    const ensureMessageLoaded = useCallback(async (conversationId, messageId, maxPages = 30) => {
+        for (let page = 0; page < maxPages; page += 1) {
+            const t = threadsRef.current[conversationId];
+            if (t?.messages.some((m) => m.message_id === messageId)) return true;
+            if (!t || !t.hasMore || !t.nextCursor) return false;
+            await loadHistory(conversationId, t.nextCursor);
+            await new Promise((resolve) => setTimeout(resolve, 0));   // let the reducer commit before the next check
+        }
+        return false;
+    }, [loadHistory]);
 
     const startConversation = useCallback(async (userId) => {
         const { conversation } = await chatApi.getOrCreateConversation(userId);
@@ -215,13 +273,18 @@ export function ChatProvider({ children }) {
             }),
             socket.on("message:deleted", ({ message_id, conversation_id, deleted_at }) => { dispatch({ type: "MESSAGE_PATCH", conversationId: conversation_id, predicate: (m) => m.message_id === message_id, fields: { is_deleted: true, content: null, deleted_at } }); refreshConversations(); }),
             socket.on("conversation:new", () => refreshConversations()),
+            socket.on("message:edited", (message) => { dispatch({ type: "MESSAGE_UPDATE", message }); dispatch({ type: "PREVIEW_CONTENT", message }); }),
+            socket.on("conversation:updated", (conversation) => dispatch({ type: "CONVERSATION_UPSERT", conversation })),
+            socket.on("scheduled:changed", ({ conversation_id }) => dispatch({ type: "SCHEDULED_CHANGED", id: conversation_id })),
         ];
         return () => { offs.forEach((off) => off && off()); };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [authStatus, refreshConversations, loadHistory, sendSeen, sendDelivered, state.conversations.length]);
 
-    const value = useMemo(() => ({ ...state, myId, refreshConversations, openConversation, closeConversation, loadOlder, sendMessage, retryMessage, discardMessage, deleteMessage, startConversation, blockUser, unblockUser }),
-        [state, myId, refreshConversations, openConversation, closeConversation, loadOlder, sendMessage, retryMessage, discardMessage, deleteMessage, startConversation, blockUser, unblockUser]);
+    const value = useMemo(() => ({ ...state, myId, refreshConversations, openConversation, closeConversation, loadOlder, sendMessage, retryMessage, discardMessage, deleteMessage, startConversation, blockUser, unblockUser,
+        editMessage, forwardMessage, updateConversationSettings, readAll, ensureMessageLoaded }),
+        [state, myId, refreshConversations, openConversation, closeConversation, loadOlder, sendMessage, retryMessage, discardMessage, deleteMessage, startConversation, blockUser, unblockUser,
+            editMessage, forwardMessage, updateConversationSettings, readAll, ensureMessageLoaded]);
     return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;
 }
 

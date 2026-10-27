@@ -39,7 +39,9 @@
           "resizeMode": "contain",
           "backgroundColor": "#FFFFFF"
         }
-      ]
+      ],
+      "expo-sharing",
+      "@react-native-community/datetimepicker"
     ],
     "description": "More Gossip. More Giggles."
   }

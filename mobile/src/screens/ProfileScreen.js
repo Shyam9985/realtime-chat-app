@@ -10,7 +10,7 @@ import { getProfile } from '../services/profile.service';
 import { loadPhoto, savePhoto } from '../store/photoStore';
 import { handleLogout, resetPasswordMail } from '../services/auth.service';
 import { listBlocked } from '../services/chat.service';
-import { Screen, Avatar, Button, Muted, Divider, Dialog, Spinner, IconButton, Section, FormScroll } from '../components/ui';
+import { Screen, Avatar, Button, Muted, Divider, Dialog, Spinner, IconButton, Section, FormScroll, PeopleListSkeleton } from '../components/ui';
 import VerifyOtp from '../components/VerifyOtp';
 import UpdatePassword from '../components/UpdatePassword';
 import { fullName } from '../utils/chatFormat';
@@ -30,22 +30,18 @@ function Field({ label, value, last }) {
   );
 }
 
-// icon, title with a short explanation, and the control on the right (the web ProfilePage rows)
-function Row({ icon, title, text, children }) {
+// a setting: the title and its control on one line, the explanation on its own line underneath.
+// on a very narrow screen or at the largest font the control wraps below the title instead of clipping
+function Row({ title, text, children }) {
   const { theme } = useTheme();
   const c = theme.colors;
   return (
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: theme.space.md, paddingHorizontal: theme.space.lg, paddingVertical: theme.space.md }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.space.md, flexShrink: 1 }}>
-        <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: c.accentSoft, alignItems: 'center', justifyContent: 'center' }}>
-          <Ionicons name={icon} size={20} color={c.accent} />
-        </View>
-        <View style={{ flexShrink: 1 }}>
-          <Text style={{ fontWeight: '700', color: c.text, fontSize: theme.font.md }}>{title}</Text>
-          <Muted>{text}</Muted>
-        </View>
+    <View style={{ paddingHorizontal: theme.space.lg, paddingVertical: theme.space.md, gap: theme.space.xs }}>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', columnGap: theme.space.md, rowGap: theme.space.sm }}>
+        <Text style={{ fontWeight: '700', color: c.text, fontSize: theme.font.md }}>{title}</Text>
+        {children}
       </View>
-      {children}
+      <Muted style={{ lineHeight: Math.round(theme.font.sm * 1.45) }}>{text}</Muted>
     </View>
   );
 }
@@ -58,7 +54,7 @@ function Segmented({ options }) {
     <View style={{ flexDirection: 'row', gap: 4, padding: 4, borderRadius: theme.radius.md, borderWidth: 1, borderColor: c.border, backgroundColor: c.surfaceAlt }}>
       {options.map((o) => (
         <Pressable key={o.key} onPress={o.onPress} disabled={o.disabled} testID={o.testID} accessibilityRole="button" accessibilityLabel={o.accessibilityLabel || o.label} accessibilityState={{ selected: !!o.active, disabled: !!o.disabled }}
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 12, borderRadius: theme.radius.sm, backgroundColor: o.active ? c.accent : 'transparent', opacity: o.disabled ? 0.4 : 1 }}>
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 4, height: 36, paddingHorizontal: 10, borderRadius: theme.radius.sm, backgroundColor: o.active ? c.accent : 'transparent', opacity: o.disabled ? 0.4 : 1 }}>
           {o.icon ? <Ionicons name={o.icon} size={16} color={o.active ? '#FFFFFF' : c.textMuted} /> : null}
           <Text style={{ fontWeight: '700', fontSize: theme.font.sm, color: o.active ? '#FFFFFF' : c.textMuted }}>{o.label}</Text>
         </Pressable>
@@ -210,7 +206,7 @@ export default function ProfileScreen() {
         </Section>
 
         <Section title="Appearance">
-          <Row icon="sunny-outline" title="Theme" text="Light, dark, or follow your phone's setting.">
+          <Row title="Theme" text="Light, dark, or follow your phone's setting.">
             <Segmented options={[
               { key: 'system', label: 'System', icon: 'phone-portrait-outline', active: mode === 'system', onPress: setSystemTheme, testID: 'theme-system' },
               { key: 'light', label: 'Light', icon: 'sunny-outline', active: mode === 'light', onPress: setLightTheme, testID: 'theme-light' },
@@ -218,7 +214,7 @@ export default function ProfileScreen() {
             ]} />
           </Row>
           <Divider />
-          <Row icon="text-outline" title="Font size" text="Scales the text in the whole app.">
+          <Row title="Font size" text="Scales the text in the whole app.">
             <Segmented options={[
               { key: 'decrease', label: 'A-', disabled: fontSize <= MIN_FONT, onPress: () => setFontSize(fontSize - 2), accessibilityLabel: 'Decrease font size', testID: 'font-decrease' },
               { key: 'default', label: 'A', active: fontSize === DEFAULT_FONT, onPress: () => setFontSize(DEFAULT_FONT), accessibilityLabel: 'Default font size', testID: 'font-default' },
@@ -228,7 +224,7 @@ export default function ProfileScreen() {
         </Section>
 
         <Section title="Blocked users">
-          {blocked === null ? <Spinner size="small" style={{ margin: theme.space.lg }} /> : blocked.length === 0 ? (
+          {blocked === null ? <PeopleListSkeleton rows={2} /> : blocked.length === 0 ? (
             <Muted style={{ padding: theme.space.lg }}>You have not blocked anyone.</Muted>
           ) : blocked.map((u, i) => (
             <View key={u.user_id}>

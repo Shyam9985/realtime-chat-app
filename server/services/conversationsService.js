@@ -13,7 +13,13 @@ const pairKeyFor = (a, b) => `${Math.min(a, b)}:${Math.max(a, b)}`;
 const toSummaryDto = (row) => ({
     conversation_id: row.conversation_id,
     conversation_type: row.conversation_type,
-    title: row.title,
+    // the name this member sees: their own title (one-to-one: the other person's name unless renamed),
+    // else the shared group title
+    title: row.custom_title || row.title || null,
+    is_pinned: !!row.is_pinned,
+    pinned_at: toIso(row.pinned_at),
+    is_archived: !!row.is_archived,
+    archived_at: toIso(row.archived_at),
     other_user: row.other_user_id ? {
         user_id: row.other_user_id,
         first_nm: row.other_first_nm,
@@ -89,6 +95,43 @@ exports.assertMemberSrvc = async (conversationIdRaw, userId) => {
     const [membership] = await conversationsMdl.getMembership(conversationId, userId);
     if (!membership) resutils.createError('notMember', 'You are not a member of this conversation.');
     return membership;
+};
+
+const MAX_TITLE = 100;
+
+const optionalBoolean = (value, label) => {
+    if (value === undefined) return undefined;
+    if (typeof value !== 'boolean') resutils.createError('validationFailed', `${label} must be true or false.`);
+    return value;
+};
+
+/*
+ * This member's own settings for a chat: { is_pinned?, is_archived?, custom_title? }. Nothing here
+ * changes what the other member sees. Archiving unpins; a blank title goes back to the default (the
+ * other person's name in a one-to-one chat). The member's other devices are told live.
+ */
+exports.updateSettingsSrvc = async (userId, conversationIdRaw, body = {}) => {
+    log('in updateSettingsSrvc');
+    const conversationId = parseId(conversationIdRaw, 'Conversation id');
+    const membership = await exports.assertMemberSrvc(conversationId, userId);
+
+    const isPinned = optionalBoolean(body.is_pinned, 'is_pinned');
+    const isArchived = optionalBoolean(body.is_archived, 'is_archived');
+    let customTitle;
+    if (body.custom_title !== undefined) {
+        if (body.custom_title !== null && typeof body.custom_title !== 'string') resutils.createError('validationFailed', 'The name must be text.');
+        const title = (body.custom_title || '').trim();
+        if (title.length > MAX_TITLE) resutils.createError('validationFailed', `The name cannot exceed ${MAX_TITLE} characters.`);
+        if (title) customTitle = title;
+        else if (membership.type_code === DIRECT) customTitle = (await conversationsMdl.getDefaultDirectTitle(conversationId, userId))[0]?.title || null;
+        else customTitle = null;
+    }
+    if (isPinned === undefined && isArchived === undefined && customTitle === undefined) resutils.createError('validationFailed', 'Nothing to change.');
+
+    await conversationsMdl.updateMemberSettings(conversationId, userId, { isPinned, isArchived, customTitle });
+    const conversation = await exports.getSummarySrvc(userId, conversationId);
+    appEvents.emit('conversation.updated', { userId: Number(userId), conversation });
+    return { conversation };
 };
 
 exports.toSummaryDto = toSummaryDto;

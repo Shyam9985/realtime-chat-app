@@ -1,4 +1,5 @@
--- chat_application schema v1. generated from the schema definition in gen_schema.py;
+-- chat_application schema (v1 plus the v2 additions). generated from the schema definition in gen_schema.py;
+-- for a NEW database. an existing v1 database is upgraded with documents/database/migration-v2.sql instead.
 -- every table carries is_active / created_at / updated_at with defaults.
 -- run as chatapp_admin:
 --   mysql -u chatapp_admin -p chat_application < documents/database/schema-v1.sql
@@ -84,6 +85,11 @@ CREATE TABLE IF NOT EXISTS `conversation_members_t` (
   `user_id` BIGINT UNSIGNED NOT NULL,
   `member_role` VARCHAR(20) NOT NULL DEFAULT 'MEMBER' COMMENT 'MEMBER | ADMIN (groups)',
   `last_read_message_id` BIGINT UNSIGNED NULL,
+  `is_pinned` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '1 = pinned to the top of this member''s chat list',
+  `pinned_at` DATETIME(3) NULL COMMENT 'when pinned; orders pinned chats',
+  `is_archived` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '1 = shown in this member''s archive instead of the list',
+  `archived_at` DATETIME(3) NULL,
+  `custom_title` VARCHAR(100) NULL COMMENT 'the name this member sees; one-to-one: the other person''s name at creation, renamable',
   `joined_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `left_at` DATETIME NULL,
   `is_active` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '1 = active, 0 = soft deleted',
@@ -92,6 +98,7 @@ CREATE TABLE IF NOT EXISTS `conversation_members_t` (
   PRIMARY KEY (`conversation_member_id`),
   UNIQUE KEY `uq_member_conv_user` (`conversation_id`, `user_id`),
   KEY `idx_member_user` (`user_id`),
+  KEY `idx_member_user_list` (`user_id`, `is_archived`, `is_pinned`, `pinned_at`),
   KEY `fk_member_last_read_idx` (`last_read_message_id`),
   CONSTRAINT `fk_member_conversation` FOREIGN KEY (`conversation_id`) REFERENCES `conversations_lst_t` (`conversation_id`) ON DELETE NO ACTION ON UPDATE NO ACTION,
   CONSTRAINT `fk_member_user` FOREIGN KEY (`user_id`) REFERENCES `users_lst_t` (`user_id`) ON DELETE NO ACTION ON UPDATE NO ACTION
@@ -237,7 +244,11 @@ CREATE TABLE IF NOT EXISTS `messages_lst_t` (
   `message_type_id` INT UNSIGNED NOT NULL DEFAULT 1,
   `content` TEXT NULL,
   `attachment_file_id` BIGINT UNSIGNED NULL COMMENT 'uploaded_files_lst_t.file_id for image / file messages',
+  `reply_to_message_id` BIGINT UNSIGNED NULL COMMENT 'the message this one quotes (swipe to reply)',
+  `forwarded_from_message_id` BIGINT UNSIGNED NULL COMMENT 'the message this one is a forwarded copy of',
   `client_message_id` CHAR(36) NULL COMMENT 'uuid from the sender; makes a socket retry idempotent',
+  `is_edited` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '1 = content changed after sending; history in message_edits_t',
+  `edited_at` DATETIME(3) NULL COMMENT 'time of the latest edit',
   `is_deleted` TINYINT(1) NOT NULL DEFAULT 0,
   `deleted_at` DATETIME(3) NULL,
   `is_active` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '1 = active, 0 = soft deleted',
@@ -248,11 +259,59 @@ CREATE TABLE IF NOT EXISTS `messages_lst_t` (
   KEY `idx_msg_conv_created` (`conversation_id`, `created_at`, `message_id`),
   KEY `fk_msg_type_idx` (`message_type_id`),
   KEY `fk_msg_attachment_idx` (`attachment_file_id`),
+  KEY `fk_msg_reply_to_idx` (`reply_to_message_id`),
+  KEY `fk_msg_forwarded_from_idx` (`forwarded_from_message_id`),
+  FULLTEXT KEY `ft_msg_content` (`content`),
   CONSTRAINT `fk_msg_conversation` FOREIGN KEY (`conversation_id`) REFERENCES `conversations_lst_t` (`conversation_id`) ON DELETE NO ACTION ON UPDATE NO ACTION,
   CONSTRAINT `fk_msg_sender` FOREIGN KEY (`sender_id`) REFERENCES `users_lst_t` (`user_id`) ON DELETE NO ACTION ON UPDATE NO ACTION,
   CONSTRAINT `fk_msg_type` FOREIGN KEY (`message_type_id`) REFERENCES `message_type_master_t` (`message_type_id`) ON DELETE NO ACTION ON UPDATE NO ACTION,
-  CONSTRAINT `fk_msg_attachment` FOREIGN KEY (`attachment_file_id`) REFERENCES `uploaded_files_lst_t` (`file_id`) ON DELETE SET NULL ON UPDATE NO ACTION
+  CONSTRAINT `fk_msg_attachment` FOREIGN KEY (`attachment_file_id`) REFERENCES `uploaded_files_lst_t` (`file_id`) ON DELETE SET NULL ON UPDATE NO ACTION,
+  CONSTRAINT `fk_msg_reply_to` FOREIGN KEY (`reply_to_message_id`) REFERENCES `messages_lst_t` (`message_id`) ON DELETE SET NULL ON UPDATE NO ACTION,
+  CONSTRAINT `fk_msg_forwarded_from` FOREIGN KEY (`forwarded_from_message_id`) REFERENCES `messages_lst_t` (`message_id`) ON DELETE SET NULL ON UPDATE NO ACTION
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='messages; soft delete via is_deleted within the 15 minute window';
+
+-- ---------------------------------------------------------------- message_edits_t
+CREATE TABLE IF NOT EXISTS `message_edits_t` (
+  `message_edit_id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `message_id` BIGINT UNSIGNED NOT NULL,
+  `old_content` TEXT NULL COMMENT 'the text before this edit',
+  `edited_by` BIGINT UNSIGNED NOT NULL COMMENT 'always the sender; kept for audits',
+  `edited_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `is_active` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '1 = active, 0 = soft deleted',
+  `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `updated_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (`message_edit_id`),
+  KEY `idx_edit_message` (`message_id`, `edited_at`),
+  KEY `fk_edit_user_idx` (`edited_by`),
+  CONSTRAINT `fk_edit_message` FOREIGN KEY (`message_id`) REFERENCES `messages_lst_t` (`message_id`) ON DELETE NO ACTION ON UPDATE NO ACTION,
+  CONSTRAINT `fk_edit_user` FOREIGN KEY (`edited_by`) REFERENCES `users_lst_t` (`user_id`) ON DELETE NO ACTION ON UPDATE NO ACTION
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='previous versions of edited messages';
+
+-- ---------------------------------------------------------------- scheduled_messages_t
+CREATE TABLE IF NOT EXISTS `scheduled_messages_t` (
+  `scheduled_message_id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `conversation_id` BIGINT UNSIGNED NOT NULL,
+  `sender_id` BIGINT UNSIGNED NOT NULL,
+  `content` TEXT NOT NULL,
+  `reply_to_message_id` BIGINT UNSIGNED NULL,
+  `send_at` DATETIME(3) NOT NULL COMMENT 'date and time to send, server time',
+  `status` VARCHAR(20) NOT NULL DEFAULT 'PENDING' COMMENT 'PENDING | SENDING | SENT | CANCELLED | FAILED',
+  `sent_message_id` BIGINT UNSIGNED NULL COMMENT 'the message created when it was sent',
+  `failure_reason` VARCHAR(255) NULL COMMENT 'e.g. blocked by the recipient',
+  `is_active` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '1 = active, 0 = soft deleted',
+  `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `updated_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (`scheduled_message_id`),
+  KEY `idx_sched_due` (`status`, `send_at`),
+  KEY `idx_sched_conv_sender` (`conversation_id`, `sender_id`, `status`),
+  KEY `fk_sched_sender_idx` (`sender_id`),
+  KEY `fk_sched_sent_msg_idx` (`sent_message_id`),
+  KEY `fk_sched_reply_idx` (`reply_to_message_id`),
+  CONSTRAINT `fk_sched_conversation` FOREIGN KEY (`conversation_id`) REFERENCES `conversations_lst_t` (`conversation_id`) ON DELETE NO ACTION ON UPDATE NO ACTION,
+  CONSTRAINT `fk_sched_sender` FOREIGN KEY (`sender_id`) REFERENCES `users_lst_t` (`user_id`) ON DELETE NO ACTION ON UPDATE NO ACTION,
+  CONSTRAINT `fk_sched_sent_msg` FOREIGN KEY (`sent_message_id`) REFERENCES `messages_lst_t` (`message_id`) ON DELETE SET NULL ON UPDATE NO ACTION,
+  CONSTRAINT `fk_sched_reply` FOREIGN KEY (`reply_to_message_id`) REFERENCES `messages_lst_t` (`message_id`) ON DELETE SET NULL ON UPDATE NO ACTION
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='messages scheduled for a later date and time';
 
 -- ---------------------------------------------------------------- message_receipts_t
 CREATE TABLE IF NOT EXISTS `message_receipts_t` (

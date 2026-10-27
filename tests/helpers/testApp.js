@@ -99,6 +99,8 @@ const cleanupUsers = async (userIds) => {
         await sql(`update conversations_lst_t set last_message_id = null where conversation_id in (${cm})`, convIds);
         await sql(`update conversation_members_t set last_read_message_id = null where conversation_id in (${cm})`, convIds);
         await sql(`delete r from message_receipts_t r join messages_lst_t m on m.message_id = r.message_id where m.conversation_id in (${cm})`, convIds);
+        await sql(`delete e from message_edits_t e join messages_lst_t m on m.message_id = e.message_id where m.conversation_id in (${cm})`, convIds);
+        await sql(`delete from scheduled_messages_t where conversation_id in (${cm})`, convIds);
         await sql(`delete from messages_lst_t where conversation_id in (${cm})`, convIds);
         await sql(`delete from conversation_members_t where conversation_id in (${cm})`, convIds);
         await sql(`delete from conversations_lst_t where conversation_id in (${cm})`, convIds);

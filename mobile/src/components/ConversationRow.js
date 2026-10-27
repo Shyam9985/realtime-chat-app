@@ -8,7 +8,7 @@ import { DELETED_PLACEHOLDER, fullName, listStamp } from '../utils/chatFormat';
 
 // the avatar (opens the contact's profile) and the rest of the row (opens the chat) are two sibling
 // touch targets: a button inside a button is invalid on the web build and ambiguous for screen readers
-export function ConversationRow({ conversation, myId, onPress, onAvatarPress }) {
+export function ConversationRow({ conversation, myId, onPress, onAvatarPress, onLongPress }) {
   const { theme } = useTheme();
   const c = theme.colors;
   const other = conversation.other_user;
@@ -20,11 +20,12 @@ export function ConversationRow({ conversation, myId, onPress, onAvatarPress }) 
 
   return (
     <View style={{ flexDirection: 'row', alignItems: 'stretch', backgroundColor: c.surface }}>
-      <Pressable onPress={onAvatarPress} disabled={!onAvatarPress} accessibilityRole="button" accessibilityLabel={`View ${fullName(other)}'s profile`}
+      <Pressable onPress={onAvatarPress} onLongPress={onLongPress} delayLongPress={350} disabled={!onAvatarPress} accessibilityRole="button" accessibilityLabel={`View ${fullName(other)}'s profile`}
         style={({ pressed }) => ({ justifyContent: 'center', paddingLeft: theme.space.lg, paddingRight: theme.space.md, paddingVertical: 11, backgroundColor: pressed ? c.surfaceAlt : c.surface })}>
         <Avatar user={other} size={52} />
       </Pressable>
-      <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`Open chat with ${fullName(other)}`}
+      <Pressable onPress={onPress} onLongPress={onLongPress} delayLongPress={350} accessibilityRole="button" accessibilityHint="Long press for pin and archive"
+        accessibilityLabel={`Open chat with ${name}${conversation.is_pinned ? ', pinned' : ''}`} testID={`chat-row-${conversation.conversation_id}`}
         style={({ pressed }) => ({ flex: 1, minWidth: 0, justifyContent: 'center', paddingRight: theme.space.lg, paddingVertical: 11, backgroundColor: pressed ? c.surfaceAlt : c.surface })}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.space.sm }}>
           <Text numberOfLines={1} style={{ flex: 1, fontSize: theme.font.lg, fontWeight: unread ? '700' : '500', color: c.text }}>
@@ -41,7 +42,10 @@ export function ConversationRow({ conversation, myId, onPress, onAvatarPress }) 
               {preview}
             </Text>
           </View>
-          <Badge count={conversation.unread_count} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            {conversation.is_pinned ? <Ionicons name="pin" size={15} color={c.textMuted} accessibilityLabel="Pinned" testID="pinned-icon" /> : null}
+            <Badge count={conversation.unread_count} />
+          </View>
         </View>
       </Pressable>
     </View>
