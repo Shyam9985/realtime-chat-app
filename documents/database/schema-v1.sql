@@ -256,6 +256,23 @@ CREATE TABLE IF NOT EXISTS `user_devices_t` (
   CONSTRAINT `fk_device_user` FOREIGN KEY (`user_id`) REFERENCES `users_lst_t` (`user_id`) ON DELETE NO ACTION ON UPDATE NO ACTION
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='phones that receive push notifications';
 
+-- ---------------------------------------------------------------- app_releases_t
+CREATE TABLE IF NOT EXISTS `app_releases_t` (
+  `release_id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `version` VARCHAR(20) NOT NULL COMMENT 'what users see, semver: 1.1.0',
+  `version_code` INT UNSIGNED NOT NULL COMMENT 'what the app compares: major*10000 + minor*100 + patch',
+  `apk_url` VARCHAR(500) NOT NULL COMMENT 'where the APK is downloaded from (github releases)',
+  `notes` TEXT NULL COMMENT 'what''s new, shown in the update dialog',
+  `is_mandatory` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '1 = older builds must update before using the app',
+  `released_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `is_active` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '1 = active, 0 = soft deleted',
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`release_id`),
+  UNIQUE KEY `uq_release_version` (`version`),
+  UNIQUE KEY `uq_release_version_code` (`version_code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='published app versions; the app compares its build with the newest';
+
 -- ---------------------------------------------------------------- messages_lst_t
 CREATE TABLE IF NOT EXISTS `messages_lst_t` (
   `message_id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
