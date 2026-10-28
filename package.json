@@ -11,7 +11,8 @@
   ],
   "scripts": {
     "test": "node --test --test-concurrency=1 tests/",
-    "start": "node server.js"
+    "start": "node server.js",
+    "publish-release": "node scripts/publish-release.js"
   },
   "author": "shyam",
   "license": "ISC",

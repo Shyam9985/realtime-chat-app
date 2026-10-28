@@ -10,6 +10,7 @@ const messagesRtr = require('./messagesRtr');
 const healthRtr = require('./healthRtr');
 const scheduledRtr = require('./scheduledRtr');
 const devicesRtr = require('./devicesRtr');
+const appRtr = require('./appRtr');
 
 router.use('/health', healthRtr);
 router.use('/auth', authRtr);
@@ -22,5 +23,7 @@ router.use('/messages', messagesRtr);
 router.use('/scheduled', scheduledRtr);
 // push notifications: the phones of each user
 router.use('/devices', devicesRtr);
+// app updates: the newest published build
+router.use('/app', appRtr);
 
 module.exports = router;

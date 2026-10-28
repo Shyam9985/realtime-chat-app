@@ -6,6 +6,7 @@ import { ToastProvider } from './src/contexts/MessageContext';
 import { AuthProvider } from './src/contexts/AuthContext';
 import { ChatProvider } from './src/contexts/ChatContext';
 import RootNavigator from './src/navigation/RootNavigator';
+import UpdateGate from './src/components/UpdateGate';
 
 function Root() {
   const { isDark } = useTheme();
@@ -13,6 +14,8 @@ function Root() {
     <>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <RootNavigator />
+      {/* "a new version is available": over every screen, the login screen included */}
+      <UpdateGate />
     </>
   );
 }

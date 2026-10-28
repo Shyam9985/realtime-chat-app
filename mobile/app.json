@@ -3,7 +3,7 @@
     "name": "YaapZone",
     "slug": "yaapzone",
     "scheme": "yaapzone",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -25,7 +25,9 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "usesCleartextTraffic": true
+      "usesCleartextTraffic": true,
+      "permissions": ["android.permission.REQUEST_INSTALL_PACKAGES"],
+      "versionCode": 10100
     },
     "plugins": [
       [

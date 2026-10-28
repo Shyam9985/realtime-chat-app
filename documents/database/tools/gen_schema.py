@@ -302,6 +302,18 @@ T("user_devices_t", "auth", "phones that receive push notifications", [
     fks=[("fk_device_user", ["user_id"], "users_lst_t", ["user_id"], "NO ACTION", False)],
     layout=(1540, 950))
 
+T("app_releases_t", "auth", "published app versions; the app compares its build with the newest", [
+    C("release_id", ID, False, ai=True),
+    C("version", "VARCHAR(20)", False, comment="what users see, semver: 1.1.0"),
+    C("version_code", "INT UNSIGNED", False, comment="what the app compares: major*10000 + minor*100 + patch"),
+    C("apk_url", "VARCHAR(500)", False, comment="where the APK is downloaded from (github releases)"),
+    C("notes", "TEXT", comment="what's new, shown in the update dialog"),
+    C("is_mandatory", "TINYINT(1)", False, "0", comment="1 = older builds must update before using the app"),
+    C("released_at", "DATETIME", False, "CURRENT_TIMESTAMP"),
+    *STD()], "release_id",
+    uniques=[("uq_release_version", ["version"]), ("uq_release_version_code", ["version_code"])],
+    layout=(1540, 1150))
+
 BY = {t["name"]: t for t in TABLES}
 def col(t, name):
     for c in t["cols"]:
@@ -382,7 +394,7 @@ def write_sql():
 
 # ----------------------------------------------------------------------------- SVG
 def write_svg():
-    W, H = 2080, 1330; ROW, HEAD, PAD, BW = 16, 24, 8, 280
+    W, H = 2080, 1400; ROW, HEAD, PAD, BW = 16, 24, 8, 280
     FONT = "Consolas, 'Courier New', monospace"
     HEADFILL = {"core": "#1d4ed8", "chat": "#0f766e", "master": "#7c3aed", "auth": "#475569"}
     def rows_of(t):
@@ -412,7 +424,7 @@ def write_svg():
            f'<rect width="{W}" height="{H}" fill="#f8fafc"/>',
            '<rect x="20" y="20" width="2040" height="890" rx="10" fill="#ecfeff" stroke="#a5f3fc"/>',
            '<text x="36" y="46" font-size="15" font-weight="bold" fill="#155e75">CHAT  -  ONE_TO_ONE / GROUP conversations, one receipt per recipient, blocks, edits, scheduled messages, seeded masters</text>',
-           '<rect x="20" y="925" width="2040" height="375" rx="10" fill="#f1f5f9" stroke="#cbd5e1"/>',
+           '<rect x="20" y="925" width="2040" height="445" rx="10" fill="#f1f5f9" stroke="#cbd5e1"/>',
            '<text x="36" y="945" font-size="15" font-weight="bold" fill="#334155">AUTH &amp; PLATFORM  -  tables the existing login / session / otp / audit / upload code reads</text>',
            f'<text x="36" y="{H-10}" font-size="12" fill="#64748b">Every table: is_active TINYINT(1) NOT NULL DEFAULT 1, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP. Ids BIGINT UNSIGNED. InnoDB, utf8mb4.</text>']
     for t in TABLES:

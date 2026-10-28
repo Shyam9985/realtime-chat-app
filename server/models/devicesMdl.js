@@ -29,6 +29,12 @@ exports.listActiveTokens = (userIds) => {
     return dbutils.executeQuery(qry, userIds, 'list active push tokens');
 };
 
+// every phone that is switched on, whoever it belongs to (announcing a new app version)
+exports.listAllActiveTokens = () => {
+    log('in listAllActiveTokens');
+    return dbutils.executeQuery('select user_id, push_token from user_devices_t where is_active = 1', [], 'list all push tokens');
+};
+
 // firebase said these tokens no longer reach a phone (app uninstalled, data cleared): stop using them
 exports.deactivateTokens = (pushTokens) => {
     log('in deactivateTokens');

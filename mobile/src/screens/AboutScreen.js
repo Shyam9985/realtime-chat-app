@@ -5,6 +5,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { Screen, Muted } from '../components/ui';
 import { StatusTicks } from '../components/MessageBubble';
 import { DELETE_WINDOW_MINUTES } from '../utils/chatFormat';
+import { APP_VERSION } from '../config';
 
 /*
  * The About tab: what the app does, in everyday words. Every sentence matches how the app and the
@@ -116,7 +117,7 @@ export default function AboutScreen() {
             <Text style={{ fontSize: theme.font.xl, fontWeight: '700', color: c.text, marginTop: theme.space.md }}>YaapZone</Text>
             <Text style={{ marginTop: 2, textAlign: 'center', fontSize: theme.font.md, fontWeight: '600', color: c.accent }}>More Gossip. More Giggles.</Text>
             <Muted style={{ marginTop: theme.space.xs, textAlign: 'center' }}>Simple one-to-one messaging with the people you know.</Muted>
-            <Muted style={{ marginTop: theme.space.sm, fontSize: theme.font.xs }}>Version 1.0.0</Muted>
+            <Muted style={{ marginTop: theme.space.sm, fontSize: theme.font.xs }}>Version {APP_VERSION}</Muted>
           </View>
         </Card>
 

@@ -1,11 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="2080" height="1330" viewBox="0 0 2080 1330" font-family="Consolas, 'Courier New', monospace">
+<svg xmlns="http://www.w3.org/2000/svg" width="2080" height="1400" viewBox="0 0 2080 1400" font-family="Consolas, 'Courier New', monospace">
 <defs><marker id="one" markerWidth="12" markerHeight="12" refX="11" refY="6" orient="auto"><path d="M5 1 V11 M8 1 V11" stroke="#334155" stroke-width="1.6" fill="none"/></marker><marker id="many" markerWidth="14" markerHeight="14" refX="1" refY="7" orient="auto"><path d="M1 7 L13 1 M1 7 L13 13 M1 7 L13 7 M10 1 V13" stroke="#334155" stroke-width="1.6" fill="none"/></marker></defs>
-<rect width="2080" height="1330" fill="#f8fafc"/>
+<rect width="2080" height="1400" fill="#f8fafc"/>
 <rect x="20" y="20" width="2040" height="890" rx="10" fill="#ecfeff" stroke="#a5f3fc"/>
 <text x="36" y="46" font-size="15" font-weight="bold" fill="#155e75">CHAT  -  ONE_TO_ONE / GROUP conversations, one receipt per recipient, blocks, edits, scheduled messages, seeded masters</text>
-<rect x="20" y="925" width="2040" height="375" rx="10" fill="#f1f5f9" stroke="#cbd5e1"/>
+<rect x="20" y="925" width="2040" height="445" rx="10" fill="#f1f5f9" stroke="#cbd5e1"/>
 <text x="36" y="945" font-size="15" font-weight="bold" fill="#334155">AUTH &amp; PLATFORM  -  tables the existing login / session / otp / audit / upload code reads</text>
-<text x="36" y="1320" font-size="12" fill="#64748b">Every table: is_active TINYINT(1) NOT NULL DEFAULT 1, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP. Ids BIGINT UNSIGNED. InnoDB, utf8mb4.</text>
+<text x="36" y="1390" font-size="12" fill="#64748b">Every table: is_active TINYINT(1) NOT NULL DEFAULT 1, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP. Ids BIGINT UNSIGNED. InnoDB, utf8mb4.</text>
 <path d="M1280 110.0 H1380.0 V72.0 H1480" fill="none" stroke="#334155" stroke-width="1.4" stroke-dasharray="5 3" marker-start="url(#many)" marker-end="url(#one)"/>
 <path d="M1000 158.0 H660.0 V72.0 H320" fill="none" stroke="#334155" stroke-width="1.4" stroke-dasharray="5 3" marker-start="url(#many)" marker-end="url(#one)"/>
 <path d="M1280 190.0 H1306 V412.0 H1280" fill="none" stroke="#334155" stroke-width="1.4" stroke-dasharray="5 3" marker-start="url(#many)" marker-end="url(#one)"/>
@@ -709,4 +709,38 @@
 <text x="1814" y="1099" font-size="9" fill="#64748b" text-anchor="end">DATETIME(3)</text>
 <text x="1546" y="1115" font-size="10" font-weight="bold" fill="#0369a1">IX</text>
 <text x="1566" y="1115" font-size="10.5" fill="#0f172a">(user_id, is_active)</text>
+<rect x="1540" y="1150" width="280" height="192" rx="6" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<rect x="1540" y="1150" width="280" height="24" rx="6" fill="#475569"/>
+<rect x="1540" y="1168" width="280" height="6" fill="#475569"/>
+<text x="1550" y="1167" font-size="13" font-weight="bold" fill="#fff">app_releases_t</text>
+<text x="1546" y="1187" font-size="10" font-weight="bold" fill="#b45309">PK</text>
+<text x="1566" y="1187" font-size="10.5" fill="#0f172a">release_id</text>
+<text x="1814" y="1187" font-size="9" fill="#64748b" text-anchor="end">BIGINT UNSIGNED</text>
+<text x="1546" y="1203" font-size="10" font-weight="bold" fill="#0369a1">UQ</text>
+<text x="1566" y="1203" font-size="10.5" fill="#0f172a">version</text>
+<text x="1814" y="1203" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(20)</text>
+<text x="1546" y="1219" font-size="10" font-weight="bold" fill="#0369a1">UQ</text>
+<text x="1566" y="1219" font-size="10.5" fill="#0f172a">version_code</text>
+<text x="1814" y="1219" font-size="9" fill="#64748b" text-anchor="end">INT UNSIGNED</text>
+<text x="1546" y="1235" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1566" y="1235" font-size="10.5" fill="#0f172a">apk_url</text>
+<text x="1814" y="1235" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(500)</text>
+<text x="1546" y="1251" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1566" y="1251" font-size="10.5" fill="#0f172a">notes</text>
+<text x="1814" y="1251" font-size="9" fill="#64748b" text-anchor="end">TEXT NULL</text>
+<text x="1546" y="1267" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1566" y="1267" font-size="10.5" fill="#0f172a">is_mandatory</text>
+<text x="1814" y="1267" font-size="9" fill="#64748b" text-anchor="end">TINYINT(1) =0</text>
+<text x="1546" y="1283" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1566" y="1283" font-size="10.5" fill="#0f172a">released_at</text>
+<text x="1814" y="1283" font-size="9" fill="#64748b" text-anchor="end">DATETIME =CURRENT_TIMESTAMP</text>
+<text x="1546" y="1299" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1566" y="1299" font-size="10.5" fill="#0f172a">is_active</text>
+<text x="1814" y="1299" font-size="9" fill="#64748b" text-anchor="end">TINYINT(1) =1</text>
+<text x="1546" y="1315" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1566" y="1315" font-size="10.5" fill="#0f172a">created_at</text>
+<text x="1814" y="1315" font-size="9" fill="#64748b" text-anchor="end">DATETIME =CURRENT_TIMESTAMP</text>
+<text x="1546" y="1331" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1566" y="1331" font-size="10.5" fill="#0f172a">updated_at</text>
+<text x="1814" y="1331" font-size="9" fill="#64748b" text-anchor="end">DATETIME</text>
 </svg>

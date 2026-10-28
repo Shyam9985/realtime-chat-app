@@ -4,6 +4,7 @@ import * as Notifications from 'expo-notifications';
 import { post } from '../store/api.service';
 import * as tokenStore from '../store/tokenStore';
 import { CHANNEL_ID, pushSupported } from './push.service';
+import { requestUpdateCheck } from './update.service';
 
 /*
  * What happens when a push arrives while YaapZone is in the background or closed. Android starts the
@@ -28,6 +29,15 @@ const readPush = (payload) => {
 TaskManager.defineTask(PUSH_TASK, async ({ data, error }) => {
     if (error) return;
     const push = readPush(data);
+
+    // a new app version (to everyone, signed in or not): open app -> the update dialog at once;
+    // otherwise a notification that opens it
+    if (push?.type === 'update') {
+        if (AppState.currentState === 'active') { requestUpdateCheck(); return; }
+        await Notifications.scheduleNotificationAsync({ content: { title: push.title, body: push.body, data: { type: 'update' } }, trigger: { channelId: CHANNEL_ID } });
+        return;
+    }
+
     if (push?.type !== 'message' || AppState.currentState === 'active') return;
     // signed out on this phone: nothing to acknowledge and nothing to show
     if (!(await tokenStore.getToken())) return;

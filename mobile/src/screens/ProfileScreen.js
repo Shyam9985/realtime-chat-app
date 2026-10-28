@@ -10,6 +10,7 @@ import { getProfile, updateProfile } from '../services/profile.service';
 import { loadPhoto, savePhoto } from '../store/photoStore';
 import { handleLogout, resetPasswordMail } from '../services/auth.service';
 import { listBlocked } from '../services/chat.service';
+import { APP_VERSION } from '../config';
 import { Screen, Avatar, Button, Muted, Divider, Dialog, Spinner, IconButton, Section, FormScroll, PeopleListSkeleton, TextField } from '../components/ui';
 import DateField from '../components/DateField';
 import VerifyOtp from '../components/VerifyOtp';
@@ -310,7 +311,7 @@ export default function ProfileScreen() {
             <Button title="Sign out" variant="danger" icon="log-out-outline" onPress={() => setConfirmSignOut(true)} />
           </View>
         </Section>
-        <Muted style={{ textAlign: 'center', marginTop: theme.space.xl }}>YaapZone v1.0.0</Muted>
+        <Muted style={{ textAlign: 'center', marginTop: theme.space.xl }}>YaapZone v{APP_VERSION}</Muted>
       </FormScroll>
 
       <Dialog visible={confirmSignOut} icon="log-out-outline" tone="danger" title="Sign out?" message="You will need to sign in again to continue."

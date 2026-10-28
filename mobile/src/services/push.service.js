@@ -54,8 +54,9 @@ export function watchPushToken() {
 export function openChatsFromNotifications(openChat) {
     if (!supported()) return () => {};
     const open = (response) => {
-        const { conversation_id: conversationId } = response?.notification?.request?.content?.data || {};
-        if (conversationId) openChat(Number(conversationId), response.notification.request.content.title);
+        const { conversation_id: conversationId, type } = response?.notification?.request?.content?.data || {};
+        // a "new version" tap is the update dialog's (UpdateGate), which also works signed out
+        if (type !== 'update' && conversationId) openChat(Number(conversationId), response.notification.request.content.title);
     };
     const subscription = Notifications.addNotificationResponseReceivedListener(open);
     const launchedBy = Notifications.getLastNotificationResponse();

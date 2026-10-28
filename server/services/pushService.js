@@ -31,12 +31,8 @@ const contentOf = async (message) => {
     };
 };
 
-// sends one data message to every active phone of these users; switches off tokens firebase rejects
-const sendToUsers = async (userIds, data) => {
-    const messaging = getFirebaseMessaging();
-    if (!messaging || !userIds.length) return { sent: 0, failed: 0 };
-    const rows = await devicesMdl.listActiveTokens(userIds);
-    const tokens = rows.map((r) => r.push_token);
+// sends one data message to these phones; switches off tokens firebase rejects
+const sendToTokens = async (messaging, tokens, data) => {
     let sent = 0;
     const dead = [];
     for (let i = 0; i < tokens.length; i += BATCH) {
@@ -49,6 +45,20 @@ const sendToUsers = async (userIds, data) => {
     if (dead.length) await devicesMdl.deactivateTokens(dead);
     log(`[push] ${sent} sent, ${tokens.length - sent} failed, ${dead.length} dead tokens switched off`);
     return { sent, failed: tokens.length - sent };
+};
+
+// every active phone of these users
+const sendToUsers = async (userIds, data) => {
+    const messaging = getFirebaseMessaging();
+    if (!messaging || !userIds.length) return { sent: 0, failed: 0 };
+    return sendToTokens(messaging, (await devicesMdl.listActiveTokens(userIds)).map((r) => r.push_token), data);
+};
+
+// every active phone there is (a new app version)
+const sendToAllDevices = async (data) => {
+    const messaging = getFirebaseMessaging();
+    if (!messaging) return { sent: 0, failed: 0 };
+    return sendToTokens(messaging, (await devicesMdl.listAllActiveTokens()).map((r) => r.push_token), data);
 };
 
 // a new message (sends, forwards, scheduled sends): every recipient's phones hear about it.
@@ -75,4 +85,4 @@ const registerPushRelay = () => {
     });
 };
 
-module.exports = { registerPushRelay, sendToUsers };
+module.exports = { registerPushRelay, sendToUsers, sendToAllDevices };
