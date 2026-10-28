@@ -1,4 +1,4 @@
--- chat_application schema (v1 plus the v2 and v3 additions). generated from the schema definition in gen_schema.py;
+-- chat_application schema (v1 plus the v2, v3 and v4 additions). generated from the schema definition in gen_schema.py;
 -- for a NEW database. migration scripts for an existing database are kept only until every database has run them.
 -- every table carries is_active / created_at / updated_at with defaults.
 -- run as chatapp_admin:
@@ -239,6 +239,22 @@ CREATE TABLE IF NOT EXISTS `audit_logs_t` (
   KEY `idx_audit_request` (`request_id`),
   CONSTRAINT `fk_audit_user` FOREIGN KEY (`user_id`) REFERENCES `users_lst_t` (`user_id`) ON DELETE SET NULL ON UPDATE NO ACTION
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='one row per audited business action';
+
+-- ---------------------------------------------------------------- user_devices_t
+CREATE TABLE IF NOT EXISTS `user_devices_t` (
+  `device_id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `user_id` BIGINT UNSIGNED NOT NULL COMMENT 'who is signed in on that phone',
+  `push_token` VARCHAR(512) NOT NULL COMMENT 'the phone''s firebase cloud messaging token',
+  `platform` VARCHAR(20) NOT NULL DEFAULT 'android' COMMENT 'android | ios',
+  `last_registered_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT 'the app sends the token at every start and sign-in',
+  `is_active` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '1 = active, 0 = soft deleted',
+  `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `updated_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (`device_id`),
+  UNIQUE KEY `uq_device_push_token` (`push_token`),
+  KEY `idx_device_user` (`user_id`, `is_active`),
+  CONSTRAINT `fk_device_user` FOREIGN KEY (`user_id`) REFERENCES `users_lst_t` (`user_id`) ON DELETE NO ACTION ON UPDATE NO ACTION
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='phones that receive push notifications';
 
 -- ---------------------------------------------------------------- messages_lst_t
 CREATE TABLE IF NOT EXISTS `messages_lst_t` (

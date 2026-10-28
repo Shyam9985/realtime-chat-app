@@ -3,6 +3,7 @@ const { socketAuth } = require('./socket.auth');
 const { registerHandlers } = require('./socket.handlers');
 const { registerRelay, room } = require('./socket.relay');
 const messagesService = require('../services/messagesService');
+const { registerPushRelay } = require('../services/pushService');
 const { logBlock } = require('../utils/log.utils');
 
 /*
@@ -22,6 +23,8 @@ const initSocket = (httpServer, { allowedOrigins }) => {
 
     io.use(socketAuth);
     registerRelay(io);
+    // the same announcements also reach phones whose app is closed, as firebase push notifications
+    registerPushRelay();
 
     io.on('connection', async (socket) => {
         const userId = socket.data.user.user_id;

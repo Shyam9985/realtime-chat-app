@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { ImageBackground } from 'react-native';
-import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
+import { NavigationContainer, DefaultTheme, DarkTheme, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { Screen, Spinner } from '../components/ui';
+import { openChatsFromNotifications } from '../services/push.service';
 import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
 import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
@@ -76,11 +77,22 @@ function HomeTabs() {
   );
 }
 
+// a handle on the navigator for code outside the screens (a tapped notification opening its chat)
+const navigationRef = createNavigationContainerRef();
+
 export default function RootNavigator() {
   const { theme, isDark } = useTheme();
   const { status } = useAuth();
   const header = useHeaderOptions();
   const c = theme.colors;
+  const [navReady, setNavReady] = useState(false);
+
+  // a tapped notification opens its chat, once someone is signed in and the screens exist. this also
+  // catches the tap that started the app from closed, which arrived before any of this was mounted
+  useEffect(() => {
+    if (status !== 'signedIn' || !navReady) return undefined;
+    return openChatsFromNotifications((conversationId, title) => navigationRef.navigate('Chat', { conversationId, title }));
+  }, [status, navReady]);
 
   const navTheme = {
     ...(isDark ? DarkTheme : DefaultTheme),
@@ -91,7 +103,7 @@ export default function RootNavigator() {
   if (status === 'loading') return <ImageBackground source={require('../../assets/startup-screen.png')} resizeMode="cover" style={{ flex: 1, backgroundColor: '#FFFFFF' }} accessibilityLabel="YaapZone is starting" />;
 
   return (
-    <NavigationContainer theme={navTheme}>
+    <NavigationContainer theme={navTheme} ref={navigationRef} onReady={() => setNavReady(true)}>
       <Stack.Navigator screenOptions={header}>
         {status === 'signedIn' ? (
           <>

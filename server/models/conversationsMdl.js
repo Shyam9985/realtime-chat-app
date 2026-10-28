@@ -124,6 +124,15 @@ exports.updateMemberSettings = (conversationId, userId, { isPinned, isArchived, 
     return dbutils.executeQuery(qry, [...params, conversationId, userId], 'update member settings');
 };
 
+// a conversation's type and shared name (a group's title; null for one-to-one), for notifications
+exports.getTypeAndTitle = (conversationId) => {
+    log('in getTypeAndTitle');
+    const qry = `select ct.type_code, c.title from conversations_lst_t c
+        join conversations_type_master_t ct on ct.conversation_type_id = c.conversation_type_id
+        where c.conversation_id = ?`;
+    return dbutils.executeQuery(qry, [conversationId], 'conversation type and title');
+};
+
 // the default title of a one-to-one chat for this member: the other person's name
 exports.getDefaultDirectTitle = (conversationId, userId) => {
     log('in getDefaultDirectTitle');

@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef } from "react";
 import * as chatApi from "../services/chat.service";
 import * as socket from "../services/socket.service";
+import { registerForPush, watchPushToken } from "../services/push.service";
 import { useAuth } from "./AuthContext";
 
 /*
@@ -287,6 +288,9 @@ export function ChatProvider({ children }) {
         if (authStatus !== "signedIn") { dispatch({ type: "RESET" }); return undefined; }
         socket.connect();
         refreshConversations();
+        // push notifications: this phone's token goes to the server (and again whenever firebase renews it)
+        registerForPush().catch(() => {});
+        const stopWatchingToken = watchPushToken();
         const offs = [
             socket.onStatus((s) => {
                 dispatch({ type: "SOCKET_STATUS", status: s });
@@ -322,7 +326,7 @@ export function ChatProvider({ children }) {
             socket.on("group:updated", ({ conversation_id }) => { refreshConversation(conversation_id); dispatch({ type: "GROUP_CHANGED", id: conversation_id }); }),
             socket.on("conversation:removed", ({ conversation_id }) => dispatch({ type: "CONVERSATION_REMOVE", id: conversation_id })),
         ];
-        return () => { offs.forEach((off) => off && off()); };
+        return () => { offs.forEach((off) => off && off()); stopWatchingToken(); };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [authStatus, refreshConversations, refreshConversation, loadHistory, sendSeen, sendDelivered, state.conversations.length]);
 

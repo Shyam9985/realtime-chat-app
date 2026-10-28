@@ -9,6 +9,7 @@ const conversationsRtr = require('./conversationsRtr');
 const messagesRtr = require('./messagesRtr');
 const healthRtr = require('./healthRtr');
 const scheduledRtr = require('./scheduledRtr');
+const devicesRtr = require('./devicesRtr');
 
 router.use('/health', healthRtr);
 router.use('/auth', authRtr);
@@ -19,5 +20,7 @@ router.use('/users', usersRtr);
 router.use('/conversations', conversationsRtr);
 router.use('/messages', messagesRtr);
 router.use('/scheduled', scheduledRtr);
+// push notifications: the phones of each user
+router.use('/devices', devicesRtr);
 
 module.exports = router;

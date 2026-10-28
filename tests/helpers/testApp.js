@@ -109,6 +109,7 @@ const cleanupUsers = async (userIds) => {
     const files = await sql(`select file_path from uploaded_files_lst_t where uploaded_by in (${marks})`, userIds);
     await sql(`delete from uploaded_files_lst_t where uploaded_by in (${marks})`, userIds);
     for (const f of files) await require('fs').promises.unlink(require('path').join(__dirname, '../../server', f.file_path)).catch(() => {});
+    await sql(`delete from user_devices_t where user_id in (${marks})`, userIds);
     await sql(`delete from user_blocks_t where blocker_id in (${marks}) or blocked_id in (${marks})`, [...userIds, ...userIds]);
     await sql(`delete from audit_logs_t where user_id in (${marks})`, userIds);
     await sql(`delete from user_login_history_t where user_id in (${marks})`, userIds);

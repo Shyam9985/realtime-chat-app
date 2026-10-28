@@ -155,6 +155,7 @@ mysql -u chatapp_admin -p chat_application < documents/database/schema-v1.sql
 | `ADMIN_USER/PASSWORD`, `CHAT_USER/PASSWORD` | the two pool logins, created by `documents/database/create-app-users.sql` |
 | `GROUP_MAX_MEMBERS` | optional; most people in a group, the creator included (default 100) |
 | `SIGNUP_MIN_AGE` | optional; youngest age allowed to sign up (default 13) |
+| `FIREBASE_SERVICE_ACCOUNT_FILE` | optional; path to the Firebase service-account key for push notifications (local: the downloaded file in the repo root, git-ignored; Render: a Secret File under `/etc/secrets/`). Unset = no pushes |
 | `REDIS_URL`, `REDIS_USERNAME`, `REDIS_PASSWORD` | Redis; username and password blank for a local instance |
 | `EMAIL_USER`, `EMAIL_PASSWORD` | Gmail SMTP login for OTP mails |
 | `APP_NAME` | name shown in outgoing mails |

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "192293553277",
+    "project_id": "yaapzone",
+    "storage_bucket": "yaapzone.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:192293553277:android:b96513272df829a8239d14",
+        "android_client_info": {
+          "package_name": "com.yaapzone.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDarSInua83Iscf8IAw5iCsV5BXqDFmCL8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

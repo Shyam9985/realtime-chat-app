@@ -1,5 +1,6 @@
 import { post, get } from "../store/api.service";
 import * as tokenStore from "../store/tokenStore";
+import { unregisterPush } from "./push.service";
 
 // Ported from the web client's services/auth.service.js: every function returns the server's
 // envelope on success and the error object on failure, and never throws.
@@ -32,6 +33,8 @@ export async function handleSignup(values) {
 export async function handleLogout() {
     try {
         const user = await tokenStore.getUser();
+        // first, while still signed in: this phone stops receiving this user's notifications
+        await unregisterPush();
         const response = await post('auth/logout', user ? JSON.stringify(user) : {});
         return response;
     } catch (error) {

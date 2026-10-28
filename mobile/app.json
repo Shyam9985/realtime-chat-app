@@ -18,6 +18,7 @@
     },
     "android": {
       "package": "com.yaapzone.app",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -37,7 +38,14 @@
         }
       ],
       "expo-sharing",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/android-icon-monochrome.png",
+          "color": "#128C5E"
+        }
+      ]
     ],
     "description": "More Gossip. More Giggles."
   }

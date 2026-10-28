@@ -290,6 +290,18 @@ T("audit_logs_t", "auth", "one row per audited business action", [
     fks=[("fk_audit_user", ["user_id"], "users_lst_t", ["user_id"], "SET NULL", False)],
     layout=(1240, 950))
 
+T("user_devices_t", "auth", "phones that receive push notifications", [
+    C("device_id", ID, False, ai=True),
+    C("user_id", ID, False, comment="who is signed in on that phone"),
+    C("push_token", "VARCHAR(512)", False, comment="the phone's firebase cloud messaging token"),
+    C("platform", "VARCHAR(20)", False, "'android'", comment="android | ios"),
+    C("last_registered_at", "DATETIME(3)", False, "CURRENT_TIMESTAMP(3)", comment="the app sends the token at every start and sign-in"),
+    *STD(3)], "device_id",
+    uniques=[("uq_device_push_token", ["push_token"])],
+    indexes=[("idx_device_user", ["user_id", "is_active"])],
+    fks=[("fk_device_user", ["user_id"], "users_lst_t", ["user_id"], "NO ACTION", False)],
+    layout=(1540, 950))
+
 BY = {t["name"]: t for t in TABLES}
 def col(t, name):
     for c in t["cols"]:
@@ -342,7 +354,7 @@ def ordered():
     return out
 
 def write_sql():
-    o = [f"-- chat_application schema (v1 plus the v2 and v3 additions). generated from the schema definition in gen_schema.py;",
+    o = [f"-- chat_application schema (v1 plus the v2, v3 and v4 additions). generated from the schema definition in gen_schema.py;",
          "-- for a NEW database. migration scripts for an existing database are kept only until every database has run them.",
          "-- every table carries is_active / created_at / updated_at with defaults.",
          "-- run as chatapp_admin:",
@@ -370,7 +382,7 @@ def write_sql():
 
 # ----------------------------------------------------------------------------- SVG
 def write_svg():
-    W, H = 1780, 1330; ROW, HEAD, PAD, BW = 16, 24, 8, 280
+    W, H = 2080, 1330; ROW, HEAD, PAD, BW = 16, 24, 8, 280
     FONT = "Consolas, 'Courier New', monospace"
     HEADFILL = {"core": "#1d4ed8", "chat": "#0f766e", "master": "#7c3aed", "auth": "#475569"}
     def rows_of(t):
@@ -398,9 +410,9 @@ def write_svg():
            '<defs><marker id="one" markerWidth="12" markerHeight="12" refX="11" refY="6" orient="auto"><path d="M5 1 V11 M8 1 V11" stroke="#334155" stroke-width="1.6" fill="none"/></marker>'
            '<marker id="many" markerWidth="14" markerHeight="14" refX="1" refY="7" orient="auto"><path d="M1 7 L13 1 M1 7 L13 13 M1 7 L13 7 M10 1 V13" stroke="#334155" stroke-width="1.6" fill="none"/></marker></defs>',
            f'<rect width="{W}" height="{H}" fill="#f8fafc"/>',
-           '<rect x="20" y="20" width="1740" height="890" rx="10" fill="#ecfeff" stroke="#a5f3fc"/>',
+           '<rect x="20" y="20" width="2040" height="890" rx="10" fill="#ecfeff" stroke="#a5f3fc"/>',
            '<text x="36" y="46" font-size="15" font-weight="bold" fill="#155e75">CHAT  -  ONE_TO_ONE / GROUP conversations, one receipt per recipient, blocks, edits, scheduled messages, seeded masters</text>',
-           '<rect x="20" y="925" width="1740" height="375" rx="10" fill="#f1f5f9" stroke="#cbd5e1"/>',
+           '<rect x="20" y="925" width="2040" height="375" rx="10" fill="#f1f5f9" stroke="#cbd5e1"/>',
            '<text x="36" y="945" font-size="15" font-weight="bold" fill="#334155">AUTH &amp; PLATFORM  -  tables the existing login / session / otp / audit / upload code reads</text>',
            f'<text x="36" y="{H-10}" font-size="12" fill="#64748b">Every table: is_active TINYINT(1) NOT NULL DEFAULT 1, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP. Ids BIGINT UNSIGNED. InnoDB, utf8mb4.</text>']
     for t in TABLES:
