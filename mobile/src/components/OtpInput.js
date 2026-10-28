@@ -1,7 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Text, TextInput, View } from 'react-native';
 import { useTheme } from '../theme/ThemeContext';
-import { webNoOutline } from './ui';
 
 /*
  * Six single-digit boxes. Typing moves forward, backspace moves back, and a pasted or autofilled
@@ -57,7 +56,7 @@ export default function OtpInput({ value = '', onChange, length = 6, disabled = 
               flex: 1, height: 56, borderRadius: theme.radius.md, borderWidth: 1, borderColor: d ? c.accent : c.border,
               backgroundColor: c.inputBackground, textAlign: 'center', fontSize: 24, fontWeight: '600', color: c.text,
               opacity: disabled ? 0.6 : 1,
-            }, webNoOutline]}
+            }]}
           />
         ))}
       </View>

@@ -10,7 +10,7 @@ Each case has an id, the steps, and what must happen. The API cases are automate
 `GROUP_MAX_MEMBERS=5` so the limit is quick to reach); the test names carry these ids. UI cases are
 run on a phone and in the web build, in light and dark themes and at the largest font size.
 
-Database: `documents/database/migration-v3.sql` must be run before the server that needs it starts.
+Database: the release 3 columns (applied with the v3 migration, since deleted) must exist before the server starts.
 
 ## 1. Creating a group
 

@@ -36,7 +36,6 @@ export function KeyboardAvoider({ children, style }) {
   }, []);
 
   useEffect(() => {
-    if (Platform.OS === 'web') return undefined;
     const ios = Platform.OS === 'ios';
     const subscriptions = [
       Keyboard.addListener(ios ? 'keyboardWillChangeFrame' : 'keyboardDidShow', (event) => measure(event?.endCoordinates, ios ? event : null)),
@@ -47,7 +46,7 @@ export function KeyboardAvoider({ children, style }) {
 
   // a screen that opens while the keyboard is already up (a chat opened from search) gets no keyboard event
   const onLayout = () => {
-    if (Platform.OS !== 'web' && Keyboard.isVisible()) measure(Keyboard.metrics());
+    if (Keyboard.isVisible()) measure(Keyboard.metrics());
   };
 
   return <View ref={ref} onLayout={onLayout} style={[{ flex: 1 }, style, covered ? { paddingBottom: covered } : null]}>{children}</View>;
@@ -87,8 +86,8 @@ const usePulse = () => {
     pulseUsers += 1;
     if (pulseUsers === 1) {
       pulseLoop = Animated.loop(Animated.sequence([
-        Animated.timing(pulse, { toValue: 1, duration: 700, easing: Easing.inOut(Easing.quad), useNativeDriver: Platform.OS !== 'web' }),
-        Animated.timing(pulse, { toValue: 0.45, duration: 700, easing: Easing.inOut(Easing.quad), useNativeDriver: Platform.OS !== 'web' }),
+        Animated.timing(pulse, { toValue: 1, duration: 700, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0.45, duration: 700, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
       ]));
       pulseLoop.start();
     }
@@ -206,8 +205,6 @@ export function Muted({ children, style, numberOfLines }) {
 }
 
 // ---- inputs
-// the browser draws its own focus ring around text inputs; the bordered wrapper already shows focus
-export const webNoOutline = Platform.OS === 'web' ? { outlineStyle: 'none' } : null;
 
 export function TextField({ label, error, style, inputStyle, right, icon, ...props }) {
   const { theme } = useTheme();
@@ -219,7 +216,7 @@ export function TextField({ label, error, style, inputStyle, right, icon, ...pro
         {icon ? <Ionicons name={icon} size={18} color={c.textMuted} style={{ marginLeft: theme.space.md }} /> : null}
         <TextInput
           placeholderTextColor={c.placeholder}
-          style={[{ flex: 1, paddingHorizontal: theme.space.md, paddingVertical: 12, fontSize: theme.font.md, color: c.text }, webNoOutline, inputStyle]}
+          style={[{ flex: 1, paddingHorizontal: theme.space.md, paddingVertical: 12, fontSize: theme.font.md, color: c.text }, inputStyle]}
           {...props}
         />
         {right}

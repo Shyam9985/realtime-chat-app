@@ -1,4 +1,4 @@
-import React, { createElement, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Platform, Pressable, Text, View } from 'react-native';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,9 +7,6 @@ import { Dialog } from './ui';
 import { timeOf, dayLabel } from '../utils/chatFormat';
 
 const MIN_LEAD_MS = 60 * 1000;
-const pad = (n) => String(n).padStart(2, '0');
-// value for <input type="datetime-local"> in the phone / browser's own time zone
-const toLocalInput = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 
 // a sensible first suggestion: the next full hour, at least ten minutes away
 const nextSlot = () => {
@@ -71,20 +68,10 @@ export default function ScheduleDialog({ visible, initial, title = 'Schedule mes
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
           {quick.map((q) => <Chip key={q.label} label={q.label} onPress={() => setWhen(q.date())} testID={`schedule-quick-${q.label}`} />)}
         </View>
-        {Platform.OS === 'web' ? (
-          // the browser's own date and time field
-          createElement('input', {
-            type: 'datetime-local', 'data-testid': 'schedule-input', 'aria-label': 'Date and time',
-            value: toLocalInput(when), min: toLocalInput(new Date()),
-            onChange: (e) => { const d = new Date(e.target.value); if (!Number.isNaN(d.getTime())) setWhen(d); },
-            style: { font: 'inherit', fontSize: 16, padding: 10, borderRadius: 10, border: `1px solid ${c.border}`, background: c.inputBackground, color: c.text },
-          })
-        ) : (
-          <View style={{ flexDirection: 'row', gap: 8, justifyContent: 'center' }}>
-            <Chip label="Date" icon="calendar-outline" onPress={() => pick('date')} testID="schedule-pick-date" />
-            <Chip label="Time" icon="time-outline" onPress={() => pick('time')} testID="schedule-pick-time" />
-          </View>
-        )}
+        <View style={{ flexDirection: 'row', gap: 8, justifyContent: 'center' }}>
+          <Chip label="Date" icon="calendar-outline" onPress={() => pick('date')} testID="schedule-pick-date" />
+          <Chip label="Time" icon="time-outline" onPress={() => pick('time')} testID="schedule-pick-time" />
+        </View>
         {Platform.OS === 'ios' && iosMode ? (
           <DateTimePicker value={when} mode={iosMode} display="spinner" minimumDate={new Date()}
             onChange={(_, date) => { if (date) setWhen(date); }} />

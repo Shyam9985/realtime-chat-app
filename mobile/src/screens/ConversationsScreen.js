@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { useChat } from '../contexts/ChatContext';
 import { useToast } from '../contexts/MessageContext';
-import { Screen, EmptyState, Button, Divider, Banner, Fab, KeyboardAvoider, ConversationListSkeleton, IconButton, PopupMenu, Dialog, SwitchRow, webNoOutline } from '../components/ui';
+import { Screen, EmptyState, Button, Divider, Banner, Fab, KeyboardAvoider, ConversationListSkeleton, IconButton, PopupMenu, Dialog, SwitchRow } from '../components/ui';
 import { ConversationRow } from '../components/ConversationRow';
 import { fullName, isGroup } from '../utils/chatFormat';
 
@@ -83,7 +83,7 @@ export function ChatListView({ navigation, archived = false }) {
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.space.sm, backgroundColor: c.inputBackground, borderRadius: theme.radius.pill, paddingHorizontal: theme.space.md }}>
           <Ionicons name="search" size={18} color={c.textMuted} />
           <TextInput value={query} onChangeText={setQuery} placeholder={archived ? 'Search archived chats' : 'Search chats'} placeholderTextColor={c.placeholder} autoCapitalize="none" autoCorrect={false}
-            style={[{ flex: 1, paddingVertical: 9, fontSize: theme.font.md, color: c.text }, webNoOutline]} testID="chat-search" accessibilityLabel="Search chats" />
+            style={[{ flex: 1, paddingVertical: 9, fontSize: theme.font.md, color: c.text }]} testID="chat-search" accessibilityLabel="Search chats" />
           {query ? <Ionicons name="close-circle" size={18} color={c.textMuted} onPress={() => setQuery('')} accessibilityLabel="Clear search" /> : null}
         </View>
       </View>

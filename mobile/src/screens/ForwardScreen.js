@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { useChat } from '../contexts/ChatContext';
 import { useToast } from '../contexts/MessageContext';
-import { Screen, Avatar, GroupAvatar, Divider, EmptyState, Button, KeyboardAvoider, webNoOutline } from '../components/ui';
+import { Screen, Avatar, GroupAvatar, Divider, EmptyState, Button, KeyboardAvoider } from '../components/ui';
 import { fullName, isGroup } from '../utils/chatFormat';
 
 const MAX_TARGETS = 10;
@@ -63,7 +63,7 @@ export default function ForwardScreen({ route, navigation }) {
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.space.sm, backgroundColor: c.inputBackground, borderRadius: theme.radius.pill, paddingHorizontal: theme.space.md }}>
           <Ionicons name="search" size={18} color={c.textMuted} />
           <TextInput value={query} onChangeText={setQuery} placeholder="Search chats" placeholderTextColor={c.placeholder} autoCapitalize="none" autoCorrect={false}
-            style={[{ flex: 1, paddingVertical: 9, fontSize: theme.font.md, color: c.text }, webNoOutline]} accessibilityLabel="Search chats to forward to" testID="forward-search" />
+            style={[{ flex: 1, paddingVertical: 9, fontSize: theme.font.md, color: c.text }]} accessibilityLabel="Search chats to forward to" testID="forward-search" />
         </View>
         <Text style={{ color: c.textMuted, fontSize: theme.font.xs }}>{picked.length ? `${picked.length} selected (up to ${MAX_TARGETS})` : `Choose up to ${MAX_TARGETS} chats`}</Text>
       </View>

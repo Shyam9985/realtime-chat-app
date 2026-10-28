@@ -26,3 +26,7 @@ documents/database/*.local.sql
 documents/screens/
 # browser-automation scratch output
 .playwright-mcp/
+
+# firebase admin key (secret): never commit
+*firebase-adminsdk*.json
+firebase-service-account.json

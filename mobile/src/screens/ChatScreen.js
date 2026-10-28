@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Platform, Pressable, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { useChat } from '../contexts/ChatContext';
 import { useToast } from '../contexts/MessageContext';
 import * as chatApi from '../services/chat.service';
-import { Screen, Banner, IconButton, Button, EmptyState, Avatar, GroupAvatar, Dialog, PopupMenu, KeyboardAvoider, ChatSkeleton, TextField, webNoOutline } from '../components/ui';
+import { Screen, Banner, IconButton, Button, EmptyState, Avatar, GroupAvatar, Dialog, PopupMenu, KeyboardAvoider, ChatSkeleton, TextField } from '../components/ui';
 import { MessageBubble, DaySeparator, StatusTicks, ReplyQuote, SystemNotice } from '../components/MessageBubble';
 import ScheduleDialog from '../components/ScheduleDialog';
 import { exportChatAsPdf } from '../utils/exportChat';
@@ -218,7 +218,7 @@ export default function ChatScreen({ route, navigation }) {
         headerLeft: () => headerIcon('arrow-back', closeSearch, 'Close search', color, 'search-close'),
         headerTitle: () => (
           <TextInput value={searchQuery} onChangeText={setSearchQuery} autoFocus placeholder="Search this chat" placeholderTextColor={color}
-            style={[{ color, fontSize: 16, minWidth: 140, paddingVertical: 6 }, webNoOutline]} accessibilityLabel="Search this chat" testID="chat-search-input" />
+            style={[{ color, fontSize: 16, minWidth: 140, paddingVertical: 6 }]} accessibilityLabel="Search this chat" testID="chat-search-input" />
         ),
         headerRight: () => (
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -558,8 +558,7 @@ export default function ChatScreen({ route, navigation }) {
               placeholderTextColor={c.placeholder}
               multiline
               maxLength={MESSAGE_MAX_LENGTH}
-              style={[{ flex: 1, maxHeight: 120, fontSize: theme.font.md, color: c.text, paddingVertical: 8 }, webNoOutline]}
-              onKeyPress={Platform.OS === 'web' ? (e) => { if (e.nativeEvent.key === 'Enter' && !e.nativeEvent.shiftKey) { e.preventDefault(); send(); } } : undefined}
+              style={[{ flex: 1, maxHeight: 120, fontSize: theme.font.md, color: c.text, paddingVertical: 8 }]}
               blurOnSubmit={false}
               testID="composer"
               accessibilityLabel="Message"

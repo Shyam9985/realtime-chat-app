@@ -35,7 +35,7 @@ const stop = async ({ server, io }) => {
 // minimal rest client: returns { status, body, headers }
 const api = (baseUrl, token) => {
     const call = async (method, path, body) => {
-        const headers = { 'content-type': 'application/json', origin: 'http://localhost:8081' };
+        const headers = { 'content-type': 'application/json' };
         if (token) headers['access-token'] = `Bearer ${token}`;
         const res = await fetch(`${baseUrl}/apiv1${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
         let json = null;

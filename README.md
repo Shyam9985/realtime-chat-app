@@ -116,8 +116,8 @@ All under `/apiv1`. Rate limits are per user or IP.
 The schema lives in `documents/database/`: `schema-v1.sql` (the DDL plus master seeds, idempotent),
 `chat_application_model_v2.mwb` (the Workbench model) and `chat-app-erd-v2.png` (the diagram). All
 three are generated from one definition in `documents/database/tools/gen_schema.py`, so change the
-schema there, run the script, and screenshot the svg for the png rather than editing a table by hand. An existing database
-is upgraded with `documents/database/migration-v3.sql` (group chats and date of birth; additive only). Every table has `is_active`, `created_at` and `updated_at` with defaults;
+schema there, run the script, and screenshot the svg for the png rather than editing a table by hand. Migration scripts for an
+existing database live next to it only until every database has run them, then they are deleted. Every table has `is_active`, `created_at` and `updated_at` with defaults;
 ids are `BIGINT UNSIGNED`; engine InnoDB, charset `utf8mb4_0900_ai_ci`.
 
 | Table | Purpose |
@@ -158,7 +158,6 @@ mysql -u chatapp_admin -p chat_application < documents/database/schema-v1.sql
 | `REDIS_URL`, `REDIS_USERNAME`, `REDIS_PASSWORD` | Redis; username and password blank for a local instance |
 | `EMAIL_USER`, `EMAIL_PASSWORD` | Gmail SMTP login for OTP mails |
 | `APP_NAME` | name shown in outgoing mails |
-| `CLIENT_ORIGINS` | comma-separated browser origins allowed by CORS (the Expo web build); native apps send no origin |
 | `SCHEDULE_RUN`, `SHOW_LOG` | enable cron jobs, enable debug logging |
 | `METRICS_DIR` | optional; where the request logs go, default `metrics/` |
 
@@ -173,7 +172,7 @@ npm start                     # http://localhost:4901
 cd mobile
 npm install
 copy .env.example .env        # EXPO_PUBLIC_API_URL=http://localhost:4200 (keep it; a phone finds this computer itself)
-npx expo start                # android: press a, or scan with Expo Go; w for the browser build
+npx expo start                # android: press a, or scan with Expo Go
 ```
 
 The server exits at startup if MySQL is unreachable. Redis is optional for development: the
@@ -341,11 +340,10 @@ cd mobile
 npm install
 copy .env.example .env          # EXPO_PUBLIC_API_URL=http://localhost:4200 (keep it; a phone finds this computer itself)
 npx expo start                  # android: press a, or scan with Expo Go
-npx expo start --web            # browser build on http://localhost:8081, used for ui testing
 ```
 
-Expo SDK 58 wants Node 22.13 or newer; it runs on Node 20 with a warning. The browser build
-(`npx expo start --web`, port 8081) needs that origin in the server's `CLIENT_ORIGINS`; native builds do not.
+Expo SDK 58 wants Node 22.13 or newer; it runs on Node 20 with a warning. YaapZone is mobile only:
+there is no browser build, and the server refuses every browser origin (the app sends none).
 
 On a phone, Expo Go must be on the same Wi-Fi as the computer, and Windows must let Node through the firewall.
 In development the app replaces `localhost` in `EXPO_PUBLIC_API_URL` with the computer address Expo Go loaded it from

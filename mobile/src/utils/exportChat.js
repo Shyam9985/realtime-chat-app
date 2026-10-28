@@ -1,4 +1,3 @@
-import { Platform } from 'react-native';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as chatApi from '../services/chat.service';
@@ -59,28 +58,11 @@ function buildHtml({ title, messages, myId, nameOf }) {
 
 /*
  * Export a whole conversation as a PDF: fetch every page, lay it out like the chat, then hand the file
- * to the phone's share sheet (save to files, send by email, ...). In the browser build the print
- * dialog opens instead, where "Save as PDF" does the same.
+ * to the phone's share sheet (save to files, send by email, ...).
  */
 export async function exportChatAsPdf({ conversationId, title, myId, nameOf, onProgress }) {
   const messages = await fetchAll(conversationId, onProgress);
   const html = buildHtml({ title, messages, myId, nameOf });
-  if (Platform.OS === 'web') {
-    // expo-print on the web prints the current page, not the html; print the formatted chat from a
-    // hidden frame instead (no pop-up to block). The browser's dialog offers "Save as PDF"
-    const frame = document.createElement('iframe');
-    frame.setAttribute('aria-hidden', 'true');
-    frame.style.cssText = 'position:fixed;width:0;height:0;border:0;right:0;bottom:0';
-    document.body.appendChild(frame);
-    frame.contentDocument.open();
-    frame.contentDocument.write(html);
-    frame.contentDocument.close();
-    await new Promise((resolve) => setTimeout(resolve, 250));
-    frame.contentWindow.focus();
-    frame.contentWindow.print();
-    setTimeout(() => frame.remove(), 60000);
-    return { count: messages.length };
-  }
   const { uri } = await Print.printToFileAsync({ html });
   if (await Sharing.isAvailableAsync()) {
     await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: `Export ${title}`, UTI: 'com.adobe.pdf' });

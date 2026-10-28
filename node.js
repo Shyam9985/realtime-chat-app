@@ -70,10 +70,9 @@ app.use(
 );
 
 
-// browser origins allowed to call the api come from .env (comma separated) so each
-// environment names its own without a code change; the vite dev server is the fallback
-const clientOrigins = (process.env.CLIENT_ORIGINS || '').split(',').map((origin) => origin.trim()).filter(Boolean);
-const allowedOrigins = clientOrigins.length ? clientOrigins : ['http://localhost:8081'];
+// YaapZone is mobile only: the app's requests carry no origin and are allowed; every browser
+// origin is refused
+const allowedOrigins = [];
 // cors setup
 const corsOptions = {
     origin: (origin, callback) => {

@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Platform, Pressable, Text, View } from 'react-native';
+import { Animated, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
@@ -11,7 +11,7 @@ import { useTheme } from '../theme/ThemeContext';
  */
 const DISPLAY_TIME = { success: 3000, info: 4000, warning: 5000, error: 6000 };
 const ICONS = { success: 'checkmark-circle', error: 'close-circle', warning: 'warning', info: 'information-circle' };
-const nativeDriver = Platform.OS !== 'web';
+const nativeDriver = true;
 
 const ToastContext = createContext(null);
 

@@ -1,5 +1,5 @@
 import React, { useMemo, useRef } from 'react';
-import { Animated, PanResponder, Platform, Pressable, Text, Vibration, View } from 'react-native';
+import { Animated, PanResponder, Pressable, Text, Vibration, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { timeOf, DELETED_PLACEHOLDER } from '../utils/chatFormat';
@@ -71,14 +71,14 @@ export function MessageBubble({ message, mine, senderName, onLongPress, onPress,
     onPanResponderMove: (_, g) => {
       const x = Math.max(0, Math.min(g.dx, SWIPE_TRIGGER * 1.4));
       dx.setValue(x);
-      if (!triggered.current && x >= SWIPE_TRIGGER) { triggered.current = true; if (Platform.OS !== 'web') Vibration.vibrate(15); }
+      if (!triggered.current && x >= SWIPE_TRIGGER) { triggered.current = true; Vibration.vibrate(15); }
     },
     onPanResponderRelease: () => {
       if (triggered.current) onReply(message);
       triggered.current = false;
-      Animated.spring(dx, { toValue: 0, useNativeDriver: Platform.OS !== 'web', bounciness: 6 }).start();
+      Animated.spring(dx, { toValue: 0, useNativeDriver: true, bounciness: 6 }).start();
     },
-    onPanResponderTerminate: () => { triggered.current = false; Animated.spring(dx, { toValue: 0, useNativeDriver: Platform.OS !== 'web' }).start(); },
+    onPanResponderTerminate: () => { triggered.current = false; Animated.spring(dx, { toValue: 0, useNativeDriver: true }).start(); },
   }), [canReply, onReply, message, dx]);
 
   const replyIconOpacity = dx.interpolate({ inputRange: [0, SWIPE_TRIGGER], outputRange: [0, 1], extrapolate: 'clamp' });

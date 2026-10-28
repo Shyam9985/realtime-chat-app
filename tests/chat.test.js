@@ -400,7 +400,7 @@ test('another member\'s profile and photo, and what a block hides', async () => 
     assert.equal((await as(B).get(`/users/${A.user.user_id}/photo`)).status, 404);
     const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
     const up = await fetch(`${app.baseUrl}/apiv1/files/upload`, { method: 'POST', body: PNG,
-        headers: { 'access-token': `Bearer ${A.token}`, 'content-type': 'image/png', 'x-file-name': 'a.png', origin: 'http://localhost:8081' } });
+        headers: { 'access-token': `Bearer ${A.token}`, 'content-type': 'image/png', 'x-file-name': 'a.png' } });
     assert.equal(up.status, 201);
     const photo = await fetch(`${app.baseUrl}/apiv1/users/${A.user.user_id}/photo`, { headers: { 'access-token': `Bearer ${B.token}` } });
     assert.equal(photo.status, 200);

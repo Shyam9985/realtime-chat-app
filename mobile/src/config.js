@@ -1,5 +1,4 @@
 import Constants from 'expo-constants';
-import { Platform } from 'react-native';
 
 /*
  * Where the api lives. EXPO_PUBLIC_API_URL (mobile/.env) is inlined by Expo at build time.
@@ -19,7 +18,6 @@ const devServerHost = () => {
 };
 
 const resolveApiUrl = () => {
-  if (Platform.OS === 'web') return configured;
   const local = configured.match(/^(https?:\/\/)(localhost|127\.0\.0\.1)(:\d+)?(\/.*)?$/i);
   const host = local ? devServerHost() : null;
   return host ? `${local[1]}${host}${local[3] || ''}${local[4] || ''}` : configured;

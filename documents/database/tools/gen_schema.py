@@ -343,7 +343,7 @@ def ordered():
 
 def write_sql():
     o = [f"-- chat_application schema (v1 plus the v2 and v3 additions). generated from the schema definition in gen_schema.py;",
-         "-- for a NEW database. an existing database is upgraded with documents/database/migration-v3.sql instead.",
+         "-- for a NEW database. migration scripts for an existing database are kept only until every database has run them.",
          "-- every table carries is_active / created_at / updated_at with defaults.",
          "-- run as chatapp_admin:",
          "--   mysql -u chatapp_admin -p chat_application < documents/database/schema-v1.sql", "",
