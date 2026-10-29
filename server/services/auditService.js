@@ -57,4 +57,10 @@ exports.log = (req, res, status, { message = null, data = null, error = null } =
         .catch((err) => console.error(`[audit] insert failed for request ${record.request_id}:`, err.message));
 };
 
+// the row an update/delete is about to change, read by the audit() middleware for old_values
+exports.getOldValuesSrvc = async (table, pk, id) => {
+    logutils.log('in auditService.getOldValuesSrvc');
+    return auditMdl.getRowByIdMdl(table, pk, id);
+};
+
 exports.AUDIT_STATUS = AUDIT_STATUS;

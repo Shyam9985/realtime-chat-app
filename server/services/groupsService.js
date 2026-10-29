@@ -6,7 +6,9 @@ const conversationsService = require('./conversationsService');
 const messagesService = require('./messagesService');
 const resutils = require('../utils/response.utils');
 const appEvents = require('../utils/events.utils');
-const { parseId, toIso } = require('../utils/validate.utils');
+const { toIso } = require('../utils/validate.utils');
+// the member limit is a request rule too (how many ids one call may name); one setting for both
+const { MAX_MEMBERS } = require('../validators/groupsVldtr');
 const { log } = require('../utils/log.utils');
 
 /*
@@ -15,11 +17,8 @@ const { log } = require('../utils/log.utils');
  * keeps at least one while it has members. Every change is announced in the chat by a notice and
  * pushed live to everyone it concerns. The rules that depend on who is in the group right now are
  * checked again inside the locked transaction (groupsMdl), so concurrent changes stay consistent.
+ * The request itself (names, id lists, roles) is checked by validators/groupsVldtr before it gets here.
  */
-const MAX_MEMBERS = Number(process.env.GROUP_MAX_MEMBERS) || 100;
-const MAX_TITLE = 100;
-const MAX_DESCRIPTION = 500;
-const ROLES = ['ADMIN', 'MEMBER'];
 const { GROUP, nameOf } = conversationsService;
 
 let groupTypeId = null;
@@ -29,33 +28,6 @@ const getGroupTypeId = async () => {
     if (!row) resutils.createError('DatabaseError', 'Conversation type master is not seeded.');
     groupTypeId = row.conversation_type_id;
     return groupTypeId;
-};
-
-const validateTitle = (value) => {
-    if (typeof value !== 'string') resutils.createError('validationFailed', 'Give the group a name.');
-    const title = value.trim();
-    if (!title) resutils.createError('validationFailed', 'Give the group a name.');
-    if (title.length > MAX_TITLE) resutils.createError('validationFailed', `The group name cannot exceed ${MAX_TITLE} characters.`);
-    return title;
-};
-
-// undefined = not given; null or blank = no description
-const validateDescription = (value) => {
-    if (value === undefined) return undefined;
-    if (value === null) return null;
-    if (typeof value !== 'string') resutils.createError('validationFailed', 'The description must be text.');
-    const text = value.trim();
-    if (text.length > MAX_DESCRIPTION) resutils.createError('validationFailed', `The description cannot exceed ${MAX_DESCRIPTION} characters.`);
-    return text || null;
-};
-
-// a list of other people's ids: unique, the caller left out, at most `max`
-const validateUserIds = (value, selfId, max) => {
-    if (!Array.isArray(value) || !value.length) resutils.createError('validationFailed', 'Choose at least one person.');
-    const userIds = [...new Set(value.map((id) => parseId(id, 'User id')))].filter((id) => id !== selfId);
-    if (!userIds.length) resutils.createError('validationFailed', 'Choose at least one person other than yourself.');
-    if (userIds.length > max) resutils.createError('groupFull', `A group can have at most ${MAX_MEMBERS} members, you included.`);
-    return userIds;
 };
 
 // who can actually be put in the group by this person: active accounts with no block between the two,
@@ -108,13 +80,10 @@ const announce = async ({ conversationId, noticeIds = [], notify = [], excludedM
     if (scheduledFor) appEvents.emit('scheduled.changed', { sender_id: scheduledFor, conversation_id: conversationId });
 };
 
-// POST /conversations/groups  { title, description?, member_ids }
-exports.createSrvc = async (userId, body = {}) => {
+// POST /conversations/groups  { title, description, memberIds } (groupsVldtr.validateCreate)
+exports.createSrvc = async (userId, { title, description = null, memberIds: requested }) => {
     log('in group createSrvc');
     const me = Number(userId);
-    const title = validateTitle(body.title);
-    const description = validateDescription(body.description) ?? null;
-    const requested = validateUserIds(body.member_ids, me, MAX_MEMBERS - 1);
     const { ok, skipped } = await addable(me, requested);
     if (!ok.length) resutils.createError('validationFailed', 'None of the people you chose can be added to a group.');
 
@@ -127,9 +96,8 @@ exports.createSrvc = async (userId, body = {}) => {
 };
 
 // GET /conversations/:id/group  - the group's details and current members (members only)
-exports.getGroupSrvc = async (userId, conversationIdRaw) => {
+exports.getGroupSrvc = async (userId, conversationId) => {
     log('in getGroupSrvc');
-    const conversationId = parseId(conversationIdRaw, 'Conversation id');
     const membership = await assertGroupMember(conversationId, userId);
     const [group] = await groupsMdl.getGroup(conversationId);
     const members = await groupsMdl.listMembers(conversationId);
@@ -150,13 +118,11 @@ exports.getGroupSrvc = async (userId, conversationIdRaw) => {
     };
 };
 
-// POST /conversations/:id/members  { user_ids }  - admins only
-exports.addMembersSrvc = async (userId, conversationIdRaw, body = {}) => {
+// POST /conversations/:id/members  { user_ids }  - admins only; requested: unique ids, caller left out
+exports.addMembersSrvc = async (userId, conversationId, requested) => {
     log('in addMembersSrvc');
     const me = Number(userId);
-    const conversationId = parseId(conversationIdRaw, 'Conversation id');
     await assertGroupMember(conversationId, me);
-    const requested = validateUserIds(body.user_ids, me, MAX_MEMBERS);
     const { ok, skipped } = await addable(me, requested);
     if (!ok.length) resutils.createError('validationFailed', 'None of the people you chose can be added to this group.');
 
@@ -170,11 +136,9 @@ exports.addMembersSrvc = async (userId, conversationIdRaw, body = {}) => {
 };
 
 // DELETE /conversations/:id/members/:userId  - admins only; exiting yourself is POST /leave
-exports.removeMemberSrvc = async (userId, conversationIdRaw, targetIdRaw) => {
+exports.removeMemberSrvc = async (userId, conversationId, targetId) => {
     log('in removeMemberSrvc');
     const me = Number(userId);
-    const conversationId = parseId(conversationIdRaw, 'Conversation id');
-    const targetId = parseId(targetIdRaw, 'User id');
     if (targetId === me) resutils.createError('selfAction', 'To leave the group yourself, use Exit group.');
     await assertGroupMember(conversationId, me);
 
@@ -189,10 +153,9 @@ exports.removeMemberSrvc = async (userId, conversationIdRaw, targetIdRaw) => {
 
 // POST /conversations/:id/leave  - any member exits the group (admins too). they keep reading what
 // they received, read-only; if they were the last admin, the longest-standing member takes over
-exports.leaveSrvc = async (userId, conversationIdRaw) => {
+exports.leaveSrvc = async (userId, conversationId) => {
     log('in leaveSrvc');
     const me = Number(userId);
-    const conversationId = parseId(conversationIdRaw, 'Conversation id');
     const membership = await conversationsService.assertMemberSrvc(conversationId, me);
     if (membership.type_code !== GROUP) resutils.createError('notGroup', 'You can only exit a group.');
 
@@ -206,28 +169,22 @@ exports.leaveSrvc = async (userId, conversationIdRaw) => {
 };
 
 // PATCH /conversations/:id/members/:userId  { role: 'ADMIN' | 'MEMBER' }  - admins only
-exports.setRoleSrvc = async (userId, conversationIdRaw, targetIdRaw, body = {}) => {
+exports.setRoleSrvc = async (userId, conversationId, targetId, role) => {
     log('in setRoleSrvc');
     const me = Number(userId);
-    const conversationId = parseId(conversationIdRaw, 'Conversation id');
-    const targetId = parseId(targetIdRaw, 'User id');
-    if (!ROLES.includes(body.role)) resutils.createError('validationFailed', `role must be one of: ${ROLES.join(', ')}.`);
     await assertGroupMember(conversationId, me);
 
-    const result = await withRetry(async () => groupsMdl.setRole({ conversationId, actorId: me, targetId, role: body.role, systemTypeId: await messagesService.getSystemTypeId() }));
+    const result = await withRetry(async () => groupsMdl.setRole({ conversationId, actorId: me, targetId, role, systemTypeId: await messagesService.getSystemTypeId() }));
     if (result.refused) refuse(result);
     if (result.changed) await announce({ conversationId, noticeIds: result.noticeIds, notify: result.memberIds });
     return { changed: result.changed, ...(await exports.getGroupSrvc(me, conversationId)) };
 };
 
 // PATCH /conversations/:id/group  { title?, description? }  - admins only
-exports.updateInfoSrvc = async (userId, conversationIdRaw, body = {}) => {
+// title / description: undefined = unchanged (at least one is given, see groupsVldtr.validateUpdateInfo)
+exports.updateInfoSrvc = async (userId, conversationId, { title, description }) => {
     log('in updateInfoSrvc');
     const me = Number(userId);
-    const conversationId = parseId(conversationIdRaw, 'Conversation id');
-    const title = body.title === undefined ? undefined : validateTitle(body.title);
-    const description = validateDescription(body.description);
-    if (title === undefined && description === undefined) resutils.createError('validationFailed', 'Nothing to change.');
     await assertGroupMember(conversationId, me);
 
     const result = await withRetry(async () => groupsMdl.updateInfo({ conversationId, actorId: me, title, description, systemTypeId: await messagesService.getSystemTypeId() }));
@@ -237,10 +194,9 @@ exports.updateInfoSrvc = async (userId, conversationIdRaw, body = {}) => {
 };
 
 // DELETE /conversations/:id  - a group the caller already exited leaves their list
-exports.deleteSrvc = async (userId, conversationIdRaw) => {
+exports.deleteSrvc = async (userId, conversationId) => {
     log('in group deleteSrvc');
     const me = Number(userId);
-    const conversationId = parseId(conversationIdRaw, 'Conversation id');
     const membership = await conversationsService.assertReaderSrvc(conversationId, me);
     if (membership.type_code !== GROUP) resutils.createError('notGroup', 'Only a group you have exited can be deleted.');
     if (!membership.left_at) resutils.createError('stillMember', 'Exit the group before deleting it.');

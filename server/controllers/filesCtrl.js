@@ -3,6 +3,7 @@ const { pipeline } = require("stream/promises");
 const resutils = require("../utils/response.utils");
 const RESPONSE_STATUS = require("../utils/standard.messages");
 const filesService = require("../services/filesService");
+const filesVldtr = require("../validators/filesVldtr");
 const fileutils = require("../utils/files.utils");
 const { log } = require('../utils/log.utils');
 
@@ -30,28 +31,11 @@ const sendFilesError = (req, res, error, location) => {
 // no chunk ever piles up here, the service pipes them straight to disk
 exports.uploadFiles = async (req, res) => {
     log('in uploadFiles');
-  // the body is the raw file itself, so metadata travels in headers
-  const meta = {
-    originalName: decodeURIComponent(req.headers["x-file-name"] || ""),
-    mimeType: (req.headers["content-type"] || "").toLowerCase().split(";")[0].trim(),
-    uploadedBy: req.user?.user_id || null,
-  };
-
-  log(`[upload] request received — name: '${meta.originalName}', mime: ${meta.mimeType}, user: ${meta.uploadedBy}`);
-
-  // cheap early reject: the declared size alone already breaks the limit
-  const declaredSize = Number(req.headers["content-length"] || 0);
-  log(`[upload] declared content-length: ${declaredSize} bytes (cap ${fileutils.MAX_FILE_SIZE_BYTES})`);
-  if (declaredSize > fileutils.MAX_FILE_SIZE_BYTES) {
-    return sendFilesError(
-      req,
-      res,
-      { name: "validationFailed", message: `File exceeds the ${fileutils.MAX_FILE_SIZE_BYTES / (1024 * 1024)} MB limit.` },
-      "upload file controller",
-    );
-  }
-
   try {
+    // the body is the raw file itself, so metadata travels in headers: checked before any byte is read
+    const meta = { ...filesVldtr.validateUploadMeta(req.headers), uploadedBy: req.user?.user_id || null };
+    log(`[upload] request received — name: '${meta.originalName}', mime: ${meta.mimeType}, user: ${meta.uploadedBy}`);
+
     log("[upload] handing the request stream to filesService (no bytes read yet)");
     const result = await filesService.saveStreamedFileSrvc(req, meta, PROFILE_PHOTO_DIR);
     log(`[upload] done — file_id ${result.file_id}, stored at ${result.file_path}`);
@@ -106,7 +90,7 @@ exports.removeProfilePhoto = async (req, res) => {
 exports.getUserPhoto = async (req, res) => {
   log('in getUserPhoto');
   try {
-    const photo = await filesService.getUserPhotoSrvc(req.user?.user_id, req.params.id);
+    const photo = await filesService.getUserPhotoSrvc(req.user?.user_id, filesVldtr.userId(req.params.id));
     res.setHeader("Content-Type", photo.mimeType);
     res.setHeader("Content-Length", photo.sizeBytes);
     await pipeline(fs.createReadStream(photo.absolutePath), res);

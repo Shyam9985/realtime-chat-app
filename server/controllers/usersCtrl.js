@@ -1,6 +1,7 @@
 const resutils = require('../utils/response.utils');
 const RESPONSE_STATUS = require('../utils/standard.messages');
 const usersService = require('../services/usersService');
+const usersVldtr = require('../validators/usersVldtr');
 const { statusForError, clientMessageForError } = require('../utils/chat.errors');
 const { log } = require('../utils/log.utils');
 
@@ -15,7 +16,8 @@ const sendChatError = (req, res, error, fname) => {
 exports.search = async (req, res) => {
     log('in users search');
     try {
-        const users = await usersService.searchSrvc(req.user.user_id, req.query.query, req.query.limit);
+        const { text, limit } = usersVldtr.validateSearch(req.query);
+        const users = await usersService.searchSrvc(req.user.user_id, text, limit);
         // an empty result is a normal answer to a search, so it is always a 200 with an empty list
         return resutils.sendSuccessResponse(req, res, { users }, RESPONSE_STATUS.DATA_FOUND, { function: 'users search' });
     } catch (error) {
@@ -38,7 +40,7 @@ exports.listBlocked = async (req, res) => {
 exports.block = async (req, res) => {
     log('in users block');
     try {
-        const result = await usersService.blockSrvc(req.user.user_id, req.params.id);
+        const result = await usersService.blockSrvc(req.user.user_id, usersVldtr.userId(req.params.id));
         return resutils.sendSuccessResponse(req, res, result, RESPONSE_STATUS.SUCCESS, { function: 'users block' });
     } catch (error) {
         return sendChatError(req, res, error, 'users block');
@@ -49,7 +51,7 @@ exports.block = async (req, res) => {
 exports.unblock = async (req, res) => {
     log('in users unblock');
     try {
-        const result = await usersService.unblockSrvc(req.user.user_id, req.params.id);
+        const result = await usersService.unblockSrvc(req.user.user_id, usersVldtr.userId(req.params.id));
         return resutils.sendSuccessResponse(req, res, result, RESPONSE_STATUS.SUCCESS, { function: 'users unblock' });
     } catch (error) {
         return sendChatError(req, res, error, 'users unblock');
@@ -60,7 +62,7 @@ exports.unblock = async (req, res) => {
 exports.getProfile = async (req, res) => {
     log('in users getProfile');
     try {
-        const user = await usersService.getProfileSrvc(req.user.user_id, req.params.id);
+        const user = await usersService.getProfileSrvc(req.user.user_id, usersVldtr.userId(req.params.id));
         return resutils.sendSuccessResponse(req, res, { user }, RESPONSE_STATUS.DATA_FOUND, { function: 'users get profile' });
     } catch (error) {
         return sendChatError(req, res, error, 'users get profile');

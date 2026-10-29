@@ -21,33 +21,15 @@ exports.getProfileSrvc = async (user_id) => {
 const defaultTitle = (first, last) => `${first} ${last || ''}`.trim().slice(0, 100);
 
 /*
- * The user edits their own profile: { fst_nm?, lst_nm?, mobile?, date_of_birth? } (already validated by
- * the controller). A blank last name or mobile clears it; the first name and the date of birth cannot be
- * cleared. A new name also reaches the one-to-one chats where the other person still shows the old one
- * (chats they renamed keep their name), and their screens are told live.
+ * The user edits their own profile. fields holds the changed columns { first_nm?, last_nm?, mobile_no?,
+ * date_of_birth? }, already checked and cleaned by profileVldtr.validateUpdate. A new name also reaches
+ * the one-to-one chats where the other person still shows the old one (chats they renamed keep their
+ * name), and their screens are told live.
  */
-exports.updateProfileSrvc = async (user_id, body = {}) => {
+exports.updateProfileSrvc = async (user_id, fields) => {
     log('in updateProfileSrvc');
     const [before] = await profileMdl.getUserProfileById(user_id);
     if (!before) resutils.createError('noUser', 'User profile not found.');
-
-    const fields = {};
-    if (body.fst_nm !== undefined) {
-        const first = String(body.fst_nm ?? '').trim();
-        if (first.length < 2 || first.length > 100) resutils.createError('validationFailed', 'First name must be 2 to 100 letters.');
-        fields.first_nm = first;
-    }
-    if (body.lst_nm !== undefined) {
-        const last = String(body.lst_nm ?? '').trim();
-        if (last.length > 100) resutils.createError('validationFailed', 'Last name cannot exceed 100 letters.');
-        fields.last_nm = last || null;
-    }
-    if (body.mobile !== undefined) fields.mobile_no = String(body.mobile ?? '').trim() || null;
-    if (body.date_of_birth !== undefined) {
-        if (!String(body.date_of_birth ?? '').trim()) resutils.createError('validationFailed', 'Date of birth is required.');
-        fields.date_of_birth = body.date_of_birth.trim();
-    }
-    if (!Object.keys(fields).length) resutils.createError('validationFailed', 'Nothing to change.');
 
     await profileMdl.updateProfile(user_id, fields);
 

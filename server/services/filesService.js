@@ -8,7 +8,6 @@ const fileutils = require("../utils/files.utils");
 const filesMdl = require("../models/filesMdl");
 const usersMdl = require("../models/usersMdl");
 const blocksMdl = require("../models/blocksMdl");
-const { parseId } = require("../utils/validate.utils");
 const { log } = require('../utils/log.utils');
 
 // used when the caller does not specify a destination
@@ -26,23 +25,8 @@ const validationError = (message) => {
 // compressed JPEG of at most 1 MB, and it replaces the user's previous photo completely (row and file)
 exports.saveStreamedFileSrvc = async (readStream, meta, uploadDir = DEFAULT_UPLOAD_DIR) => {
     log('in saveStreamedFileSrvc');
-    // metadata checks need no bytes — fail before touching the stream or the disk
-    const originalName = fileutils.sanitizeFileName(meta.originalName);
-    if (!originalName) {
-        resutils.createError("validationFailed", "A valid file name is required (x-file-name header).");
-    }
-
-    const allowed = fileutils.ALLOWED_IMAGE_TYPES[meta.mimeType];
-    if (!allowed) {
-        resutils.createError("validationFailed", `File type '${meta.mimeType}' is not allowed. Allowed types: JPG, PNG, WEBP.`);
-    }
-
-    const extension = fileutils.getExtension(originalName);
-    if (!allowed.extensions.includes(extension)) {
-        resutils.createError("validationFailed", `Extension '${extension || "none"}' does not match the file type '${meta.mimeType}'.`);
-    }
-
-    log(`[upload] metadata valid — '${originalName}' (${meta.mimeType}, ext ${extension})`);
+    // meta: { originalName, mimeType, extension, uploadedBy }, the headers already checked by filesVldtr
+    const { originalName, extension } = meta;
 
     await fs.promises.mkdir(uploadDir, { recursive: true });
 
@@ -167,9 +151,8 @@ exports.getProfilePhotoSrvc = async (user_id) => {
 
 // another member's photo for the viewer. an inactive account and a member who has blocked the viewer
 // answer exactly like "no photo", so the response never reveals a block
-exports.getUserPhotoSrvc = async (viewerId, userIdRaw) => {
+exports.getUserPhotoSrvc = async (viewerId, userId) => {
     log('in getUserPhotoSrvc');
-    const userId = parseId(userIdRaw, "User id");
     const [user] = await usersMdl.getActiveUserById(userId);
     if (!user) resutils.createError("noPhoto", "No profile photo found.");
     if (userId !== Number(viewerId) && await blocksMdl.isSenderBlockedByRecipient(viewerId, userId)) {

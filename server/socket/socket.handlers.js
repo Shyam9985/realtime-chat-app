@@ -1,4 +1,5 @@
 const messagesService = require('../services/messagesService');
+const messagesVldtr = require('../validators/messagesVldtr');
 const { statusForError, clientMessageForError } = require('../utils/chat.errors');
 const rateLimit = require('./socket.ratelimit');
 const { log } = require('../utils/log.utils');
@@ -45,7 +46,9 @@ const registerHandlers = (io, socket) => {
     socket.data.sendQueue = Promise.resolve();
     socket.on('message:send', wrap(socket, 'message:send', async (payload) => {
         if (!rateLimit.take(`send:${userId}`, SEND_CAPACITY, SEND_REFILL_PER_SECOND)) rateLimited();
-        const run = socket.data.sendQueue.then(() => messagesService.sendSrvc(userId, payload));
+        // a socket handler is the controller here: the payload is checked before it joins the queue
+        const send = messagesVldtr.validateSend(payload);
+        const run = socket.data.sendQueue.then(() => messagesService.sendSrvc(userId, send));
         socket.data.sendQueue = run.catch(() => {});
         const { message, duplicate } = await run;
         return { message, duplicate };
@@ -53,12 +56,12 @@ const registerHandlers = (io, socket) => {
 
     // message:delivered { message_id }
     socket.on('message:delivered', wrap(socket, 'message:delivered', async (payload) => {
-        return messagesService.markDeliveredSrvc(userId, payload.message_id);
+        return messagesService.markDeliveredSrvc(userId, messagesVldtr.messageId(payload.message_id));
     }));
 
     // message:seen { conversation_id } - the user viewed the conversation
     socket.on('message:seen', wrap(socket, 'message:seen', async (payload) => {
-        return messagesService.markSeenSrvc(userId, payload.conversation_id);
+        return messagesService.markSeenSrvc(userId, messagesVldtr.conversationId(payload.conversation_id));
     }));
 
     socket.on('disconnect', (reason) => log(`[socket] user ${userId} disconnected: ${reason}`));

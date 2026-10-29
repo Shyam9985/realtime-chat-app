@@ -1,10 +1,11 @@
 const resutils = require('../utils/response.utils');
 const RESPONSE_STATUS = require('../utils/standard.messages');
 const devicesService = require('../services/devicesService');
+const devicesVldtr = require('../validators/devicesVldtr');
 const { sendChatError } = require('./usersCtrl');
 const { log } = require('../utils/log.utils');
 
-// run the service, answer with its result, map named errors (the same shape as the chat controllers)
+// validate the request, run the service, answer with its result, map named errors (the same shape as the chat controllers)
 const handle = (fname, status, run) => async (req, res) => {
     log(`in ${fname}`);
     try {
@@ -15,7 +16,7 @@ const handle = (fname, status, run) => async (req, res) => {
 };
 
 // POST /devices  { push_token, platform? }
-exports.register = handle('devices register', RESPONSE_STATUS.SUCCESS, (req) => devicesService.registerSrvc(req.user.user_id, req.body || {}));
+exports.register = handle('devices register', RESPONSE_STATUS.SUCCESS, (req) => devicesService.registerSrvc(req.user.user_id, devicesVldtr.validateRegister(req.body || {})));
 
 // POST /devices/unregister  { push_token }
-exports.unregister = handle('devices unregister', RESPONSE_STATUS.SUCCESS, (req) => devicesService.unregisterSrvc(req.user.user_id, req.body || {}));
+exports.unregister = handle('devices unregister', RESPONSE_STATUS.SUCCESS, (req) => devicesService.unregisterSrvc(req.user.user_id, devicesVldtr.validateUnregister(req.body || {})));

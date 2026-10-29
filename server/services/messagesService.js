@@ -4,18 +4,13 @@ const blocksMdl = require('../models/blocksMdl');
 const conversationsService = require('./conversationsService');
 const resutils = require('../utils/response.utils');
 const appEvents = require('../utils/events.utils');
-const { parseId, toIso } = require('../utils/validate.utils');
+const { toIso } = require('../utils/validate.utils');
 const { log } = require('../utils/log.utils');
 const { statusForError, clientMessageForError } = require('../utils/chat.errors');
 
-// configurable limits; the defaults are the SRS values
-const MAX_LENGTH = Number(process.env.MESSAGE_MAX_LENGTH) || 2000;
+// configurable limits; the defaults are the SRS values (the request limits are in validators/messagesVldtr)
 const DELETE_WINDOW_MINUTES = Number(process.env.MESSAGE_DELETE_WINDOW_MINUTES) || 15;
 const EDIT_WINDOW_MINUTES = Number(process.env.MESSAGE_EDIT_WINDOW_MINUTES) || 15;
-const MAX_FORWARD_TARGETS = 10;
-const MAX_SEARCH_RESULTS = 100;
-const DEFAULT_PAGE = 30;
-const MAX_PAGE = 100;
 const RECENT_MIN = 20;      // opening a chat: at least this many messages, even if older than the window
 const RECENT_CAP = 300;     // and at most this many from the window, however busy it was
 
@@ -116,23 +111,6 @@ const announceMessage = async (messageId) => {
     return message;
 };
 
-// FR-007 / FR-027: text only, trimmed, non-empty, bounded
-const validateContent = (content) => {
-    if (typeof content !== 'string') resutils.createError('validationFailed', 'Message content must be text.');
-    const text = content.trim();
-    if (!text) resutils.createError('validationFailed', 'Message cannot be empty.');
-    if (text.length > MAX_LENGTH) resutils.createError('validationFailed', `Message cannot exceed ${MAX_LENGTH} characters.`);
-    return text;
-};
-
-const validateClientMessageId = (value) => {
-    if (value === undefined || value === null || value === '') return null;
-    if (typeof value !== 'string' || value.length > 36 || !/^[A-Za-z0-9_-]+$/.test(value)) {
-        resutils.createError('validationFailed', 'client_message_id must be up to 36 url-safe characters.');
-    }
-    return value;
-};
-
 // a lost lock race (deadlock victim or lock wait timeout) is retried once before it is reported
 const RETRYABLE = new Set(['ER_LOCK_DEADLOCK', 'ER_LOCK_WAIT_TIMEOUT']);
 const insertWithRetry = async (args, attempt = 1) => {
@@ -144,10 +122,10 @@ const insertWithRetry = async (args, attempt = 1) => {
     }
 };
 
-// a reply may only quote a live message of the same conversation that the sender can see
-const validateReplyTarget = async (conversationId, value, senderId) => {
-    if (value === undefined || value === null || value === '') return null;
-    const replyToId = parseId(value, 'Reply message id');
+// a reply may only quote a live message of the same conversation that the sender can see.
+// replyToId is already parsed by the validator; null means the message is not a reply
+const validateReplyTarget = async (conversationId, replyToId, senderId) => {
+    if (replyToId === null || replyToId === undefined) return null;
     const [target] = await messagesMdl.getVisibleById(replyToId, senderId);
     if (!target || target.conversation_id !== conversationId) resutils.createError('validationFailed', 'You can only reply to a message in this conversation.');
     if (target.is_deleted) resutils.createError('validationFailed', 'You cannot reply to a deleted message.');
@@ -199,51 +177,30 @@ const createMessage = async (senderId, { conversationId, content, clientMessageI
     return { message, duplicate: false };
 };
 
-// payload: { conversation_id, content, client_message_id?, reply_to_message_id? }
-exports.sendSrvc = async (senderId, payload = {}) => {
+// { conversationId, content, clientMessageId, replyToMessageId }, as messagesVldtr.validateSend returns it
+exports.sendSrvc = async (senderId, { conversationId, content, clientMessageId = null, replyToMessageId = null }) => {
     log('in sendSrvc');
-    const conversationId = parseId(payload.conversation_id, 'Conversation id');
-    const content = validateContent(payload.content);
-    const clientMessageId = validateClientMessageId(payload.client_message_id);
     await conversationsService.assertMemberSrvc(conversationId, senderId);
-    const replyToMessageId = await validateReplyTarget(conversationId, payload.reply_to_message_id, senderId);
-    return createMessage(senderId, { conversationId, content, clientMessageId, replyToMessageId });
+    const replyTo = await validateReplyTarget(conversationId, replyToMessageId, senderId);
+    return createMessage(senderId, { conversationId, content, clientMessageId, replyToMessageId: replyTo });
 };
 
 // cursor = base64url('<created_at iso>|<message_id>') of the oldest message the client has
+// (messagesVldtr reads it back from the query)
 const encodeCursor = (row) => Buffer.from(`${toIso(row.created_at)}|${row.message_id}`).toString('base64url');
-const decodeCursor = (value) => {
-    if (!value) return null;
-    try {
-        const [iso, id] = Buffer.from(String(value), 'base64url').toString('utf8').split('|');
-        const createdAt = new Date(iso);
-        const messageId = Number(id);
-        if (Number.isNaN(createdAt.getTime()) || !Number.isInteger(messageId) || messageId < 1) throw new Error('bad cursor');
-        return { createdAt, messageId };
-    } catch (_) {
-        return resutils.createError('invalidCursor', 'Invalid cursor.');
-    }
-};
 
 // FR-010: newest first, ordered by (created_at, message_id); next_cursor continues backwards. only
 // what the caller can see: in a group, what was sent while they were in it (and not by someone they
-// blocked); someone who exited keeps reading what they received
-exports.historySrvc = async (userId, conversationIdRaw, cursorRaw, limitRaw, daysRaw) => {
+// blocked); someone who exited keeps reading what they received. { cursor, limit, days } come from
+// messagesVldtr.validateHistory (days null: no window asked for)
+exports.historySrvc = async (userId, conversationId, { cursor = null, limit, days = null }) => {
     log('in historySrvc');
-    const conversationId = parseId(conversationIdRaw, 'Conversation id');
     await conversationsService.assertReaderSrvc(conversationId, userId);
-
-    let limit = Number.parseInt(limitRaw, 10);
-    if (!Number.isInteger(limit) || limit < 1) limit = DEFAULT_PAGE;
-    if (limit > MAX_PAGE) limit = MAX_PAGE;
-    const cursor = decodeCursor(cursorRaw);
 
     // opening a chat with ?days=N: everything from the last N days (at most RECENT_CAP), so the first
     // screen holds a whole recent conversation. a quiet chat with fewer than RECENT_MIN of them gets its
     // newest messages instead, so it never opens nearly empty. older pages follow with the cursor
-    if (!cursor && daysRaw !== undefined) {
-        const days = Number.parseInt(daysRaw, 10);
-        if (!Number.isInteger(days) || days < 1 || days > 90) resutils.createError('validationFailed', 'days must be a whole number from 1 to 90.');
+    if (!cursor && days) {
         const recent = await messagesMdl.getRecentHistory(conversationId, Number(userId), days, RECENT_CAP);
         if (recent.length >= RECENT_MIN) {
             // there may be older messages before the window: the next scroll asks (an empty answer ends it)
@@ -267,9 +224,8 @@ exports.historySrvc = async (userId, conversationIdRaw, cursorRaw, limitRaw, day
 const audienceOf = async (message) => [message.sender_id, ...(await messagesMdl.getRecipientIds(message.message_id))];
 
 // FR-020..024: only the sender, still in the conversation, only inside the window measured by the database clock
-exports.deleteForEveryoneSrvc = async (userId, messageIdRaw) => {
+exports.deleteForEveryoneSrvc = async (userId, messageId) => {
     log('in deleteForEveryoneSrvc');
-    const messageId = parseId(messageIdRaw, 'Message id');
     const [row] = await messagesMdl.getById(messageId);
     if (!row) resutils.createError('messageNotFound', 'Message not found.');
     if (row.sender_id !== Number(userId)) resutils.createError('notOwner', 'You can only delete your own messages.');
@@ -291,9 +247,8 @@ exports.deleteForEveryoneSrvc = async (userId, messageIdRaw) => {
 
 // FR-012: the recipient's client acknowledged the message. the sender hears about it once the
 // message has reached everyone (in a group: every recipient)
-exports.markDeliveredSrvc = async (userId, messageIdRaw) => {
+exports.markDeliveredSrvc = async (userId, messageId) => {
     log('in markDeliveredSrvc');
-    const messageId = parseId(messageIdRaw, 'Message id');
     const [receipt] = await messagesMdl.getReceipt(messageId, userId);
     if (!receipt) resutils.createError('messageNotFound', 'Message not found.');
     if (receipt.delivered_at) return { changed: false, delivered_at: toIso(receipt.delivered_at) };
@@ -313,9 +268,8 @@ exports.markPendingDeliveredSrvc = async (userId) => {
 };
 
 // FR-013 / FR-014: the recipient opened the conversation (an exited group too: they can still read it)
-exports.markSeenSrvc = async (userId, conversationIdRaw) => {
+exports.markSeenSrvc = async (userId, conversationId) => {
     log('in markSeenSrvc');
-    const conversationId = parseId(conversationIdRaw, 'Conversation id');
     await conversationsService.assertReaderSrvc(conversationId, userId);
 
     const { seenAt, rows } = await messagesMdl.markConversationSeen(conversationId, userId);
@@ -326,10 +280,8 @@ exports.markSeenSrvc = async (userId, conversationIdRaw) => {
 
 // edit own message: only the sender, only inside the window measured by the database clock,
 // whatever its ticks. the previous text is kept in message_edits_t in the same transaction
-exports.editSrvc = async (userId, messageIdRaw, contentRaw) => {
+exports.editSrvc = async (userId, messageId, content) => {
     log('in editSrvc');
-    const messageId = parseId(messageIdRaw, 'Message id');
-    const content = validateContent(contentRaw);
     const [row] = await messagesMdl.getById(messageId);
     if (!row) resutils.createError('messageNotFound', 'Message not found.');
     if (row.sender_id !== Number(userId)) resutils.createError('notOwner', 'You can only edit your own messages.');
@@ -351,9 +303,8 @@ exports.editSrvc = async (userId, messageIdRaw, contentRaw) => {
 };
 
 // every version of the caller's own message, oldest first; the last one is the current text
-exports.editHistorySrvc = async (userId, messageIdRaw) => {
+exports.editHistorySrvc = async (userId, messageId) => {
     log('in editHistorySrvc');
-    const messageId = parseId(messageIdRaw, 'Message id');
     const [row] = await messagesMdl.getById(messageId);
     if (!row) resutils.createError('messageNotFound', 'Message not found.');
     if (row.sender_id !== Number(userId)) resutils.createError('notOwner', 'Only the sender can see earlier versions.');
@@ -370,12 +321,9 @@ exports.editHistorySrvc = async (userId, messageIdRaw) => {
  * forwarded_from_message_id. Targets are independent: a refused one (e.g. blocked) is reported and the
  * others still go out. Recipients only learn that it was forwarded, never where from.
  */
-exports.forwardSrvc = async (userId, messageIdRaw, conversationIdsRaw) => {
+// targets: unique conversation ids, already checked by messagesVldtr.validateForward
+exports.forwardSrvc = async (userId, messageId, targets) => {
     log('in forwardSrvc');
-    const messageId = parseId(messageIdRaw, 'Message id');
-    if (!Array.isArray(conversationIdsRaw) || !conversationIdsRaw.length) resutils.createError('validationFailed', 'Choose at least one conversation.');
-    const targets = [...new Set(conversationIdsRaw.map((id) => parseId(id, 'Conversation id')))];
-    if (targets.length > MAX_FORWARD_TARGETS) resutils.createError('validationFailed', `You can forward to at most ${MAX_FORWARD_TARGETS} conversations at once.`);
 
     // a message the caller cannot see (someone else's chat, or a group message from before they
     // joined) gets the same answer as a missing one: nothing leaks
@@ -403,23 +351,16 @@ exports.forwardSrvc = async (userId, messageIdRaw, conversationIdsRaw) => {
 };
 
 // text search inside one conversation, newest first; deleted messages are never searched
-exports.searchSrvc = async (userId, conversationIdRaw, queryRaw, limitRaw) => {
+exports.searchSrvc = async (userId, conversationId, text, limit) => {
     log('in searchSrvc');
-    const conversationId = parseId(conversationIdRaw, 'Conversation id');
     await conversationsService.assertReaderSrvc(conversationId, userId);
-    const text = typeof queryRaw === 'string' ? queryRaw.trim() : '';
-    if (!text) resutils.createError('validationFailed', 'Type something to search for.');
-    if (text.length > 100) resutils.createError('validationFailed', 'Search text cannot exceed 100 characters.');
-    let limit = Number.parseInt(limitRaw, 10);
-    if (!Number.isInteger(limit) || limit < 1 || limit > MAX_SEARCH_RESULTS) limit = 50;
     const rows = await messagesMdl.search(conversationId, Number(userId), text, limit);
     return { messages: rows.map(toMessageDto) };
 };
 
 // message info in a group: who has it and who has read it, each with their own time. the sender only
-exports.receiptsSrvc = async (userId, messageIdRaw) => {
+exports.receiptsSrvc = async (userId, messageId) => {
     log('in receiptsSrvc');
-    const messageId = parseId(messageIdRaw, 'Message id');
     const [row] = await messagesMdl.getById(messageId);
     if (!row) resutils.createError('messageNotFound', 'Message not found.');
     if (row.sender_id !== Number(userId)) resutils.createError('notOwner', 'Only the sender can see who received a message.');
@@ -451,9 +392,6 @@ exports.createMessage = createMessage;
 exports.announceMessage = announceMessage;
 exports.announceStatus = announceStatus;
 exports.getSystemTypeId = getSystemTypeId;
-exports.validateContent = validateContent;
-exports.validateClientMessageId = validateClientMessageId;
 exports.validateReplyTarget = validateReplyTarget;
 exports.toMessageDto = toMessageDto;
-exports.MAX_LENGTH = MAX_LENGTH;
 exports.DELETE_WINDOW_MINUTES = DELETE_WINDOW_MINUTES;

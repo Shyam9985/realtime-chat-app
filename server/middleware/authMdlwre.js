@@ -1,7 +1,6 @@
 const jwt = require('jsonwebtoken');
 const resutils = require("../utils/response.utils");
 const RESPONSE_STATUS = require("../utils/standard.messages");
-const authMdl = require('../models/authMdl');
 const authService = require('../services/authService');
 const { logBlock } = require('../utils/log.utils');
 
@@ -26,7 +25,7 @@ exports.isAuthenticated = async (req, res, next) => {
 
             // a valid signature is not enough: logout and the session lifetime are enforced on
             // the stored session, otherwise a stolen or logged-out token would work until it expires
-            const session = await authMdl.checkIfSessionAlive(decodedToken.session_id);
+            const session = await authService.getSessionSrvc(decodedToken.session_id);
             if (!session?.length || session[0].destroyed_at != null || session[0].is_expired) resutils.createError('sessionExpired', 'Your session has expired. Please log in again.');
             if (session[0].is_locked) resutils.createError('TemporarilyLocked', `Your account is temporarily locked. Please try again after ${session[0].locked_until}.`);
 
@@ -43,7 +42,7 @@ exports.isAuthenticated = async (req, res, next) => {
                 if (!sessionId) resutils.createError('sessionExpired', 'Your session has expired. Please log in again.');
 
                 // check if session is still alive or not
-                const isAlive = await authMdl.checkIfSessionAlive(sessionId);
+                const isAlive = await authService.getSessionSrvc(sessionId);
 
                 // expired throw error
                 if (!isAlive || !isAlive?.length || isAlive?.[0]?.destroyed_at != null) resutils.createError('sessionExpired', 'Your session has expired. Please log in again.');
@@ -54,7 +53,7 @@ exports.isAuthenticated = async (req, res, next) => {
 
                 // console.log('Session still alive but jwt token has expired.');
 
-                const userData = await authMdl.getUserDetails({ email: decoded?.email });
+                const userData = await authService.getUserByEmailSrvc(decoded?.email);
 
                 // alive - regenereate token and sent it to the client
 
@@ -66,7 +65,7 @@ exports.isAuthenticated = async (req, res, next) => {
                 const newToken = await authService.generateJWToken(userObj, sessionId);
 
                 // update the express session time 
-                const updated = await authMdl.slideExpressSession(sessionId);
+                const updated = await authService.slideSessionSrvc(sessionId);
                 // console.log('session successfully slided', updated);
 
                 user = newToken.obj;

@@ -1,7 +1,7 @@
 const resutils = require('../utils/response.utils');
-const validutils = require('../utils/validate.utils');
 const RESPONSE_STATUS = require('../utils/standard.messages');
 const profileService = require('../services/profileService');
+const profileVldtr = require('../validators/profileVldtr');
 const { log } = require('../utils/log.utils');
 
 // maps profile error names to standard responses, mirroring the other controllers
@@ -31,21 +31,12 @@ exports.getProfile = async (req, res) => {
     }
 }
 
-// PATCH /profile  { fst_nm?, lst_nm?, mobile?, date_of_birth? }  - the same rules as sign-up; a blank
-// last name or mobile clears it. the email (the login id) is not editable, so it is an unknown field here
+// PATCH /profile  { fst_nm?, lst_nm?, mobile?, date_of_birth? }  - the rules are in profileVldtr
 exports.updateProfile = async (req, res) => {
     log('in updateProfile');
     try {
-        const body = req.body || {};
-        const validation = await validutils.validatePayload(body, {
-            fst_nm: { required: false, type: 'alpha', maxLength: 100, label: 'First Name' },
-            lst_nm: { required: false, type: 'alpha', maxLength: 100, label: 'Last Name' },
-            mobile: { required: false, type: 'mobile-no', label: 'Mobile Number' },
-            date_of_birth: { required: false, type: 'string', label: 'Date of birth', validator: (value) => validutils.isValidBirthDate(value) }
-        });
-        if (!validation?.validationStatus) resutils.createError('validationFailed', validation.errors[0]);
-
-        const result = await profileService.updateProfileSrvc(req.user.user_id, body);
+        const fields = await profileVldtr.validateUpdate(req.body || {});
+        const result = await profileService.updateProfileSrvc(req.user.user_id, fields);
         return resutils.sendSuccessResponse(req, res, result, RESPONSE_STATUS.UPDATED, { function: 'update profile controller' });
     } catch (error) {
         return sendProfileError(req, res, error, 'update profile controller');

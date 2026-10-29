@@ -1,4 +1,4 @@
-const auditMdl = require('../models/auditMdl');
+const auditService = require('../services/auditService');
 const { log } = require('../utils/log.utils');
 
 /**********************************************
@@ -24,7 +24,7 @@ exports.audit = (entity, action, table = null, pk = null) => async (req, res, ne
     // so it is only printed and the audit row simply goes out without old values
     if (table && pk && req.params.id) {
         try {
-            const [row] = await auditMdl.getRowByIdMdl(table, pk, req.params.id);
+            const [row] = await auditService.getOldValuesSrvc(table, pk, req.params.id);
             res.locals.audit.oldValues = row || null;
         } catch (error) {
             console.error(`[audit] could not read old values from ${table}:`, error.message);

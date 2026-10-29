@@ -2,7 +2,7 @@ const conversationsMdl = require('../models/conversationsMdl');
 const usersService = require('./usersService');
 const resutils = require('../utils/response.utils');
 const appEvents = require('../utils/events.utils');
-const { parseId, toIso } = require('../utils/validate.utils');
+const { toIso } = require('../utils/validate.utils');
 const { log } = require('../utils/log.utils');
 
 const DIRECT = 'ONE_TO_ONE';
@@ -74,9 +74,8 @@ exports.getSummarySrvc = async (userId, conversationId) => {
 
 // FR-005: one active one-to-one conversation per pair. the unique user_pair_key is the real guard;
 // a lost race shows up as ER_DUP_ENTRY and is resolved by re-reading
-exports.getOrCreateDirectSrvc = async (userId, otherUserIdRaw) => {
+exports.getOrCreateDirectSrvc = async (userId, otherUserId) => {
     log('in getOrCreateDirectSrvc');
-    const otherUserId = parseId(otherUserIdRaw, 'User id');
     if (otherUserId === Number(userId)) resutils.createError('selfAction', 'You cannot start a conversation with yourself.');
     await usersService.assertActiveUser(otherUserId);
 
@@ -107,8 +106,7 @@ exports.listSrvc = async (userId) => {
 // FR-006: membership gate. a missing conversation and a foreign one get the same answer, so the
 // response never confirms that a conversation id exists. this is the gate for anything that writes
 // to a conversation (send, schedule, forward into, edit, delete, manage a group)
-exports.assertMemberSrvc = async (conversationIdRaw, userId) => {
-    const conversationId = parseId(conversationIdRaw, 'Conversation id');
+exports.assertMemberSrvc = async (conversationId, userId) => {
     const [membership] = await conversationsMdl.getMembership(conversationId, userId);
     if (!membership) resutils.createError('notMember', 'You are not a member of this conversation.');
     return membership;
@@ -116,53 +114,37 @@ exports.assertMemberSrvc = async (conversationIdRaw, userId) => {
 
 // the reading gate: current members, and people who exited a group (they keep what they received
 // while they were in it: history, search, export, read receipts, pin / archive)
-exports.assertReaderSrvc = async (conversationIdRaw, userId) => {
-    const conversationId = parseId(conversationIdRaw, 'Conversation id');
+exports.assertReaderSrvc = async (conversationId, userId) => {
     const [membership] = await conversationsMdl.getReadableMembership(conversationId, userId);
     if (!membership) resutils.createError('notMember', 'You are not a member of this conversation.');
     return membership;
 };
 
 // GET /conversations/:id: one chat as the caller's list shows it
-exports.getOneSrvc = async (userId, conversationIdRaw) => {
+exports.getOneSrvc = async (userId, conversationId) => {
     log('in getOneSrvc');
-    const conversationId = parseId(conversationIdRaw, 'Conversation id');
     await exports.assertReaderSrvc(conversationId, userId);
     return { conversation: await exports.getSummarySrvc(userId, conversationId) };
-};
-
-const MAX_TITLE = 100;
-
-const optionalBoolean = (value, label) => {
-    if (value === undefined) return undefined;
-    if (typeof value !== 'boolean') resutils.createError('validationFailed', `${label} must be true or false.`);
-    return value;
 };
 
 /*
  * This member's own settings for a chat: { is_pinned?, is_archived?, custom_title? }. Nothing here
  * changes what the other member sees. Archiving unpins; a blank title goes back to the default (the
- * other person's name in a one-to-one chat). The member's other devices are told live.
+ * other person's name in a one-to-one chat). The member's other devices are told live. The values come
+ * checked from conversationsVldtr.validateSettings (custom_title trimmed, '' = back to the default).
  */
-exports.updateSettingsSrvc = async (userId, conversationIdRaw, body = {}) => {
+exports.updateSettingsSrvc = async (userId, conversationId, { isPinned, isArchived, customTitle: title }) => {
     log('in updateSettingsSrvc');
-    const conversationId = parseId(conversationIdRaw, 'Conversation id');
     const membership = await exports.assertReaderSrvc(conversationId, userId);
 
-    const isPinned = optionalBoolean(body.is_pinned, 'is_pinned');
-    const isArchived = optionalBoolean(body.is_archived, 'is_archived');
     let customTitle;
-    if (body.custom_title !== undefined) {
+    if (title !== undefined) {
         // a group has one name for everyone, changed by its admins (PATCH /conversations/:id/group)
         if (membership.type_code === GROUP) resutils.createError('validationFailed', "A group's name is the same for everyone. Admins change it from Group info.");
-        if (body.custom_title !== null && typeof body.custom_title !== 'string') resutils.createError('validationFailed', 'The name must be text.');
-        const title = (body.custom_title || '').trim();
-        if (title.length > MAX_TITLE) resutils.createError('validationFailed', `The name cannot exceed ${MAX_TITLE} characters.`);
         if (title) customTitle = title;
         else if (membership.type_code === DIRECT) customTitle = (await conversationsMdl.getDefaultDirectTitle(conversationId, userId))[0]?.title || null;
         else customTitle = null;
     }
-    if (isPinned === undefined && isArchived === undefined && customTitle === undefined) resutils.createError('validationFailed', 'Nothing to change.');
 
     await conversationsMdl.updateMemberSettings(conversationId, userId, { isPinned, isArchived, customTitle });
     const conversation = await exports.getSummarySrvc(userId, conversationId);

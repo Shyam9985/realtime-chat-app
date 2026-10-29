@@ -62,14 +62,19 @@ const buildOtpEmailData = (email, fullName, otp, { reason, subject, heading, int
         </div>`
 });
 
-// sends an OTP mail and returns the message references
+// sends an OTP mail, records the attempt in the email log (sent or not) and returns the message references
 const sendOtpEmail = async (email, data, user) => {
-    const mailRes = await emailutils.sendEmail([email], data, user);
+    const mailRes = await emailutils.sendEmail([email], data);
     const mail = mailRes?.[0];
+
+    const logRow = mail?.success
+        ? { to: email, subject: data.subject, body: data.body, status: 'SUCCESS', messageId: mail.messageId, response: mail.response, key: data.key, reason: data.reason }
+        : { to: email, subject: data.subject, body: data.body, status: 'FAILED', response: mail?.error, errorMessage: mail?.error?.message, key: data.key, reason: data.reason };
+    const logged = await authMdl.logEMail(logRow, user);
 
     if (!mail?.success) resutils.createError('emailNotSent', 'Unable to send email right now. please try again.');
 
-    return { email: mail.email, message_key: mail.messageKey, message_id: mail.messageId };
+    return { email: mail.email, message_key: logged?.insertId, message_id: mail.messageId };
 }
 
 // generates a signed jwt for the given user row and session
@@ -144,6 +149,32 @@ exports.establishSessionSrvc = async (userRow, sessionId, expiresAt, context = {
 exports.logoutSrvc = async (sessionId) => {
     log('in logoutSrvc');
     return authMdl.expireExpressSession(sessionId);
+}
+
+// ---- session checks for the auth middleware and the socket handshake (they reach the db through here)
+
+// the stored session behind a token, joined to its active user (empty when there is none)
+exports.getSessionSrvc = async (sessionId) => {
+    log('in getSessionSrvc');
+    return authMdl.checkIfSessionAlive(sessionId);
+}
+
+// the user row a refreshed token is built from
+exports.getUserByEmailSrvc = async (email) => {
+    log('in getUserByEmailSrvc');
+    return authMdl.getUserDetails({ email });
+}
+
+// a refreshed token also extends the stored session's lifetime
+exports.slideSessionSrvc = async (sessionId) => {
+    log('in slideSessionSrvc');
+    return authMdl.slideExpressSession(sessionId);
+}
+
+// the hourly job: accounts whose lock time has passed are unlocked
+exports.unlockUsersSrvc = async () => {
+    log('in unlockUsersSrvc');
+    return authMdl.unlockUsers();
 }
 
 // shared with profileService so both login and profile return the same shape

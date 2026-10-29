@@ -1,11 +1,12 @@
 const nodemailer = require('nodemailer');
-const authMdl = require('../models/authMdl');
 
 exports.get6DigitOtp = () => {
     return parseInt(Math.random(9) * 1000000);
 }
 
-exports.sendEmail = async (mailIds = [], data, user) => {
+// sends the mail to each address and reports every attempt; recording them in the email log is the
+// caller's job (authService), so this util never touches the database
+exports.sendEmail = async (mailIds = [], data) => {
 
     const results = [];
 
@@ -22,18 +23,13 @@ exports.sendEmail = async (mailIds = [], data, user) => {
                 //send mail
                 const mailRes = await transporter.sendMail({ from: process.env.EMAIL_USER, to: email, subject: data.subject, html: data.body });
 
-                // insert audit record
-                const auditRes = await authMdl.logEMail({ to: email, subject: data.subject, body: data.body, status: 'SUCCESS', messageId: mailRes.messageId, response: mailRes, key: data.key, reason: data.reason }, user);
-
-                // store response
-                results.push({ email, success: true, messageId: mailRes.messageId, response: mailRes.response, messageKey: auditRes?.insertId });
+                // store response (the full one, for the email log)
+                results.push({ email, success: true, messageId: mailRes.messageId, response: mailRes });
 
             } catch (error) {
 
-                // insert audit record
-                const auditRes = await authMdl.logEMail({ to: email, subject: data.subject, body: data.body, status: 'FAILED', response: error, errorMessage: error.message, key: data.key, reason: data.reason }, user);
                 // store response
-                results.push({ email, success: false, messageId: null, error: error.message, messageKey: auditRes?.insertId });
+                results.push({ email, success: false, messageId: null, error });
 
             }
         }

@@ -1,5 +1,4 @@
 const scheduler = require('node-schedule');
-const authMdl = require('../models/authMdl');
 const { formatDistanceToNowStrict } = require('date-fns');
 const { displayDateTime } = require('./date.utils');
 const { log, logBlock } = require('./log.utils');
@@ -23,9 +22,10 @@ function registerJobs() {
     log('\n', '=============== in schedules registry ===============', '\n');
 
     // unlocking the lockedusers (guarded so a db failure never crashes the server)
+    const authService = require('../services/authService');
     const unlockJob = scheduler.scheduleJob('0 */60 * * * *', async () => {
         try {
-            const response = await authMdl.unlockUsers();
+            const response = await authService.unlockUsersSrvc();
             logBlock('[unlock users job] completed successfully - affected rows:', response?.affectedRows);
         } catch (error) {
             console.error('Unlock users job failed:', error.message);

@@ -1,5 +1,5 @@
-const authMdl = require('../models/authMdl');
-const usersMdl = require('../models/usersMdl');
+const authService = require('../services/authService');
+const usersService = require('../services/usersService');
 const { verifyAccessToken, stripBearer } = require('../utils/token.utils');
 const { logBlock } = require('../utils/log.utils');
 
@@ -30,10 +30,9 @@ const socketAuth = async (socket, next) => {
     try {
         // account first: the session lookup only joins active users, so an inactive account would
         // otherwise be reported as an expired session
-        const user = await usersMdl.getActiveUserById(verified.payload.user_id);
-        if (!user.length) return next(reject('ACCOUNT_INACTIVE', 'This account is inactive.'));
+        if (!(await usersService.isActiveUserSrvc(verified.payload.user_id))) return next(reject('ACCOUNT_INACTIVE', 'This account is inactive.'));
 
-        const session = await authMdl.checkIfSessionAlive(verified.payload.session_id);
+        const session = await authService.getSessionSrvc(verified.payload.session_id);
         if (!session.length || session[0].destroyed_at || session[0].is_expired) return next(reject('SESSION_EXPIRED', 'Your session has expired.'));
         if (session[0].is_locked) return next(reject('TEMPORARLY_LOCKED', 'Your account is temporarily locked.'));
 

@@ -2,7 +2,7 @@ const usersMdl = require('../models/usersMdl');
 const presenceService = require('./presenceService');
 const blocksMdl = require('../models/blocksMdl');
 const resutils = require('../utils/response.utils');
-const { parseId, toIso } = require('../utils/validate.utils');
+const { toIso } = require('../utils/validate.utils');
 const { log } = require('../utils/log.utils');
 
 const toPublicUser = (row) => ({
@@ -13,18 +13,13 @@ const toPublicUser = (row) => ({
     profile_photo_url: row.profile_photo_url
 });
 
-// FR-004: discovery. the viewer never sees themselves or anyone who has blocked them
-exports.searchSrvc = async (viewerId, query, limit) => {
+// FR-004: discovery. the viewer never sees themselves or anyone who has blocked them. text (trimmed)
+// and limit (clamped) come from usersVldtr.validateSearch; nothing typed finds nobody
+exports.searchSrvc = async (viewerId, text, limit) => {
     log('in searchSrvc');
-    const text = typeof query === 'string' ? query.trim() : '';
     if (!text) return [];
-    if (text.length > 100) resutils.createError('validationFailed', 'Search text is too long.');
 
-    let size = Number.parseInt(limit, 10);
-    if (!Number.isInteger(size) || size < 1) size = 20;
-    if (size > 50) size = 50;
-
-    const rows = await usersMdl.searchUsers(viewerId, text, size);
+    const rows = await usersMdl.searchUsers(viewerId, text, limit);
     return rows.map((row) => ({ ...toPublicUser(row), blocked_by_me: !!row.blocked_by_me }));
 };
 
@@ -36,9 +31,8 @@ const assertActiveUser = async (userId) => {
 };
 
 // FR-015: block another user, never yourself. idempotent: blocking twice is one block
-exports.blockSrvc = async (blockerId, blockedIdRaw) => {
+exports.blockSrvc = async (blockerId, blockedId) => {
     log('in blockSrvc');
-    const blockedId = parseId(blockedIdRaw, 'User id');
     if (blockedId === Number(blockerId)) resutils.createError('selfAction', 'You cannot block yourself.');
     await assertActiveUser(blockedId);
 
@@ -60,9 +54,8 @@ exports.blockSrvc = async (blockerId, blockedIdRaw) => {
 };
 
 // FR-018: unblock. idempotent: unblocking someone who is not blocked is a no-op success
-exports.unblockSrvc = async (blockerId, blockedIdRaw) => {
+exports.unblockSrvc = async (blockerId, blockedId) => {
     log('in unblockSrvc');
-    const blockedId = parseId(blockedIdRaw, 'User id');
     if (blockedId === Number(blockerId)) resutils.createError('selfAction', 'You cannot unblock yourself.');
 
     const [existing] = await blocksMdl.findBlock(blockerId, blockedId);
@@ -77,6 +70,13 @@ exports.listBlockedSrvc = async (blockerId) => {
     return rows.map((row) => ({ ...toPublicUser(row), blocked_at: row.blocked_at }));
 };
 
+// the socket handshake refuses an inactive account
+exports.isActiveUserSrvc = async (userId) => {
+    log('in isActiveUserSrvc');
+    const rows = await usersMdl.getActiveUserById(userId);
+    return rows.length > 0;
+};
+
 exports.toPublicUser = toPublicUser;
 exports.assertActiveUser = assertActiveUser;
 
@@ -85,9 +85,8 @@ exports.assertActiveUser = assertActiveUser;
  * keeps showing them, FR-017) but their photo is withheld, and nothing in the answer says who blocked
  * whom. The mobile number is private and is not part of it.
  */
-exports.getProfileSrvc = async (viewerId, userIdRaw) => {
+exports.getProfileSrvc = async (viewerId, userId) => {
     log('in getProfileSrvc');
-    const userId = parseId(userIdRaw, 'User id');
     const me = Number(viewerId);
     const pairKey = `${Math.min(me, userId)}:${Math.max(me, userId)}`;
     const [row] = await usersMdl.getPublicProfile(me, userId, pairKey);
