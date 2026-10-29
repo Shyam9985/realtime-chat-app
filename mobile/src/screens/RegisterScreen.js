@@ -4,6 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { useToast } from '../contexts/MessageContext';
 import { handleSignup } from '../services/auth.service';
+import * as keyStore from '../crypto/keyStore';
+import RecoveryCodeDialog from '../components/RecoveryCodeDialog';
 import * as validate from '../utils/ValidateUtils';
 import { TextField, Button, Muted, Title } from '../components/ui';
 import DateField from '../components/DateField';
@@ -60,6 +62,8 @@ export default function RegisterScreen({ navigation }) {
   const message = useToast();
   const [state, dispatch] = useReducer(reducer, initialState);
   const [isLoading, setIsLoading] = useState(false);
+  const [busyText, setBusyText] = useState('');
+  const [recovery, setRecovery] = useState(null);      // { code, emailed } once the account exists
 
   const handleChange = (name) => (value) => dispatch({ type: 'CHANGE_FIELD', name, value });
 
@@ -69,7 +73,18 @@ export default function RegisterScreen({ navigation }) {
     if (Object.keys(errors).length) return;
 
     setIsLoading(true);
-    const result = await handleSignup(state.values);
+    // the encryption keys are made on this phone first (a few seconds: the password key is slow on purpose)
+    setBusyText('Securing your account...');
+    let keys;
+    try {
+      keys = await keyStore.keysForSignUp(state.values.email, state.values.password);
+    } catch (e) {
+      setIsLoading(false);
+      message.error('Could not create your encryption keys. Please try again.', 3000);
+      return;
+    }
+    setBusyText('Creating account...');
+    const result = await handleSignup(state.values, keys.payload);
     setIsLoading(false);
 
     if (!result?.success) {
@@ -80,6 +95,12 @@ export default function RegisterScreen({ navigation }) {
       message.error(result?.error || result?.message || 'We could not create your account. Please try again.', 3000);
       return;
     }
+    // the recovery code is shown once; "I've saved it" goes on to sign in
+    setRecovery({ code: keys.recoveryCode, emailed: !!result?.data?.recovery_code_emailed });
+  };
+
+  const recoverySaved = () => {
+    setRecovery(null);
     message.success('Account created. Please sign in.');
     // react navigation 7: navigate() would push a second login screen; popTo returns to the existing one
     navigation.popTo('Login');
@@ -116,10 +137,11 @@ export default function RegisterScreen({ navigation }) {
         maximumDate={new Date()} minimumDate={new Date(1900, 0, 1)} initial={new Date(2000, 0, 1)} testID="reg-dob" />
       <TextField label="Password" icon="lock-closed-outline" value={values.password} onChangeText={handleChange('password')} error={errors.password} secureTextEntry placeholder="At least 8 characters, mixed case, a number and a symbol" testID="reg-password" />
       <TextField label="Confirm Password" icon="lock-closed-outline" value={values.confirmPassword} onChangeText={handleChange('confirmPassword')} error={errors.confirmPassword} secureTextEntry placeholder="Repeat your password" testID="reg-confirm" onSubmitEditing={handleSubmit} returnKeyType="go" />
-      <Button title={isLoading ? 'Creating account...' : 'Create Account'} onPress={handleSubmit} loading={isLoading} />
+      <Button title={isLoading ? busyText || 'Creating account...' : 'Create Account'} onPress={handleSubmit} loading={isLoading} />
       <Pressable onPress={() => navigation.popTo('Login')} style={{ marginTop: theme.space.xl, alignItems: 'center' }}>
         <Text style={{ color: c.textMuted }}>Already have an account? <Text style={{ color: c.accent, fontWeight: '700' }}>Login</Text></Text>
       </Pressable>
+      <RecoveryCodeDialog code={recovery?.code} emailed={recovery?.emailed} onDone={recoverySaved} />
     </AuthLayout>
   );
 }

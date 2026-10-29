@@ -28,7 +28,10 @@ const toMessageDto = (row) => ({
     system_event: row.system_event ?? null,
     system_target_user_id: row.system_target_user_id ?? null,
     system_target_name: nameOf(row.target_first_nm, row.target_last_nm),
+    // encrypted with chat key `key_version` (enc_format 1); group notices are plain (enc_format 0)
     content: row.is_deleted ? null : row.content,
+    key_version: row.key_version ?? null,
+    enc_format: row.enc_format ?? 0,
     client_message_id: row.client_message_id,
     is_deleted: !!row.is_deleted,
     deleted_at: toIso(row.deleted_at),
@@ -45,6 +48,8 @@ const toMessageDto = (row) => ({
         sender_id: row.reply_sender_id,
         sender_name: nameOf(row.reply_sender_first_nm, row.reply_sender_last_nm),
         content: row.reply_is_deleted ? null : row.reply_content,
+        key_version: row.reply_key_version ?? null,
+        enc_format: row.reply_enc_format ?? 0,
         is_deleted: !!row.reply_is_deleted
     } : null
 });
@@ -122,6 +127,10 @@ const insertWithRetry = async (args, attempt = 1) => {
     }
 };
 
+// the chat has a newer key than the message was encrypted with (or a member left and a new one is
+// due): the app fetches the key state, makes or opens the current key, encrypts again and resends
+const refuseOutdatedKey = () => resutils.createError('keyOutdated', 'This chat has a newer key. Fetch it and send again.');
+
 // a reply may only quote a live message of the same conversation that the sender can see.
 // replyToId is already parsed by the validator; null means the message is not a reply
 const validateReplyTarget = async (conversationId, replyToId, senderId) => {
@@ -138,8 +147,10 @@ const validateReplyTarget = async (conversationId, replyToId, senderId) => {
  * validate -> membership -> block rules -> persist (one transaction) -> announce.
  * The same client_message_id from the same sender returns the first message instead of a second row.
  * Normal sends, forwards and scheduled sends all come through here, so the rules live in one place.
+ * content is encrypted with chat key keyVersion, which must be the chat's current one (checkKey).
+ * A scheduled message was encrypted when it was scheduled and goes out as it is (checkKey false).
  */
-const createMessage = async (senderId, { conversationId, content, clientMessageId = null, replyToMessageId = null, forwardedFromMessageId = null }) => {
+const createMessage = async (senderId, { conversationId, content, keyVersion, checkKey = true, clientMessageId = null, replyToMessageId = null, forwardedFromMessageId = null }) => {
     const membership = await conversationsService.assertMemberSrvc(conversationId, senderId);
 
     if (clientMessageId) {
@@ -160,9 +171,12 @@ const createMessage = async (senderId, { conversationId, content, clientMessageI
 
     let messageId;
     try {
-        messageId = await insertWithRetry({
-            conversationId, senderId, messageTypeId: await getTextTypeId(), content, clientMessageId, recipientIds, replyToMessageId, forwardedFromMessageId
+        const inserted = await insertWithRetry({
+            conversationId, senderId, messageTypeId: await getTextTypeId(), content, keyVersion, encFormat: 1, checkKey,
+            clientMessageId, recipientIds, replyToMessageId, forwardedFromMessageId
         });
+        if (inserted.keyOutdated) refuseOutdatedKey();
+        messageId = inserted.messageId;
     } catch (error) {
         // the same client id raced in twice: hand back the row that won
         if (error.code === 'ER_DUP_ENTRY' && clientMessageId) {
@@ -177,12 +191,12 @@ const createMessage = async (senderId, { conversationId, content, clientMessageI
     return { message, duplicate: false };
 };
 
-// { conversationId, content, clientMessageId, replyToMessageId }, as messagesVldtr.validateSend returns it
-exports.sendSrvc = async (senderId, { conversationId, content, clientMessageId = null, replyToMessageId = null }) => {
+// { conversationId, content, keyVersion, clientMessageId, replyToMessageId }, as messagesVldtr.validateSend returns it
+exports.sendSrvc = async (senderId, { conversationId, content, keyVersion, clientMessageId = null, replyToMessageId = null }) => {
     log('in sendSrvc');
     await conversationsService.assertMemberSrvc(conversationId, senderId);
     const replyTo = await validateReplyTarget(conversationId, replyToMessageId, senderId);
-    return createMessage(senderId, { conversationId, content, clientMessageId, replyToMessageId: replyTo });
+    return createMessage(senderId, { conversationId, content, keyVersion, clientMessageId, replyToMessageId: replyTo });
 };
 
 // cursor = base64url('<created_at iso>|<message_id>') of the oldest message the client has
@@ -279,8 +293,9 @@ exports.markSeenSrvc = async (userId, conversationId) => {
 };
 
 // edit own message: only the sender, only inside the window measured by the database clock,
-// whatever its ticks. the previous text is kept in message_edits_t in the same transaction
-exports.editSrvc = async (userId, messageId, content) => {
+// whatever its ticks. the previous text is kept in message_edits_t in the same transaction. the new
+// text is encrypted with the chat's current key (keyVersion)
+exports.editSrvc = async (userId, messageId, content, keyVersion) => {
     log('in editSrvc');
     const [row] = await messagesMdl.getById(messageId);
     if (!row) resutils.createError('messageNotFound', 'Message not found.');
@@ -290,8 +305,9 @@ exports.editSrvc = async (userId, messageId, content) => {
     await conversationsService.assertMemberSrvc(row.conversation_id, userId);
     if (row.content === content) return { message: toMessageDto(row), changed: false };
 
-    const edited = await messagesMdl.editWithinWindow(messageId, userId, content, EDIT_WINDOW_MINUTES);
-    if (!edited) {
+    const edited = await messagesMdl.editWithinWindow(messageId, userId, content, keyVersion, EDIT_WINDOW_MINUTES);
+    if (edited === 'keyOutdated') refuseOutdatedKey();
+    if (edited !== 'edited') {
         const [again] = await messagesMdl.getById(messageId);
         if (again?.is_deleted) resutils.createError('notEditable', 'A deleted message cannot be edited.');
         resutils.createError('editWindowExpired', `Messages can only be edited within ${EDIT_WINDOW_MINUTES} minutes of sending.`);
@@ -310,8 +326,12 @@ exports.editHistorySrvc = async (userId, messageId) => {
     if (row.sender_id !== Number(userId)) resutils.createError('notOwner', 'Only the sender can see earlier versions.');
     if (row.is_deleted) return { versions: [] };
     const edits = await messagesMdl.getEdits(messageId);
-    const versions = edits.map((e, i) => ({ content: e.old_content, from: toIso(i === 0 ? row.created_at : edits[i - 1].edited_at), current: false }));
-    versions.push({ content: row.content, from: toIso(edits.length ? edits[edits.length - 1].edited_at : row.created_at), current: true });
+    // each version keeps the key version it was encrypted with
+    const versions = edits.map((e, i) => ({
+        content: e.old_content, key_version: e.key_version ?? null, enc_format: e.enc_format ?? 0,
+        from: toIso(i === 0 ? row.created_at : edits[i - 1].edited_at), current: false
+    }));
+    versions.push({ content: row.content, key_version: row.key_version ?? null, enc_format: row.enc_format ?? 0, from: toIso(edits.length ? edits[edits.length - 1].edited_at : row.created_at), current: true });
     return { versions };
 };
 
@@ -320,8 +340,10 @@ exports.editHistorySrvc = async (userId, messageId) => {
  * new message (sender: the caller, same text) that points back at the source through
  * forwarded_from_message_id. Targets are independent: a refused one (e.g. blocked) is reported and the
  * others still go out. Recipients only learn that it was forwarded, never where from.
+ * The server cannot copy the text (each chat has its own key): the app decrypted it and sends it
+ * encrypted once per target.
  */
-// targets: unique conversation ids, already checked by messagesVldtr.validateForward
+// targets: [{ conversationId, content, keyVersion }], already checked by messagesVldtr.validateForward
 exports.forwardSrvc = async (userId, messageId, targets) => {
     log('in forwardSrvc');
 
@@ -338,9 +360,9 @@ exports.forwardSrvc = async (userId, messageId, targets) => {
     if (source.is_deleted) resutils.createError('validationFailed', 'A deleted message cannot be forwarded.');
 
     const results = [];
-    for (const conversationId of targets) {
+    for (const { conversationId, content, keyVersion } of targets) {
         try {
-            const { message } = await createMessage(userId, { conversationId, content: source.content, forwardedFromMessageId: messageId });
+            const { message } = await createMessage(userId, { conversationId, content, keyVersion, forwardedFromMessageId: messageId });
             results.push({ conversation_id: conversationId, ok: true, message });
         } catch (error) {
             const status = statusForError(error);
@@ -348,14 +370,6 @@ exports.forwardSrvc = async (userId, messageId, targets) => {
         }
     }
     return { results, sent: results.filter((r) => r.ok).length };
-};
-
-// text search inside one conversation, newest first; deleted messages are never searched
-exports.searchSrvc = async (userId, conversationId, text, limit) => {
-    log('in searchSrvc');
-    await conversationsService.assertReaderSrvc(conversationId, userId);
-    const rows = await messagesMdl.search(conversationId, Number(userId), text, limit);
-    return { messages: rows.map(toMessageDto) };
 };
 
 // message info in a group: who has it and who has read it, each with their own time. the sender only

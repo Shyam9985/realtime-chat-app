@@ -15,9 +15,7 @@ const ids = {};                                 // message ids the later tests r
 const sockets = [];
 const track = (s) => { sockets.push(s); return s; };
 const as = (u) => h.api(app.baseUrl, u.token);
-const call = (u, method, path, body) => fetch(`${app.baseUrl}/apiv1${path}`, {
-    method, headers: { 'content-type': 'application/json', 'access-token': `Bearer ${u.token}` }, body: body === undefined ? undefined : JSON.stringify(body)
-}).then(async (res) => ({ status: res.status, body: await res.json().catch(() => null) }));
+const call = (u, method, path, body) => h.request(app.baseUrl, u.token, method, path, body);
 const id = (u) => u.user.user_id;
 const createGroup = (u, title, members, extra = {}) => as(u).post('/conversations/groups', { title, member_ids: members.map(id), ...extra });
 const summaryOf = async (u, conversationId) => (await as(u).get('/conversations')).body.data.conversations.find((c) => c.conversation_id === conversationId);
@@ -253,16 +251,15 @@ test('GR-13 / GR-14 notices cannot be edited, deleted, forwarded or quoted', asy
     assert.equal(reply.ok, false);
 });
 
-test('GR-15 / GR-16 message info lists each recipient, for the sender only; search sees only what you can', async () => {
+test('GR-15 / GR-16 message info lists each recipient, for the sender only; history shows only what you can see', async () => {
     const info = await as(A).get(`/messages/${ids.back}/receipts`);
     assert.equal(info.status, 200);
     assert.deepEqual(info.body.data.receipts.map((r) => r.name).sort(), ['Bob', 'Carol']);
     assert.equal((await as(B).get(`/messages/${ids.back}/receipts`)).status, 403);
 
-    const search = async (u, q) => (await as(u).get(`/conversations/${trip}/messages/search?q=${encodeURIComponent(q)}`)).body.data.messages;
-    assert.equal((await search(C, 'after carol')).length, 0, 'not what was sent while she was out');
-    assert.equal((await search(C, 'hello everyone')).length, 1);
-    assert.equal((await search(A, 'Goa')).length, 0, 'notices are not searched');
+    const texts = (await historyOf(C, trip)).map((m) => m.content);
+    assert.ok(!texts.some((t) => t && t.includes('after carol')), 'not what was sent while she was out');
+    assert.ok(texts.some((t) => t && t.includes('hello everyone')));
 });
 
 // ---------------------------------------------------------------- the last admin, races, the limit, blocking

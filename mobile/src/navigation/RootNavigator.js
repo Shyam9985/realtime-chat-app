@@ -14,6 +14,8 @@ import { openChatsFromNotifications } from '../services/push.service';
 import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
 import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
+import UnlockScreen from '../screens/UnlockScreen';
+import RecoveryCodeDialog from '../components/RecoveryCodeDialog';
 import ConversationsScreen from '../screens/ConversationsScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import AboutScreen from '../screens/AboutScreen';
@@ -117,7 +119,7 @@ const navigationRef = createNavigationContainerRef();
 
 export default function RootNavigator() {
   const { theme, isDark } = useTheme();
-  const { status } = useAuth();
+  const { status, recoveryCode, clearRecoveryCode } = useAuth();
   const header = useHeaderOptions();
   const c = theme.colors;
   const [navReady, setNavReady] = useState(false);
@@ -153,6 +155,9 @@ export default function RootNavigator() {
             <Stack.Screen name="GroupInfo" component={GroupInfoScreen} options={{ title: 'Group info' }} />
             <Stack.Screen name="AddMembers" component={AddMembersScreen} options={{ title: 'Add members' }} />
           </>
+        ) : status === 'locked' ? (
+          // signed in, but this phone does not have the key that opens the chats yet
+          <Stack.Screen name="Unlock" component={UnlockScreen} options={{ headerShown: false }} />
         ) : (
           <>
             <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
@@ -161,6 +166,8 @@ export default function RootNavigator() {
           </>
         )}
       </Stack.Navigator>
+      {/* new keys were just made for this account (first sign-in after encryption, or "start fresh") */}
+      <RecoveryCodeDialog code={status === 'signedIn' ? recoveryCode : null} onDone={clearRecoveryCode} />
     </NavigationContainer>
   );
 }

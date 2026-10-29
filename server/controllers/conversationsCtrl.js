@@ -77,12 +77,6 @@ exports.updateSettings = handle('conversations settings', RESPONSE_STATUS.UPDATE
 // POST /conversations/read-all  - mark every conversation with unread messages as seen
 exports.readAll = handle('conversations read all', RESPONSE_STATUS.SUCCESS, (req) => messagesService.markAllSeenSrvc(req.user.user_id));
 
-// GET /conversations/:id/messages/search?q=&limit=
-exports.search = handle('conversations search', RESPONSE_STATUS.DATA_FOUND, (req) => {
-    const { conversationId, text, limit } = messagesVldtr.validateSearch(req.params, req.query);
-    return messagesService.searchSrvc(req.user.user_id, conversationId, text, limit);
-});
-
 // GET / POST /conversations/:id/scheduled  - the caller's scheduled messages in this conversation
 exports.listScheduled = handle('scheduled list', RESPONSE_STATUS.DATA_FOUND, (req) => scheduledService.listSrvc(req.user.user_id, scheduledVldtr.conversationId(req.params.id)));
 exports.createScheduled = handle('scheduled create', RESPONSE_STATUS.CREATED, (req) => {

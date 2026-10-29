@@ -10,18 +10,28 @@ const { log } = require('../utils/log.utils');
 // configurable limits; the defaults are the SRS values
 const MAX_LENGTH = Number(process.env.MESSAGE_MAX_LENGTH) || 2000;
 const MAX_FORWARD_TARGETS = 10;
-const MAX_SEARCH_RESULTS = 100;
-const MAX_SEARCH_TEXT = 100;
+// content is end-to-end encrypted: the server only sees base64 of (nonce + encrypted text + tag). the
+// app enforces MAX_LENGTH on the text itself; this bounds what MAX_LENGTH characters can become
+// (up to 4 bytes each in utf-8, plus the 24-byte nonce and 16-byte tag, then base64)
+const MAX_CIPHERTEXT = Math.ceil(((MAX_LENGTH * 4) + 40) / 3) * 4;
+const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
 const DEFAULT_PAGE = 30;
 const MAX_PAGE = 100;
 
-// FR-007 / FR-027: text only, trimmed, non-empty, bounded
+// FR-007 / FR-027: the encrypted text. the server cannot read it, so it checks only that it is
+// well-formed base64 of a sensible size (empty and too-long text are refused by the app before encrypting)
 const validateContent = (content) => {
-    if (typeof content !== 'string') resutils.createError('validationFailed', 'Message content must be text.');
-    const text = content.trim();
-    if (!text) resutils.createError('validationFailed', 'Message cannot be empty.');
-    if (text.length > MAX_LENGTH) resutils.createError('validationFailed', `Message cannot exceed ${MAX_LENGTH} characters.`);
-    return text;
+    if (typeof content !== 'string' || !content) resutils.createError('validationFailed', 'Message cannot be empty.');
+    if (content.length > MAX_CIPHERTEXT) resutils.createError('validationFailed', `Message cannot exceed ${MAX_LENGTH} characters.`);
+    if (!BASE64.test(content)) resutils.createError('validationFailed', 'Message content must be encrypted (base64).');
+    return content;
+};
+
+// which chat key version encrypted the content (the service checks it is the current one)
+const validateKeyVersion = (value) => {
+    const n = Number(value);
+    if (!Number.isInteger(n) || n < 1) resutils.createError('validationFailed', 'key_version must be a whole number from 1.');
+    return n;
 };
 
 const validateClientMessageId = (value) => {
@@ -56,12 +66,13 @@ const decodeCursor = (value) => {
 exports.messageId = (value) => parseId(value, 'Message id');
 exports.conversationId = (value) => parseId(value, 'Conversation id');
 
-// POST /messages and message:send  { conversation_id, content, client_message_id?, reply_to_message_id? }
+// POST /messages and message:send  { conversation_id, content, key_version, client_message_id?, reply_to_message_id? }
 exports.validateSend = (body = {}) => {
     log('in validateSend');
     return {
         conversationId: parseId(body.conversation_id, 'Conversation id'),
         content: validateContent(body.content),
+        keyVersion: validateKeyVersion(body.key_version),
         clientMessageId: validateClientMessageId(body.client_message_id),
         replyToMessageId: validateReplyToId(body.reply_to_message_id)
     };
@@ -85,36 +96,32 @@ exports.validateHistory = (params = {}, query = {}) => {
     return { conversationId, cursor, limit, days };
 };
 
-// PATCH /messages/:id  { content }
+// PATCH /messages/:id  { content, key_version }  - the new text, encrypted with the chat's current key
 exports.validateEdit = (params = {}, body = {}) => {
     log('in validateEdit');
-    return { messageId: parseId(params.id, 'Message id'), content: validateContent(body.content) };
+    return { messageId: parseId(params.id, 'Message id'), content: validateContent(body.content), keyVersion: validateKeyVersion(body.key_version) };
 };
 
-// POST /messages/:id/forward  { conversation_ids: [] }  - unique targets, at most MAX_FORWARD_TARGETS
+// POST /messages/:id/forward  { targets: [{ conversation_id, content, key_version }] }. the server cannot
+// copy encrypted text between chats (each chat has its own key), so the app sends the text encrypted
+// once per target; unique targets, at most MAX_FORWARD_TARGETS
 exports.validateForward = (params = {}, body = {}) => {
     log('in validateForward');
     const messageId = parseId(params.id, 'Message id');
-    const raw = body.conversation_ids;
+    const raw = body.targets;
     if (!Array.isArray(raw) || !raw.length) resutils.createError('validationFailed', 'Choose at least one conversation.');
-    const conversationIds = [...new Set(raw.map((id) => parseId(id, 'Conversation id')))];
-    if (conversationIds.length > MAX_FORWARD_TARGETS) resutils.createError('validationFailed', `You can forward to at most ${MAX_FORWARD_TARGETS} conversations at once.`);
-    return { messageId, conversationIds };
-};
-
-// GET /conversations/:id/messages/search?q=&limit=
-exports.validateSearch = (params = {}, query = {}) => {
-    log('in validateSearch');
-    const conversationId = parseId(params.id, 'Conversation id');
-    const text = typeof query.q === 'string' ? query.q.trim() : '';
-    if (!text) resutils.createError('validationFailed', 'Type something to search for.');
-    if (text.length > MAX_SEARCH_TEXT) resutils.createError('validationFailed', `Search text cannot exceed ${MAX_SEARCH_TEXT} characters.`);
-    let limit = Number.parseInt(query.limit, 10);
-    if (!Number.isInteger(limit) || limit < 1 || limit > MAX_SEARCH_RESULTS) limit = 50;
-    return { conversationId, text, limit };
+    const seen = new Set();
+    const targets = raw.map((t) => ({
+        conversationId: parseId(t?.conversation_id, 'Conversation id'),
+        content: validateContent(t?.content),
+        keyVersion: validateKeyVersion(t?.key_version)
+    })).filter((t) => !seen.has(t.conversationId) && seen.add(t.conversationId));     // a chat chosen twice gets one copy
+    if (targets.length > MAX_FORWARD_TARGETS) resutils.createError('validationFailed', `You can forward to at most ${MAX_FORWARD_TARGETS} conversations at once.`);
+    return { messageId, targets };
 };
 
 exports.validateContent = validateContent;
+exports.validateKeyVersion = validateKeyVersion;
 exports.validateClientMessageId = validateClientMessageId;
 exports.validateReplyToId = validateReplyToId;
 exports.MAX_LENGTH = MAX_LENGTH;

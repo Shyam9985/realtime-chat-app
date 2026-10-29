@@ -5,6 +5,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/MessageContext';
 import { handleLogin } from '../services/auth.service';
+import * as keyStore from '../crypto/keyStore';
 import * as validate from '../utils/ValidateUtils';
 import { Screen, TextField, Button, Title, Muted, IconButton, FormScroll } from '../components/ui';
 
@@ -42,6 +43,7 @@ export default function LoginScreen({ navigation }) {
   const authCtx = useAuth();
   const message = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  const [busyText, setBusyText] = useState('');
   const [form, setForm] = useState({ email: '', password: '' });
   const [errors, setErrors] = useState({});
   const [showPassword, setShowPassword] = useState(false);
@@ -57,15 +59,25 @@ export default function LoginScreen({ navigation }) {
     if (Object.keys(validationErrors).length) return;
 
     setIsLoading(true);
+    setBusyText('');
     const result = await handleLogin({ email: form.email.trim(), password: form.password });
-    setIsLoading(false);
 
     if (!result?.success) {
+      setIsLoading(false);
       message.error(result?.statusKey === 'INVALID_CREDENTIALS' ? 'Incorrect email or password.' : (result?.error || result?.message || 'Could not sign you in.'), 2500);
       return;
     }
-    await authCtx.handleLogin(result?.data?.user);
-    message.success('Login successful!');
+    // the chats' private key: from this phone, or unlocked from the password backup (a few seconds)
+    setBusyText('Unlocking your chats...');
+    let keyResult;
+    try {
+      keyResult = await keyStore.unlockAfterSignIn(result.data.user, result.data.keys, form.password);
+    } catch (e) {
+      keyResult = { status: 'needsRecovery' };
+    }
+    setIsLoading(false);
+    await authCtx.handleLogin(result.data.user, keyResult);
+    if (keyResult.status !== 'needsRecovery') message.success('Login successful!');
   };
 
   return (
@@ -78,7 +90,7 @@ export default function LoginScreen({ navigation }) {
       <Pressable onPress={() => navigation.navigate('ForgotPassword')} style={{ alignSelf: 'flex-end', marginBottom: theme.space.lg }} accessibilityRole="button" hitSlop={8}>
         <Text style={{ color: theme.colors.accent, fontWeight: '600' }}>Forgot Password?</Text>
       </Pressable>
-      <Button title={isLoading ? 'Logging in...' : 'Login'} onPress={handleSubmit} loading={isLoading} />
+      <Button title={isLoading ? busyText || 'Logging in...' : 'Login'} onPress={handleSubmit} loading={isLoading} />
       <Pressable onPress={() => navigation.navigate('Register')} style={{ marginTop: theme.space.xl, alignItems: 'center' }}>
         <Text style={{ color: theme.colors.textMuted }}>Don't have an account? <Text style={{ color: theme.colors.accent, fontWeight: '700' }}>Create Account</Text></Text>
       </Pressable>

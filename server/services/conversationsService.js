@@ -47,11 +47,16 @@ const toSummaryDto = (row) => ({
         system_target_user_id: row.last_system_target_user_id ?? null,
         system_target_name: nameOf(row.last_target_first_nm, row.last_target_last_nm),
         content: row.last_content,
+        key_version: row.last_key_version ?? null,
+        enc_format: row.last_enc_format ?? 0,
         is_deleted: !!row.last_is_deleted,
         status: row.last_status,
         created_at: toIso(row.last_created_at)
     } : null,
     unread_count: Number(row.unread_count) || 0,
+    // end-to-end encryption: the chat key messages must be sent with, and whether a new one is due
+    current_key_version: Number(row.current_key_version) || 0,
+    needs_new_key: !!row.needs_new_key,
     blocked_by_me: !!row.blocked_by_me,
     last_message_at: toIso(row.last_created_at),
     created_at: toIso(row.created_at)

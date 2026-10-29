@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef } from "react";
 import * as chatApi from "../services/chat.service";
 import * as socket from "../services/socket.service";
+import * as keyStore from "../crypto/keyStore";
 import { registerForPush, watchPushToken } from "../services/push.service";
 import { useAuth } from "./AuthContext";
 
@@ -178,9 +179,10 @@ export function ChatProvider({ children }) {
         dispatch({ type: "MESSAGE_MERGE", message: { message_id: null, client_message_id: clientMessageId, conversation_id: conversationId, sender_id: myId, content, is_deleted: false, created_at: new Date().toISOString(), status: "SENDING", local: true, reply_to: replyPreview } });
         try {
             const replyToId = replyTo?.message_id ?? null;
-            const result = socket.isConnected()
-                ? await socket.emitWithAck("message:send", { conversation_id: conversationId, content, client_message_id: clientMessageId, ...(replyToId ? { reply_to_message_id: replyToId } : {}) })
-                : await chatApi.sendMessage(conversationId, content, clientMessageId, replyToId);
+            // encrypted on this phone with the chat's current key; re-encrypted if the key changed meanwhile
+            const result = await keyStore.sendEncrypted(conversationId, content, async (encrypted) => (socket.isConnected()
+                ? keyStore.openTree(await socket.emitWithAck("message:send", { conversation_id: conversationId, ...encrypted, client_message_id: clientMessageId, ...(replyToId ? { reply_to_message_id: replyToId } : {}) }))
+                : chatApi.sendMessage(conversationId, encrypted, clientMessageId, replyToId)));
             dispatch({ type: "MESSAGE_MERGE", message: result.message });
             dispatch({ type: "CONVERSATION_PREVIEW", message: result.message, incrementUnread: false });
             return result.message;
@@ -205,7 +207,7 @@ export function ChatProvider({ children }) {
 
     // edit own message (within the server's window); the other member's screen updates through message:edited
     const editMessage = useCallback(async (message, text) => {
-        const result = await chatApi.editMessage(message.message_id, text.trim());
+        const result = await chatApi.editMessage(message, text.trim());
         dispatch({ type: "MESSAGE_UPDATE", message: result.message });
         dispatch({ type: "PREVIEW_CONTENT", message: result.message });
         return result;
@@ -213,7 +215,7 @@ export function ChatProvider({ children }) {
 
     // forward to several chats; the results say which ones were refused (e.g. blocked)
     const forwardMessage = useCallback(async (message, conversationIds) => {
-        const result = await chatApi.forwardMessage(message.message_id, conversationIds);
+        const result = await chatApi.forwardMessage(message, conversationIds);
         for (const r of result.results) {
             if (!r.ok) continue;
             dispatch({ type: "MESSAGE_UPDATE", message: r.message });
@@ -299,6 +301,12 @@ export function ChatProvider({ children }) {
     useEffect(() => {
         if (authStatus !== "signedIn") { dispatch({ type: "RESET" }); return undefined; }
         socket.connect();
+        // events that carry message text are decrypted first, one after another so their order holds
+        let chain = Promise.resolve();
+        const decrypted = (handler, open = keyStore.openTree) => (payload) => {
+            chain = chain.then(async () => handler(await open(payload))).catch(() => {});
+        };
+        const openSummary = async (c) => (await keyStore.openConversations([c]))[0];
         refreshConversations();
         // push notifications: this phone's token goes to the server (and again whenever firebase renews it)
         registerForPush().catch(() => {});
@@ -308,7 +316,7 @@ export function ChatProvider({ children }) {
                 dispatch({ type: "SOCKET_STATUS", status: s });
                 if (s === "connected") { refreshConversations(); if (active.current) { loadHistory(active.current, null, true); sendSeen(active.current); } }
             }),
-            socket.on("message:new", (message) => {
+            socket.on("message:new", decrypted((message) => {
                 const isOpen = active.current === message.conversation_id;
                 // group notices arrive already read: they never count as unread and need no acknowledgement
                 const notice = message.message_type === "SYSTEM";
@@ -318,8 +326,8 @@ export function ChatProvider({ children }) {
                 if (notice) return;
                 sendDelivered(message.message_id);
                 if (isOpen) sendSeen(message.conversation_id);
-            }),
-            socket.on("message:sent", (message) => { dispatch({ type: "MESSAGE_MERGE", message }); dispatch({ type: "CONVERSATION_PREVIEW", message, incrementUnread: false }); }),
+            })),
+            socket.on("message:sent", decrypted((message) => { dispatch({ type: "MESSAGE_MERGE", message }); dispatch({ type: "CONVERSATION_PREVIEW", message, incrementUnread: false }); })),
             socket.on("message:delivered", ({ message_id, conversation_id, delivered_at }) => {
                 dispatch({ type: "MESSAGE_PATCH", conversationId: conversation_id, predicate: (m) => m.message_id === message_id && rank(m.status) < rank("DELIVERED"), fields: { delivered_at, status: "DELIVERED" } });
                 dispatch({ type: "PREVIEW_STATUS", conversationId: conversation_id, messageIds: [message_id], status: "DELIVERED" });
@@ -331,8 +339,10 @@ export function ChatProvider({ children }) {
             }),
             socket.on("message:deleted", ({ message_id, conversation_id, deleted_at }) => { dispatch({ type: "MESSAGE_PATCH", conversationId: conversation_id, predicate: (m) => m.message_id === message_id, fields: { is_deleted: true, content: null, deleted_at } }); refreshConversations(); }),
             socket.on("conversation:new", () => refreshConversations()),
-            socket.on("message:edited", (message) => { dispatch({ type: "MESSAGE_UPDATE", message }); dispatch({ type: "PREVIEW_CONTENT", message }); }),
-            socket.on("conversation:updated", (conversation) => dispatch({ type: "CONVERSATION_UPSERT", conversation })),
+            socket.on("message:edited", decrypted((message) => { dispatch({ type: "MESSAGE_UPDATE", message }); dispatch({ type: "PREVIEW_CONTENT", message }); })),
+            socket.on("conversation:updated", decrypted((conversation) => dispatch({ type: "CONVERSATION_UPSERT", conversation }), openSummary)),
+            // a new chat key version: the next send uses it (this phone fetches its locked copy when needed)
+            socket.on("conversation:key", ({ conversation_id }) => keyStore.forgetSendKey(conversation_id)),
             socket.on("scheduled:changed", ({ conversation_id }) => dispatch({ type: "SCHEDULED_CHANGED", id: conversation_id })),
             // a group changed (members, roles, name): its summary is reloaded, open group screens refetch
             socket.on("group:updated", ({ conversation_id }) => { refreshConversation(conversation_id); dispatch({ type: "GROUP_CHANGED", id: conversation_id }); }),

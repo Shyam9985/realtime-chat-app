@@ -11,9 +11,7 @@ let app, A, B, C, ab, ac, sA, sB;
 const sockets = [];
 const track = (s) => { sockets.push(s); return s; };
 const as = (u) => h.api(app.baseUrl, u.token);
-const patch = (u, path, body) => fetch(`${app.baseUrl}/apiv1${path}`, {
-    method: 'PATCH', headers: { 'content-type': 'application/json', 'access-token': `Bearer ${u.token}` }, body: JSON.stringify(body)
-}).then(async (res) => ({ status: res.status, body: await res.json().catch(() => null) }));
+const patch = (u, path, body) => h.request(app.baseUrl, u.token, 'PATCH', path, body);
 const listOf = async (u) => (await as(u).get('/conversations')).body.data.conversations;
 const send = async (socket, conversation_id, content, extra = {}) => {
     const ack = await h.emitWithAck(socket, 'message:send', { conversation_id, content, ...extra });
@@ -116,36 +114,14 @@ test('CL-03 / CL-06 / CL-07 read all marks every unread chat seen, archived incl
     await patch(A, `/conversations/${ab}/settings`, { is_archived: false });
 });
 
-// ---------------------------------------------------------------- search
-test('CS-01 / CS-03 / CS-04 / CS-06 / CS-07 search finds text, short terms and literals, never deleted text or foreign chats', async () => {
-    const pizza = await send(sA, ab, 'Pizza tonight at Luigi');
-    await send(sB, ab, 'pizza again? ok');
-    const secret = await send(sA, ab, 'secret plan 50% off_now');
-    await as(A).del(`/messages/${secret.message_id}`);
-    const short = await send(sA, ab, 'go to x9 now');
-
-    const word = await as(B).get(`/conversations/${ab}/messages/search?q=pizza`);
-    assert.equal(word.status, 200);
-    assert.equal(word.body.data.messages.length, 2);
-    assert.ok(word.body.data.messages[0].created_at >= word.body.data.messages[1].created_at, 'newest first');
-    assert.ok(word.body.data.messages.some((m) => m.message_id === pizza.message_id));
-
-    const tiny = await as(A).get(`/conversations/${ab}/messages/search?q=x9`);
-    assert.ok(tiny.body.data.messages.some((m) => m.message_id === short.message_id), 'two-character term via LIKE');
-
-    const deleted = await as(A).get(`/conversations/${ab}/messages/search?q=${encodeURIComponent('secret')}`);
-    assert.equal(deleted.body.data.messages.length, 0, 'deleted text is never searched');
-    const literal = await as(A).get(`/conversations/${ab}/messages/search?q=${encodeURIComponent('50%')}`);
-    assert.equal(literal.status, 200);
-    assert.equal(literal.body.data.messages.length, 0, '% is literal, and the only match is deleted');
-    const quote = await as(A).get(`/conversations/${ab}/messages/search?q=${encodeURIComponent("' or 1=1 --")}`);
-    assert.equal(quote.status, 200);
-    assert.equal(quote.body.data.messages.length, 0);
-
-    assert.equal((await as(A).get(`/conversations/${ab}/messages/search?q=`)).status, 400);
-    assert.equal((await as(A).get(`/conversations/${ab}/messages/search?q=${'y'.repeat(101)}`)).status, 400);
-    const foreign = await as(C).get(`/conversations/${ab}/messages/search?q=pizza`);
-    assert.equal(foreign.status, 403);
+// ---------------------------------------------------------------- search (on the phone now)
+test('CS-08 messages are stored encrypted, so the server has no search route any more', async () => {
+    const sent = await send(sA, ab, 'Pizza tonight at Luigi');
+    const [row] = await h.sql('select content, key_version, enc_format from messages_lst_t where message_id = ?', [sent.message_id]);
+    assert.notEqual(row.content, 'Pizza tonight at Luigi', 'only the encrypted text is stored');
+    assert.equal(row.enc_format, 1);
+    assert.ok(row.key_version >= 1);
+    assert.equal((await as(A).get(`/conversations/${ab}/messages/search?q=pizza`)).status, 404);
 });
 
 // ---------------------------------------------------------------- edit
@@ -162,7 +138,7 @@ test('ED-01 / ED-03 / ED-07 / ED-08 editing within the window: live, history kep
     await patch(A, `/messages/${original.message_id}`, { content: 'See you at 6:30' });
 
     const rows = await h.sql('select old_content from message_edits_t where message_id = ? order by message_edit_id', [original.message_id]);
-    assert.deepEqual(rows.map((r) => r.old_content), ['See you at 5', 'See you at 6']);
+    assert.deepEqual(rows.map((r) => h.decryptText(r.old_content)), ['See you at 5', 'See you at 6'], 'earlier versions are kept, encrypted');
     const versions = (await as(A).get(`/messages/${original.message_id}/edits`)).body.data.versions;
     assert.deepEqual(versions.map((v) => v.content), ['See you at 5', 'See you at 6', 'See you at 6:30']);
     assert.equal(versions[2].current, true);
@@ -182,7 +158,7 @@ test('ED-02 / ED-04 / ED-05 / ED-06 edit rules: server clock window, validation,
 
     const msg = await send(sA, ab, 'typo heer');
     assert.equal((await patch(A, `/messages/${msg.message_id}`, { content: '   ' })).status, 400);
-    assert.equal((await patch(A, `/messages/${msg.message_id}`, { content: 'x'.repeat(2001) })).status, 400);
+    assert.equal((await patch(A, `/messages/${msg.message_id}`, { content: 'x'.repeat(9000) })).status, 400, 'beyond the encrypted size of 2000 characters');
     const same = await patch(A, `/messages/${msg.message_id}`, { content: 'typo heer' });
     assert.equal(same.body.data.changed, false);
     assert.equal((await h.sql('select count(*) n from message_edits_t where message_id = ?', [msg.message_id]))[0].n, 0, 'no history row for an unchanged edit');
@@ -202,7 +178,10 @@ test('RP-03 / RP-05 / RP-08 replies quote a message of the same chat; a deleted 
     const original = await send(sB, ab, 'what time?');
     const live = h.waitFor(sB, 'message:new', (m) => m.reply_to?.message_id === original.message_id);
     const reply = await send(sA, ab, 'at six', { reply_to_message_id: original.message_id });
-    assert.deepEqual(reply.reply_to, { message_id: original.message_id, sender_id: B.user.user_id, sender_name: 'Bob', content: 'what time?', is_deleted: false });
+    const { key_version: quoteKey, enc_format: quoteFormat, ...quote } = reply.reply_to;
+    assert.deepEqual(quote, { message_id: original.message_id, sender_id: B.user.user_id, sender_name: 'Bob', content: 'what time?', is_deleted: false });
+    assert.equal(quoteFormat, 1, 'the quoted text is encrypted too, with its own key version');
+    assert.ok(quoteKey >= 1);
     await live;
 
     await as(B).del(`/messages/${original.message_id}`);
@@ -301,7 +280,7 @@ test('SC-02 / SC-04 / SC-05 / SC-08 a due message is sent once through the norma
     assert.equal((await patch(A, `/scheduled/${id}`, { content: 'too late' })).status, 400, 'a sent message cannot change');
 
     await scheduledService.runDueSrvc();
-    const copies = await h.sql('select count(*) n from messages_lst_t where conversation_id = ? and content = ?', [ab, 'final text']);
+    const copies = await h.sql('select count(*) n from messages_lst_t where conversation_id = ? and content = ?', [ab, h.encryptText('final text')]);
     assert.equal(copies[0].n, 1, 'a later run does not send it again');
 });
 

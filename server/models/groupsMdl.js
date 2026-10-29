@@ -32,11 +32,18 @@ const adminCheck = (members, actorId) => {
 
 const ids = (members) => members.map((m) => m.user_id);
 
+// group notices are written by the server, so they are plain text (enc_format 0), never encrypted
 const notice = (connection, { conversationId, actorId, systemTypeId, event, targetId = null, content = null, recipientIds }) =>
     insertWithReceipts(connection, {
         conversationId, senderId: actorId, messageTypeId: systemTypeId, systemEvent: event, systemTargetUserId: targetId,
-        content, recipientIds: recipientIds.filter((id) => id !== actorId), seen: true
+        content, encFormat: 0, recipientIds: recipientIds.filter((id) => id !== actorId), seen: true
     });
+
+// the members changed: the chat key must change too, so someone who left cannot read what comes next
+// and someone who joined gets a copy of the new one. the next sender's app makes it (a chat with no key
+// yet needs nothing: its first key is made for whoever is in it then)
+const flagNewKey = (connection, conversationId) => connection.execute(
+    'update conversations_lst_t set needs_new_key = 1 where conversation_id = ? and current_key_version > 0', [conversationId]);
 
 // what leaving means for the data: the member row is closed (kept, for their history and a later
 // re-add), the messages they had not seen stop holding back their senders' ticks, and their pending
@@ -110,6 +117,7 @@ exports.addMembers = ({ conversationId, actorId, userIds, maxMembers, systemType
             }
         }
         const everyone = [...ids(members), ...toAdd];
+        await flagNewKey(connection, conversationId);
         const noticeIds = [];
         for (const userId of toAdd) {
             noticeIds.push(await notice(connection, { conversationId, actorId, systemTypeId, event: 'MEMBER_ADDED', targetId: userId, recipientIds: everyone }));
@@ -129,6 +137,7 @@ exports.removeMember = ({ conversationId, actorId, targetId, systemTypeId }) => 
         if (!members.some((m) => m.user_id === targetId)) return { refused: 'targetNotMember' };
         const noticeId = await notice(connection, { conversationId, actorId, systemTypeId, event: 'MEMBER_REMOVED', targetId, recipientIds: ids(members) });
         const ended = await endMembership(connection, conversationId, targetId, 'You were removed from the group.');
+        await flagNewKey(connection, conversationId);
         return { noticeIds: [noticeId], memberIds: ids(members).filter((id) => id !== targetId), excludedMessageIds: ended.messageIds, cancelledScheduled: ended.cancelled };
     }, 'remove group member');
 };
@@ -144,6 +153,7 @@ exports.leave = ({ conversationId, userId, systemTypeId }) => {
         const remaining = members.filter((m) => m.user_id !== userId);
         const noticeIds = [await notice(connection, { conversationId, actorId: userId, systemTypeId, event: 'MEMBER_LEFT', recipientIds: ids(remaining) })];
         const ended = await endMembership(connection, conversationId, userId, 'You exited the group.');
+        await flagNewKey(connection, conversationId);
 
         let promotedId = null;
         if (me.member_role === 'ADMIN' && remaining.length && !remaining.some((m) => m.member_role === 'ADMIN')) {

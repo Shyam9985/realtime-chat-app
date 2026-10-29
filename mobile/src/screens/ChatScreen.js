@@ -12,6 +12,7 @@ import { exportChatAsPdf } from '../utils/exportChat';
 import { DELETE_WINDOW_MINUTES, MESSAGE_MAX_LENGTH, dayLabel, firstName, fullName, fullStamp, isGroup, isNotice, isSameDay, minutesSince, noticeText, presenceLabel, timeOf } from '../utils/chatFormat';
 
 const EDIT_WINDOW_MINUTES = 15;
+const SEARCH_PAGES = 20;          // search loads up to this many older pages (30 messages each) to look through
 
 // whatsapp-style header: avatar, name and a line underneath ("Online" / last active; in a group, who is in it).
 // tapping it opens the contact's profile or the group's info
@@ -146,7 +147,7 @@ export default function ChatScreen({ route, navigation }) {
   const scheduledVersion = chat.scheduledVersion[conversationId] || 0;
   useEffect(() => {
     let alive = true;
-    chatApi.listScheduled(conversationId).then((list) => { if (alive) setScheduled(list); }).catch(() => {});
+    chatApi.listScheduled(conversationId, chat.myId).then((list) => { if (alive) setScheduled(list); }).catch(() => {});
     return () => { alive = false; };
   }, [conversationId, scheduledVersion]);
 
@@ -171,24 +172,27 @@ export default function ChatScreen({ route, navigation }) {
     setTimeout(() => setFocusedId((id) => (id === messageId ? null : id)), 2500);
   }, [chat, conversationId, toast]);
 
-  // ---- search: debounced, server-side, newest match first
+  // ---- search: on this phone (messages are end-to-end encrypted, the server cannot search them).
+  // opening search loads the older pages in the background, so they can be searched too
+  useEffect(() => {
+    if (searchMode) chat.ensureMessageLoaded(conversationId, -1, SEARCH_PAGES);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchMode, conversationId]);
   useEffect(() => {
     if (!searchMode) return undefined;
-    const q = searchQuery.trim();
+    const q = searchQuery.trim().toLowerCase();
     if (!q) { setResults(null); return undefined; }
-    const timer = setTimeout(async () => {
-      try {
-        const found = await chatApi.searchMessages(conversationId, q);
-        setResults(found);
-        setResultIndex(0);
-        if (found.length) jumpTo(found[0].message_id);
-      } catch (e) {
-        toast.error(e?.error || e?.message || 'Search failed.');
-      }
+    const timer = setTimeout(() => {
+      // newest match first; deleted messages, group notices and unreadable ones are never matched
+      const found = messagesRef.current.filter((m) => m.message_id && !m.is_deleted && !m.unreadable && m.message_type !== 'SYSTEM'
+        && typeof m.content === 'string' && m.content.toLowerCase().includes(q));
+      setResults(found);
+      setResultIndex(0);
+      if (found.length) jumpTo(found[0].message_id);
     }, 350);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchQuery, searchMode, conversationId]);
+  }, [searchQuery, searchMode, conversationId, messages.length]);
 
   const stepResult = (delta) => {
     if (!results?.length) return;
@@ -285,8 +289,8 @@ export default function ChatScreen({ route, navigation }) {
     const { content, item } = scheduleFor;
     setScheduleFor(null);
     try {
-      if (item) await chatApi.updateScheduled(item.scheduled_message_id, { content, send_at: when.toISOString() });
-      else await chatApi.scheduleMessage(conversationId, content, when.toISOString(), replyTo?.message_id || null);
+      if (item) await chatApi.updateScheduled(item, { content, send_at: when.toISOString() }, chat.myId);
+      else await chatApi.scheduleMessage(conversationId, content, when.toISOString(), replyTo?.message_id || null, chat.myId);
       setDraft(''); setEditing(null); setReplyTo(null); setScheduledOpen(true);
       toast.success(`Scheduled for ${dayLabel(when)}, ${timeOf(when)}.`);
     } catch (e) {
@@ -306,7 +310,7 @@ export default function ChatScreen({ route, navigation }) {
     setHistory(null);
     setReceipts(null);
     if (confirm?.kind !== 'info') return;
-    if (confirm.message.is_edited) chatApi.getEditHistory(confirm.message.message_id).then(setHistory).catch(() => setHistory([]));
+    if (confirm.message.is_edited) chatApi.getEditHistory(confirm.message).then(setHistory).catch(() => setHistory([]));
     if (group) chatApi.getMessageReceipts(confirm.message.message_id).then(setReceipts).catch(() => setReceipts([]));
   }, [confirm, group]);
 

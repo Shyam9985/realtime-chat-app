@@ -9,13 +9,13 @@ const { log } = require('../utils/log.utils');
 // copy only says that it was forwarded, never where from. names come along so a group chat can say
 // who wrote what, and a notice who it is about
 const MESSAGE_SELECT = `select m.message_id, m.conversation_id, m.sender_id, mt.type_code as message_type,
-            case when m.is_deleted = 1 then null else m.content end as content,
+            case when m.is_deleted = 1 then null else m.content end as content, m.key_version, m.enc_format,
             m.client_message_id, m.is_deleted, m.deleted_at, m.created_at, m.is_edited, m.edited_at,
             (m.forwarded_from_message_id is not null) as is_forwarded,
             su.first_nm as sender_first_nm, su.last_nm as sender_last_nm,
             m.system_event, m.system_target_user_id, tu.first_nm as target_first_nm, tu.last_nm as target_last_nm,
             m.reply_to_message_id, rm.sender_id as reply_sender_id, rm.is_deleted as reply_is_deleted,
-            case when rm.is_deleted = 1 then null else rm.content end as reply_content,
+            case when rm.is_deleted = 1 then null else rm.content end as reply_content, rm.key_version as reply_key_version, rm.enc_format as reply_enc_format,
             ru.first_nm as reply_sender_first_nm, ru.last_nm as reply_sender_last_nm,
             case when count(r.message_receipt_id) > 0 and sum(r.delivered_at is null) = 0 then max(r.delivered_at) end as delivered_at,
             case when count(r.message_receipt_id) > 0 and sum(r.seen_at is null) = 0 then max(r.seen_at) end as seen_at
@@ -26,10 +26,10 @@ const MESSAGE_SELECT = `select m.message_id, m.conversation_id, m.sender_id, mt.
         left join messages_lst_t rm on rm.message_id = m.reply_to_message_id
         left join users_lst_t ru on ru.user_id = rm.sender_id
         left join message_receipts_t r on r.message_id = m.message_id and r.is_active = 1 and r.excluded_at is null`;
-const MESSAGE_GROUP = `group by m.message_id, m.conversation_id, m.sender_id, mt.type_code, m.content, m.client_message_id, m.is_deleted,
+const MESSAGE_GROUP = `group by m.message_id, m.conversation_id, m.sender_id, mt.type_code, m.content, m.key_version, m.enc_format, m.client_message_id, m.is_deleted,
         m.deleted_at, m.created_at, m.is_edited, m.edited_at, m.forwarded_from_message_id, su.first_nm, su.last_nm,
         m.system_event, m.system_target_user_id, tu.first_nm, tu.last_nm,
-        m.reply_to_message_id, rm.sender_id, rm.is_deleted, rm.content, ru.first_nm, ru.last_nm`;
+        m.reply_to_message_id, rm.sender_id, rm.is_deleted, rm.content, rm.key_version, rm.enc_format, ru.first_nm, ru.last_nm`;
 
 // who may see a message: its sender, and everyone it was delivered to (a receipt). receipts are
 // written for the members at the moment of sending, minus anyone who blocked the sender, so this one
@@ -59,15 +59,16 @@ exports.getBySenderAndClientId = (senderId, clientMessageId) => {
 // the message row, one receipt per recipient, and the last-message pointers: the conversation's and
 // those of everyone who can see it (the sender and the recipients). runs inside the caller's
 // transaction, which must already hold the conversation row lock. seen: the receipts are written as
-// already read (group notices: they make the notice visible but never count as unread)
+// already read (group notices: they make the notice visible but never count as unread).
+// encFormat 1: content is encrypted with chat key keyVersion; 0: plain text (group notices only)
 const insertWithReceipts = async (connection, {
-    conversationId, senderId, messageTypeId, content, clientMessageId = null, recipientIds,
+    conversationId, senderId, messageTypeId, content, keyVersion = null, encFormat = 1, clientMessageId = null, recipientIds,
     replyToMessageId = null, forwardedFromMessageId = null, systemEvent = null, systemTargetUserId = null, seen = false
 }) => {
     const [result] = await connection.execute(
-        `insert into messages_lst_t (conversation_id, sender_id, message_type_id, system_event, system_target_user_id, content, client_message_id, reply_to_message_id, forwarded_from_message_id)
-            values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [conversationId, senderId, messageTypeId, systemEvent, systemTargetUserId, content, clientMessageId, replyToMessageId, forwardedFromMessageId]);
+        `insert into messages_lst_t (conversation_id, sender_id, message_type_id, system_event, system_target_user_id, content, key_version, enc_format, client_message_id, reply_to_message_id, forwarded_from_message_id)
+            values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [conversationId, senderId, messageTypeId, systemEvent, systemTargetUserId, content, keyVersion, encFormat, clientMessageId, replyToMessageId, forwardedFromMessageId]);
     const messageId = result.insertId;
 
     if (recipientIds.length) {
@@ -89,16 +90,23 @@ const insertWithReceipts = async (connection, {
 };
 
 // FR-008 / ACID: the message, its receipts and the last-message pointers are written in one
-// transaction. nothing is announced until this commits
+// transaction. nothing is announced until this commits. checkKey: the message must be encrypted with
+// the chat's current key, and no new one may be due (a member left); otherwise nothing is written and
+// { keyOutdated } comes back, so the app fetches the key and sends again. returns { messageId }
 exports.insertMessageWithReceipts = (args) => {
     log('in insertMessageWithReceipts');
     return dbutils.executeTransaction(async (connection) => {
         // the insert below takes a shared lock on the conversation row for its foreign key check and
         // the update at the end needs an exclusive one. two concurrent sends in the same conversation
         // would deadlock on that upgrade, so take the exclusive lock up front: sends to one
-        // conversation now queue in commit order, which also keeps created_at monotonic per chat
-        await connection.execute('select conversation_id from conversations_lst_t where conversation_id = ? for update', [args.conversationId]);
-        return insertWithReceipts(connection, args);
+        // conversation now queue in commit order, which also keeps created_at monotonic per chat.
+        // the same lock makes the key check exact: no new key version can slip in before the insert
+        const [[conv]] = await connection.execute(
+            'select current_key_version, needs_new_key from conversations_lst_t where conversation_id = ? for update', [args.conversationId]);
+        if (args.checkKey && (!conv || conv.needs_new_key || conv.current_key_version !== args.keyVersion)) {
+            return { keyOutdated: { current_key_version: conv?.current_key_version ?? 0, needs_new_key: !!conv?.needs_new_key } };
+        }
+        return { messageId: await insertWithReceipts(connection, args) };
     }, 'insert message with receipts');
 };
 
@@ -181,42 +189,36 @@ exports.softDeleteWithinWindow = (messageId, senderId, windowMinutes) => {
 // the window is checked by the database clock against the stored created_at, inside the same
 // transaction that saves the previous text, so the history and the message can never disagree.
 // returns false when the message is not the sender's, is deleted, or is too old
-exports.editWithinWindow = (messageId, senderId, newContent, windowMinutes) => {
+// the new text is encrypted with the chat's current key (checked on the locked conversation row, like a
+// send); the previous text keeps the key version it was encrypted with. returns 'edited', 'outside'
+// (deleted, not theirs or past the window) or 'keyOutdated'
+exports.editWithinWindow = (messageId, senderId, newContent, keyVersion, windowMinutes) => {
     log('in editWithinWindow');
     return dbutils.executeTransaction(async (connection) => {
+        const [[conv]] = await connection.execute(
+            `select c.current_key_version, c.needs_new_key from conversations_lst_t c
+                join messages_lst_t m on m.conversation_id = c.conversation_id where m.message_id = ? for update`,
+            [messageId]);
+        if (!conv || conv.needs_new_key || conv.current_key_version !== keyVersion) return 'keyOutdated';
         const [[row]] = await connection.execute(
-            `select content from messages_lst_t
+            `select content, key_version, enc_format from messages_lst_t
                 where message_id = ? and sender_id = ? and is_deleted = 0 and is_active = 1
                   and created_at >= now(3) - interval ${Number(windowMinutes)} minute for update`,
             [messageId, senderId]);
-        if (!row) return false;
-        await connection.execute('insert into message_edits_t (message_id, old_content, edited_by) values (?, ?, ?)', [messageId, row.content, senderId]);
-        await connection.execute('update messages_lst_t set content = ?, is_edited = 1, edited_at = now(3) where message_id = ?', [newContent, messageId]);
-        return true;
+        if (!row) return 'outside';
+        await connection.execute('insert into message_edits_t (message_id, old_content, key_version, enc_format, edited_by) values (?, ?, ?, ?, ?)',
+            [messageId, row.content, row.key_version, row.enc_format, senderId]);
+        await connection.execute('update messages_lst_t set content = ?, key_version = ?, enc_format = 1, is_edited = 1, edited_at = now(3) where message_id = ?',
+            [newContent, keyVersion, messageId]);
+        return 'edited';
     }, 'edit message');
 };
 
 // earlier versions of a message, oldest first (each row is the text as it was before that edit)
 exports.getEdits = (messageId) => {
     log('in getEdits');
-    const qry = 'select old_content, edited_at from message_edits_t where message_id = ? and is_active = 1 order by edited_at, message_edit_id';
+    const qry = 'select old_content, key_version, enc_format, edited_at from message_edits_t where message_id = ? and is_active = 1 order by edited_at, message_edit_id';
     return dbutils.executeQuery(qry, [messageId], 'get message edits');
-};
-
-// ---- search ----
-
-// messages in one conversation containing the text, newest first, among those the viewer may see.
-// words of 3+ characters use the full-text index to narrow the rows; the LIKE then matches the exact
-// text (and covers short terms). deleted messages and group notices are never searched
-exports.search = (conversationId, viewerId, text, limit) => {
-    log('in search messages');
-    const like = `%${text.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
-    const words = text.split(/\s+/).map((w) => w.replace(/[^\p{L}\p{N}]/gu, '')).filter((w) => w.length >= 3);
-    const fulltext = words.length ? 'and match(m.content) against (? in boolean mode)' : '';
-    const params = [conversationId, viewerId, viewerId, ...(words.length ? [words.map((w) => `+${w}*`).join(' ')] : []), like];
-    const qry = `${MESSAGE_SELECT} where m.conversation_id = ? and m.is_active = 1 and m.is_deleted = 0 and mt.type_code <> 'SYSTEM' ${VISIBLE_TO} ${fulltext}
-          and m.content like ? ${MESSAGE_GROUP} order by m.created_at desc, m.message_id desc limit ${Number(limit)}`;
-    return dbutils.executeQuery(qry, params, 'search messages');
 };
 
 // ---- receipts ----

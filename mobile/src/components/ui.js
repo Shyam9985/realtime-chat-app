@@ -420,7 +420,7 @@ export function Dialog({ visible, icon, tone = 'default', title, message, childr
     <Modal transparent visible={!!visible} animationType="fade" onRequestClose={onClose} statusBarTranslucent>
       <Pressable onPress={dismissable ? onClose : undefined} style={{ flex: 1, backgroundColor: c.overlay, alignItems: 'center', justifyContent: 'center', padding: theme.space.xl }}>
         <Pressable onPress={() => {}} accessibilityRole="alert" accessibilityViewIsModal
-          style={{ width: '100%', maxWidth: 360, backgroundColor: c.headerBackground, borderRadius: 20, padding: theme.space.xl, borderWidth: theme.isDark ? 1 : 0, borderColor: c.border,
+          style={{ width: '100%', maxWidth: 360, maxHeight: '100%', backgroundColor: c.headerBackground, borderRadius: 20, padding: theme.space.xl, borderWidth: theme.isDark ? 1 : 0, borderColor: c.border,
             shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 12 }}>
           {icon ? (
             <View style={{ alignSelf: 'center', width: 56, height: 56, borderRadius: 28, marginBottom: theme.space.md, alignItems: 'center', justifyContent: 'center', backgroundColor: danger ? c.dangerSoft : c.accentSoft }}>
@@ -429,7 +429,13 @@ export function Dialog({ visible, icon, tone = 'default', title, message, childr
           ) : null}
           {title ? <Text style={{ fontSize: theme.font.lg, fontWeight: '700', color: c.text, textAlign: 'center' }}>{title}</Text> : null}
           {message ? <Text style={{ fontSize: theme.font.md, color: c.textMuted, textAlign: 'center', marginTop: theme.space.sm, lineHeight: Math.round(theme.font.md * 1.4) }}>{message}</Text> : null}
-          {children}
+          {/* a long body (message info in a big group: one row per member) scrolls; the title and the
+              buttons stay in view */}
+          {children ? (
+            <ScrollView style={{ flexShrink: 1 }} bounces={false} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator>
+              {children}
+            </ScrollView>
+          ) : null}
           {actions.length ? (
             <View style={{ flexDirection: 'row', gap: theme.space.sm, marginTop: theme.space.xl }}>
               {actions.map((a) => {

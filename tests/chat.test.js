@@ -31,7 +31,7 @@ test('health reports the database as up', async () => {
 });
 
 test('AT-001 duplicate registration is rejected', async () => {
-    const res = await h.api(app.baseUrl).post('/auth/signup', { email: A.email, password: A.password, fst_nm: 'Dup', date_of_birth: '1995-05-15' });
+    const res = await h.api(app.baseUrl).post('/auth/signup', { email: A.email, password: A.password, fst_nm: 'Dup', date_of_birth: '1995-05-15', keys: h.fakeKeySet() });
     assert.equal(res.status, 409);
     assert.equal(res.body.statusKey, 'DUPLICATE_RECORD');
 });
@@ -127,7 +127,7 @@ test('FR-007 / FR-027 payload validation over the socket', async () => {
     for (const payload of [
         { conversation_id: convId, content: '' },
         { conversation_id: convId, content: '    ' },
-        { conversation_id: convId, content: 'x'.repeat(2001) },
+        { conversation_id: convId, content: 'x'.repeat(9000) },     // the app stops at 2000 characters; the server bounds the encrypted size
         { conversation_id: convId },
         { content: 'no conversation' },
         { conversation_id: convId, content: 'ok', client_message_id: 'bad id with spaces' },
@@ -341,7 +341,7 @@ test('AT-012 / AT-014 / AT-015 sender deletes within the window; others see the 
         assert.ok(row.deleted_at);
     }
     const [{ content }] = await h.sql('select content from messages_lst_t where message_id = ?', [id]);
-    assert.equal(content, 'oops wrong chat', 'the row keeps its position and content for the record');
+    assert.equal(h.decryptText(content), 'oops wrong chat', 'the row keeps its position and (encrypted) content for the record');
 
     const again = await as(A).del(`/messages/${id}`);
     assert.equal(again.status, 200);

@@ -2,6 +2,7 @@ const resutils = require('../utils/response.utils');
 const validutils = require('../utils/validate.utils');
 const RESPONSE_STATUS = require('../utils/standard.messages');
 const authService = require('../services/authService');
+const keysVldtr = require('../validators/keysVldtr');
 const { getRequestContext } = require('../utils/request.utils');
 const { verifyAccessToken, stripBearer } = require('../utils/token.utils');
 const { log } = require('../utils/log.utils');
@@ -79,8 +80,9 @@ exports.signUp = async (req, res) => {
 
     try {
 
-        // validate payload
-        const validation = await validutils.validatePayload(body,
+        // validate payload: the account details here, the encryption keys (body.keys) by their own validator
+        const { keys: _keys, ...account } = body || {};
+        const validation = await validutils.validatePayload(account,
             {
                 email: { required: true, type: 'email', label: 'Email' },
                 password: { required: true, type: 'password', label: 'Password' },
@@ -91,10 +93,12 @@ exports.signUp = async (req, res) => {
             });
 
         if (!validation?.validationStatus) resutils.createError('validationFailed', validation.errors[0]);
+        // end-to-end encryption: the app made the keys on the phone; they are stored with the account
+        const keys = keysVldtr.validateSignUpKeys(body);
 
-        const result = await authService.signUpSrvc(body);
+        const result = await authService.signUpSrvc(body, keys);
 
-        return resutils.sendSuccessResponse(req, res, { id: result.user_id }, RESPONSE_STATUS.CREATED, { function: 'signup-controller' });
+        return resutils.sendSuccessResponse(req, res, { id: result.user_id, recovery_code_emailed: result.recovery_code_emailed }, RESPONSE_STATUS.CREATED, { function: 'signup-controller' });
 
     } catch (error) {
         return sendAuthError(req, res, error, 'signup controller',
@@ -148,7 +152,8 @@ exports.logIn = async (req, res) => {
         const sessionRes = await authService.establishSessionSrvc(userRow, sessionId, expiresAt, context);
 
         res.setHeader('access-token', sessionRes.token);
-        return resutils.sendSuccessResponse(req, res, { user: sessionRes.user }, RESPONSE_STATUS.DATA_FOUND, { function: 'login-controller' });
+        // the locked key backups go only to someone who just proved the password (null: no keys yet)
+        return resutils.sendSuccessResponse(req, res, { user: sessionRes.user, keys: sessionRes.keys }, RESPONSE_STATUS.DATA_FOUND, { function: 'login-controller' });
 
     } catch (error) {
         return sendAuthError(req, res, error, 'login controller',
@@ -207,8 +212,9 @@ exports.updatePassword = async (req, res) => {
     const body = req.body;
 
     try {
-        // validate req body
-        const validation = await validutils.validatePayload(body, {
+        // validate req body (the optional re-locked key backup, body.key_backup, by its own validator)
+        const { key_backup: _keyBackup, ...request } = body || {};
+        const validation = await validutils.validatePayload(request, {
             email: { required: true, type: 'email', label: 'Email' },
             newPassword: { required: true, type: 'password', label: 'Password' },
             usedFor: { required: false, type: 'string', label: 'used for' },
@@ -216,10 +222,12 @@ exports.updatePassword = async (req, res) => {
         })
 
         if (!validation?.validationStatus) resutils.createError('validationFailed', validation.errors[0]);
+        // the key backup locked again with the new password, when the phone has the key (else null)
+        const keyBackup = keysVldtr.validateOptionalPasswordBackup(body.key_backup);
 
-        await authService.updatePasswordSrvc(body);
+        const result = await authService.updatePasswordSrvc(body, keyBackup);
 
-        return resutils.sendSuccessResponse(req, res, [{ message: 'Password updated successfully.' }], RESPONSE_STATUS.PASSWORD_UPDATED, { function: 'update password' });
+        return resutils.sendSuccessResponse(req, res, [{ message: 'Password updated successfully.', key_backup_updated: result.key_backup_updated }], RESPONSE_STATUS.PASSWORD_UPDATED, { function: 'update password' });
 
     } catch (error) {
         return sendAuthError(req, res, error, 'update password controller',

@@ -1,6 +1,6 @@
 const resutils = require('../utils/response.utils');
 const { parseId } = require('../utils/validate.utils');
-const { validateContent, validateReplyToId } = require('./messagesVldtr');
+const { validateContent, validateKeyVersion, validateReplyToId } = require('./messagesVldtr');
 const { log } = require('../utils/log.utils');
 
 // request rules for scheduled messages. the time window is relative to now only, so it needs no database
@@ -19,23 +19,26 @@ const parseSendAt = (value) => {
 exports.conversationId = (value) => parseId(value, 'Conversation id');
 exports.scheduledId = (value) => parseId(value, 'Scheduled message id');
 
-// POST /conversations/:id/scheduled  { content, send_at, reply_to_message_id? }
+// POST /conversations/:id/scheduled  { content, key_version, send_at, reply_to_message_id? }
+// (content encrypted like a message, with the chat's current key)
 exports.validateCreate = (params = {}, body = {}) => {
     log('in scheduled validateCreate');
     return {
         conversationId: parseId(params.id, 'Conversation id'),
         content: validateContent(body.content),
+        keyVersion: validateKeyVersion(body.key_version),
         sendAt: parseSendAt(body.send_at),
         replyToMessageId: validateReplyToId(body.reply_to_message_id)
     };
 };
 
-// PATCH /scheduled/:id  { content?, send_at? }  - at least one of them
+// PATCH /scheduled/:id  { content?, key_version? (with content), send_at? }  - at least one of them
 exports.validateUpdate = (params = {}, body = {}) => {
     log('in scheduled validateUpdate');
     const scheduledId = parseId(params.id, 'Scheduled message id');
     const content = body.content !== undefined ? validateContent(body.content) : undefined;
+    const keyVersion = content !== undefined ? validateKeyVersion(body.key_version) : undefined;
     const sendAt = body.send_at !== undefined ? parseSendAt(body.send_at) : undefined;
     if (content === undefined && sendAt === undefined) resutils.createError('validationFailed', 'Nothing to change.');
-    return { scheduledId, content, sendAt };
+    return { scheduledId, content, keyVersion, sendAt };
 };
