@@ -85,6 +85,8 @@ T("conversations_lst_t", "chat", "one row per chat; user_pair_key makes a one-to
     C("user_pair_key", "VARCHAR(41)", comment="'lowUserId:highUserId' for ONE_TO_ONE, null for groups"),
     C("last_message_id", ID, comment="denormalised for the conversation list"),
     C("last_message_at", "DATETIME(3)"),
+    C("current_key_version", "INT UNSIGNED", False, "0", comment="0 = no chat key yet; new messages must use this version"),
+    C("needs_new_key", "TINYINT(1)", False, "0", comment="1 = members changed: the next sender's app makes a new version"),
     *STD()], "conversation_id",
     uniques=[("uq_conv_user_pair", ["user_pair_key"])],
     indexes=[("idx_conv_last_message_at", ["last_message_at"])],
@@ -123,7 +125,9 @@ T("messages_lst_t", "chat", "messages; soft delete via is_deleted within the 15 
     C("message_type_id", "INT UNSIGNED", False, "1"),
     C("system_event", "VARCHAR(30)", comment="SYSTEM notices: GROUP_CREATED | MEMBER_ADDED | MEMBER_REMOVED | MEMBER_LEFT | ADMIN_MADE | ADMIN_DISMISSED | ADMIN_ASSIGNED | NAME_CHANGED | DESCRIPTION_CHANGED"),
     C("system_target_user_id", ID, comment="SYSTEM notices: the member the notice is about"),
-    C("content", "TEXT"),
+    C("content", "TEXT", comment="enc_format 1: ciphertext, base64 (nonce + encrypted text + tag); enc_format 0: plain (SYSTEM notices)"),
+    C("key_version", "INT UNSIGNED", comment="the chat key version that encrypted it; null for SYSTEM notices"),
+    C("enc_format", "TINYINT UNSIGNED", False, "1", comment="0 = plain text (SYSTEM notices), 1 = XChaCha20-Poly1305 v1"),
     C("attachment_file_id", ID, comment="uploaded_files_lst_t.file_id for image / file messages"),
     C("reply_to_message_id", ID, comment="the message this one quotes (swipe to reply)"),
     C("forwarded_from_message_id", ID, comment="the message this one is a forwarded copy of"),
@@ -142,13 +146,14 @@ T("messages_lst_t", "chat", "messages; soft delete via is_deleted within the 15 
          ("fk_msg_reply_to", ["reply_to_message_id"], "messages_lst_t", ["message_id"], "SET NULL", False),
          ("fk_msg_forwarded_from", ["forwarded_from_message_id"], "messages_lst_t", ["message_id"], "SET NULL", False),
          ("fk_msg_system_target", ["system_target_user_id"], "users_lst_t", ["user_id"], "NO ACTION", False)],
-    fulltexts=[("ft_msg_content", ["content"])],
     layout=(1000, 400))
 
 T("message_edits_t", "chat", "previous versions of edited messages", [
     C("message_edit_id", ID, False, ai=True),
     C("message_id", ID, False),
-    C("old_content", "TEXT", comment="the text before this edit"),
+    C("old_content", "TEXT", comment="the text before this edit, encrypted like messages_lst_t.content"),
+    C("key_version", "INT UNSIGNED", comment="the chat key version that encrypted old_content"),
+    C("enc_format", "TINYINT UNSIGNED", False, "1", comment="1 = XChaCha20-Poly1305 v1"),
     C("edited_by", ID, False, comment="always the sender; kept for audits"),
     C("edited_at", "DATETIME(3)", False, "CURRENT_TIMESTAMP(3)"),
     *STD(3)], "message_edit_id",
@@ -161,7 +166,9 @@ T("scheduled_messages_t", "chat", "messages scheduled for a later date and time"
     C("scheduled_message_id", ID, False, ai=True),
     C("conversation_id", ID, False),
     C("sender_id", ID, False),
-    C("content", "TEXT", False),
+    C("content", "TEXT", False, comment="encrypted like messages_lst_t.content; sent as is at send_at"),
+    C("key_version", "INT UNSIGNED", False, comment="the chat key version that encrypted it"),
+    C("enc_format", "TINYINT UNSIGNED", False, "1", comment="1 = XChaCha20-Poly1305 v1"),
     C("reply_to_message_id", ID),
     C("send_at", "DATETIME(3)", False, comment="date and time to send, server time"),
     C("status", "VARCHAR(20)", False, "'PENDING'", comment="PENDING | SENDING | SENT | CANCELLED | FAILED"),
@@ -314,6 +321,36 @@ T("app_releases_t", "auth", "published app versions; the app compares its build 
     *STD()], "release_id",
     uniques=[("uq_release_version", ["version"]), ("uq_release_version_code", ["version_code"])],
     layout=(1540, 1150))
+
+T("user_keys_t", "auth", "end-to-end encryption: padlocks and locked private-key backups", [
+    C("user_id", ID, False),
+    C("key_version", "INT UNSIGNED", False, "1", comment='raised by "start fresh": a new padlock and key'),
+    C("public_key", "VARCHAR(64)", False, comment="X25519 public key, base64 (the padlock)"),
+    C("pw_locked_private_key", "VARCHAR(255)", False, comment="private key locked with a key made from the password (scrypt), base64"),
+    C("pw_kdf_salt", "VARCHAR(64)", False, comment="random salt for that scrypt, base64"),
+    C("pw_kdf_params", "VARCHAR(100)", False, comment="scrypt settings used, e.g. N=32768,r=8,p=1"),
+    C("pw_backup_valid", "TINYINT(1)", False, "1", comment="0 = password reset by email without the key at hand: the app must re-lock it"),
+    C("rc_locked_private_key", "VARCHAR(255)", False, comment="private key locked with the recovery code, base64"),
+    C("rc_kdf_salt", "VARCHAR(64)", False, comment="random salt for the recovery code, base64"),
+    *STD(3)], "user_id",
+    fks=[("fk_ukey_user", ["user_id"], "users_lst_t", ["user_id"], "NO ACTION", False)],
+    layout=(1840, 950))
+
+T("conversation_keys_t", "chat", "end-to-end encryption: each member's locked copy of each chat key version", [
+    C("conversation_key_id", ID, False, ai=True),
+    C("conversation_id", ID, False),
+    C("key_version", "INT UNSIGNED", False, comment="1, 2, ... ; messages say which version encrypted them"),
+    C("user_id", ID, False, comment="the member this copy is locked for"),
+    C("user_key_version", "INT UNSIGNED", False, comment="which of the member's padlocks locked it (user_keys_t.key_version)"),
+    C("locked_key", "VARCHAR(255)", False, comment="the chat key sealed with the member's padlock, base64"),
+    C("created_by", ID, False, comment="whose app made and locked it"),
+    *STD(3)], "conversation_key_id",
+    uniques=[("uq_ckey_conv_version_user", ["conversation_id", "key_version", "user_id"])],
+    indexes=[("idx_ckey_user", ["user_id", "conversation_id"])],
+    fks=[("fk_ckey_conversation", ["conversation_id"], "conversations_lst_t", ["conversation_id"], "NO ACTION", False),
+         ("fk_ckey_user", ["user_id"], "users_lst_t", ["user_id"], "NO ACTION", False),
+         ("fk_ckey_created_by", ["created_by"], "users_lst_t", ["user_id"], "NO ACTION", False)],
+    layout=(1840, 1250))
 
 BY = {t["name"]: t for t in TABLES}
 def col(t, name):

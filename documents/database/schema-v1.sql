@@ -68,6 +68,8 @@ CREATE TABLE IF NOT EXISTS `conversations_lst_t` (
   `user_pair_key` VARCHAR(41) NULL COMMENT '''lowUserId:highUserId'' for ONE_TO_ONE, null for groups',
   `last_message_id` BIGINT UNSIGNED NULL COMMENT 'denormalised for the conversation list',
   `last_message_at` DATETIME(3) NULL,
+  `current_key_version` INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '0 = no chat key yet; new messages must use this version',
+  `needs_new_key` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '1 = members changed: the next sender''s app makes a new version',
   `is_active` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '1 = active, 0 = soft deleted',
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -274,6 +276,45 @@ CREATE TABLE IF NOT EXISTS `app_releases_t` (
   UNIQUE KEY `uq_release_version_code` (`version_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='published app versions; the app compares its build with the newest';
 
+-- ---------------------------------------------------------------- user_keys_t
+CREATE TABLE IF NOT EXISTS `user_keys_t` (
+  `user_id` BIGINT UNSIGNED NOT NULL,
+  `key_version` INT UNSIGNED NOT NULL DEFAULT 1 COMMENT 'raised by "start fresh": a new padlock and key',
+  `public_key` VARCHAR(64) NOT NULL COMMENT 'X25519 public key, base64 (the padlock)',
+  `pw_locked_private_key` VARCHAR(255) NOT NULL COMMENT 'private key locked with a key made from the password (scrypt), base64',
+  `pw_kdf_salt` VARCHAR(64) NOT NULL COMMENT 'random salt for that scrypt, base64',
+  `pw_kdf_params` VARCHAR(100) NOT NULL COMMENT 'scrypt settings used, e.g. N=32768,r=8,p=1',
+  `pw_backup_valid` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '0 = password reset by email without the key at hand: the app must re-lock it',
+  `rc_locked_private_key` VARCHAR(255) NOT NULL COMMENT 'private key locked with the recovery code, base64',
+  `rc_kdf_salt` VARCHAR(64) NOT NULL COMMENT 'random salt for the recovery code, base64',
+  `is_active` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '1 = active, 0 = soft deleted',
+  `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `updated_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (`user_id`),
+  CONSTRAINT `fk_ukey_user` FOREIGN KEY (`user_id`) REFERENCES `users_lst_t` (`user_id`) ON DELETE NO ACTION ON UPDATE NO ACTION
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='end-to-end encryption: padlocks and locked private-key backups';
+
+-- ---------------------------------------------------------------- conversation_keys_t
+CREATE TABLE IF NOT EXISTS `conversation_keys_t` (
+  `conversation_key_id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `conversation_id` BIGINT UNSIGNED NOT NULL,
+  `key_version` INT UNSIGNED NOT NULL COMMENT '1, 2, ... ; messages say which version encrypted them',
+  `user_id` BIGINT UNSIGNED NOT NULL COMMENT 'the member this copy is locked for',
+  `user_key_version` INT UNSIGNED NOT NULL COMMENT 'which of the member''s padlocks locked it (user_keys_t.key_version)',
+  `locked_key` VARCHAR(255) NOT NULL COMMENT 'the chat key sealed with the member''s padlock, base64',
+  `created_by` BIGINT UNSIGNED NOT NULL COMMENT 'whose app made and locked it',
+  `is_active` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '1 = active, 0 = soft deleted',
+  `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `updated_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (`conversation_key_id`),
+  UNIQUE KEY `uq_ckey_conv_version_user` (`conversation_id`, `key_version`, `user_id`),
+  KEY `idx_ckey_user` (`user_id`, `conversation_id`),
+  KEY `fk_ckey_created_by_idx` (`created_by`),
+  CONSTRAINT `fk_ckey_conversation` FOREIGN KEY (`conversation_id`) REFERENCES `conversations_lst_t` (`conversation_id`) ON DELETE NO ACTION ON UPDATE NO ACTION,
+  CONSTRAINT `fk_ckey_user` FOREIGN KEY (`user_id`) REFERENCES `users_lst_t` (`user_id`) ON DELETE NO ACTION ON UPDATE NO ACTION,
+  CONSTRAINT `fk_ckey_created_by` FOREIGN KEY (`created_by`) REFERENCES `users_lst_t` (`user_id`) ON DELETE NO ACTION ON UPDATE NO ACTION
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='end-to-end encryption: each member''s locked copy of each chat key version';
+
 -- ---------------------------------------------------------------- messages_lst_t
 CREATE TABLE IF NOT EXISTS `messages_lst_t` (
   `message_id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -282,7 +323,9 @@ CREATE TABLE IF NOT EXISTS `messages_lst_t` (
   `message_type_id` INT UNSIGNED NOT NULL DEFAULT 1,
   `system_event` VARCHAR(30) NULL COMMENT 'SYSTEM notices: GROUP_CREATED | MEMBER_ADDED | MEMBER_REMOVED | MEMBER_LEFT | ADMIN_MADE | ADMIN_DISMISSED | ADMIN_ASSIGNED | NAME_CHANGED | DESCRIPTION_CHANGED',
   `system_target_user_id` BIGINT UNSIGNED NULL COMMENT 'SYSTEM notices: the member the notice is about',
-  `content` TEXT NULL,
+  `content` TEXT NULL COMMENT 'enc_format 1: ciphertext, base64 (nonce + encrypted text + tag); enc_format 0: plain (SYSTEM notices)',
+  `key_version` INT UNSIGNED NULL COMMENT 'the chat key version that encrypted it; null for SYSTEM notices',
+  `enc_format` TINYINT UNSIGNED NOT NULL DEFAULT 1 COMMENT '0 = plain text (SYSTEM notices), 1 = XChaCha20-Poly1305 v1',
   `attachment_file_id` BIGINT UNSIGNED NULL COMMENT 'uploaded_files_lst_t.file_id for image / file messages',
   `reply_to_message_id` BIGINT UNSIGNED NULL COMMENT 'the message this one quotes (swipe to reply)',
   `forwarded_from_message_id` BIGINT UNSIGNED NULL COMMENT 'the message this one is a forwarded copy of',
@@ -302,7 +345,6 @@ CREATE TABLE IF NOT EXISTS `messages_lst_t` (
   KEY `fk_msg_reply_to_idx` (`reply_to_message_id`),
   KEY `fk_msg_forwarded_from_idx` (`forwarded_from_message_id`),
   KEY `fk_msg_system_target_idx` (`system_target_user_id`),
-  FULLTEXT KEY `ft_msg_content` (`content`),
   CONSTRAINT `fk_msg_conversation` FOREIGN KEY (`conversation_id`) REFERENCES `conversations_lst_t` (`conversation_id`) ON DELETE NO ACTION ON UPDATE NO ACTION,
   CONSTRAINT `fk_msg_sender` FOREIGN KEY (`sender_id`) REFERENCES `users_lst_t` (`user_id`) ON DELETE NO ACTION ON UPDATE NO ACTION,
   CONSTRAINT `fk_msg_type` FOREIGN KEY (`message_type_id`) REFERENCES `message_type_master_t` (`message_type_id`) ON DELETE NO ACTION ON UPDATE NO ACTION,
@@ -316,7 +358,9 @@ CREATE TABLE IF NOT EXISTS `messages_lst_t` (
 CREATE TABLE IF NOT EXISTS `message_edits_t` (
   `message_edit_id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   `message_id` BIGINT UNSIGNED NOT NULL,
-  `old_content` TEXT NULL COMMENT 'the text before this edit',
+  `old_content` TEXT NULL COMMENT 'the text before this edit, encrypted like messages_lst_t.content',
+  `key_version` INT UNSIGNED NULL COMMENT 'the chat key version that encrypted old_content',
+  `enc_format` TINYINT UNSIGNED NOT NULL DEFAULT 1 COMMENT '1 = XChaCha20-Poly1305 v1',
   `edited_by` BIGINT UNSIGNED NOT NULL COMMENT 'always the sender; kept for audits',
   `edited_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   `is_active` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '1 = active, 0 = soft deleted',
@@ -334,7 +378,9 @@ CREATE TABLE IF NOT EXISTS `scheduled_messages_t` (
   `scheduled_message_id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   `conversation_id` BIGINT UNSIGNED NOT NULL,
   `sender_id` BIGINT UNSIGNED NOT NULL,
-  `content` TEXT NOT NULL,
+  `content` TEXT NOT NULL COMMENT 'encrypted like messages_lst_t.content; sent as is at send_at',
+  `key_version` INT UNSIGNED NOT NULL COMMENT 'the chat key version that encrypted it',
+  `enc_format` TINYINT UNSIGNED NOT NULL DEFAULT 1 COMMENT '1 = XChaCha20-Poly1305 v1',
   `reply_to_message_id` BIGINT UNSIGNED NULL,
   `send_at` DATETIME(3) NOT NULL COMMENT 'date and time to send, server time',
   `status` VARCHAR(20) NOT NULL DEFAULT 'PENDING' COMMENT 'PENDING | SENDING | SENT | CANCELLED | FAILED',
