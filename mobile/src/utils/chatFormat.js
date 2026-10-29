@@ -73,3 +73,15 @@ export const birthDateLabel = (value) => {
     const d = fromDateValue(value);
     return d ? `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}` : "";
 };
+
+// ---- presence: "Online" while their app is open, otherwise "last active today at 14:05"
+export const presenceLabel = (presence) => {
+    if (!presence) return null;
+    if (presence.online) return "Online";
+    if (!presence.last_seen_at) return null;
+    const d = asDate(presence.last_seen_at); const now = new Date();
+    const y = new Date(now); y.setDate(now.getDate() - 1);
+    const day = sameDay(d, now) ? "today" : sameDay(d, y) ? "yesterday"
+        : `${d.getDate()} ${MONTHS[d.getMonth()]}${d.getFullYear() !== now.getFullYear() ? ` ${d.getFullYear()}` : ""}`;
+    return `last active ${day} at ${timeOf(d)}`;
+};

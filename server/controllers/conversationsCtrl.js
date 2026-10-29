@@ -35,11 +35,11 @@ exports.getOrCreate = async (req, res) => {
     }
 };
 
-// GET /conversations/:id/messages?cursor=&limit=
+// GET /conversations/:id/messages?cursor=&limit=&days=  (days: the opening page, everything from the last N days)
 exports.history = async (req, res) => {
     log('in conversations history');
     try {
-        const page = await messagesService.historySrvc(req.user.user_id, req.params.id, req.query.cursor, req.query.limit);
+        const page = await messagesService.historySrvc(req.user.user_id, req.params.id, req.query.cursor, req.query.limit, req.query.days);
         return resutils.sendSuccessResponse(req, res, page, RESPONSE_STATUS.DATA_FOUND, { function: 'conversations history' });
     } catch (error) {
         return sendChatError(req, res, error, 'conversations history');

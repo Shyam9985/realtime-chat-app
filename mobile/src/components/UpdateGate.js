@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Text, View } from 'react-native';
-import * as Notifications from 'expo-notifications';
 import { useTheme } from '../theme/ThemeContext';
 import { Dialog, Muted } from './ui';
 import { checkForUpdate, downloadAndInstall, onUpdateCheckRequested, updatesSupported } from '../services/update.service';
+import { Notifications } from '../services/push.service';
 import { APP_VERSION } from '../config';
 
 const RECHECK_MS = 30 * 60 * 1000;      // when the app comes back to the foreground, at most every 30 minutes

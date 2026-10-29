@@ -71,3 +71,16 @@ test('PH-04 other members receive the stored photo', async () => {
     assert.equal(res.headers.get('content-type'), 'image/jpeg');
     assert.deepEqual(Buffer.from(await res.arrayBuffer()), fs.readFileSync(resolveStoredPath(row.file_path)));
 });
+
+test('PH-05 removing the photo deletes the row and the file; others then get "no photo"', async () => {
+    const [row] = await rowsOf(A);
+    const remove = () => fetch(`${app.baseUrl}/apiv1/files/profile-photo`, { method: 'DELETE', headers: { 'access-token': `Bearer ${A.token}` } });
+    assert.equal((await remove()).status, 200);
+    assert.equal((await rowsOf(A)).length, 0, 'no photo row left');
+    assert.equal(fs.existsSync(resolveStoredPath(row.file_path)), false, 'the file is gone from disk');
+    const [user] = await h.sql('select profile_photo_url from users_lst_t where user_id = ?', [A.user.user_id]);
+    assert.equal(user.profile_photo_url, null);
+    const seen = await fetch(`${app.baseUrl}/apiv1/users/${A.user.user_id}/photo`, { headers: { 'access-token': `Bearer ${B.token}` } });
+    assert.equal(seen.status, 404);
+    assert.equal((await remove()).status, 404, 'nothing left to remove');
+});

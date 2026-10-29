@@ -47,6 +47,7 @@ T("users_lst_t", "core", "accounts; user_nm holds the login id (the email)", [
     C("password_salt", "VARCHAR(255)"),
     C("profile_photo_url", "VARCHAR(500)"),
     C("last_login", "DATETIME"),
+    C("last_seen_at", "DATETIME(3)", comment="when the app last closed its live connection ('last seen')"),
     C("is_locked", "TINYINT(1)", False, "0"),
     C("login_attempts", "INT UNSIGNED", False, "0"),
     C("locked_until", "DATETIME"),

@@ -6,7 +6,8 @@ import { useChat } from '../contexts/ChatContext';
 import { useToast } from '../contexts/MessageContext';
 import { getUserProfile } from '../services/chat.service';
 import { Screen, Avatar, Button, Muted, Dialog, ProfileSkeleton, EmptyState, IconButton, Section, Divider, useUserPhoto } from '../components/ui';
-import { fullName } from '../utils/chatFormat';
+import ZoomableImage from '../components/ZoomableImage';
+import { fullName, presenceLabel } from '../utils/chatFormat';
 
 const memberSince = (value) => {
   if (!value) return '-';
@@ -60,6 +61,7 @@ export default function ContactInfoScreen({ route, navigation }) {
   useEffect(() => { load(); }, [load]);
 
   const name = fullName(profile);
+  const presence = profile?.is_me ? null : presenceLabel(chat.presence[userId] || (profile && { online: profile.online, last_seen_at: profile.last_seen_at }));
 
   const block = async () => {
     try {
@@ -103,7 +105,8 @@ export default function ContactInfoScreen({ route, navigation }) {
             {photo ? <Image source={{ uri: photo }} style={{ width: 132, height: 132, borderRadius: 66 }} /> : <Avatar user={profile} size={132} showPhoto={false} />}
           </Pressable>
           <Text style={{ fontSize: theme.font.xxl, fontWeight: '700', color: c.text, textAlign: 'center' }} testID="contact-name">{name}</Text>
-          <Muted style={{ fontSize: theme.font.md }}>{profile.email}</Muted>
+          {/* "Online" / "last active ...": live when they have a chat with you, else as loaded. none when blocked */}
+          {presence ? <Muted style={{ fontSize: theme.font.md }} testID="contact-presence">{presence}</Muted> : null}
           {profile.blocked_by_me ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: theme.space.xs, paddingHorizontal: theme.space.md, paddingVertical: 4, borderRadius: theme.radius.pill, backgroundColor: c.dangerSoft }}>
               <Ionicons name="ban" size={14} color={c.danger} />
@@ -144,7 +147,7 @@ export default function ContactInfoScreen({ route, navigation }) {
 
       <Modal visible={viewPhoto} transparent animationType="fade" onRequestClose={() => setViewPhoto(false)}>
         <Pressable onPress={() => setViewPhoto(false)} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', alignItems: 'center', justifyContent: 'center', padding: theme.space.xl }}>
-          {photo ? <Image source={{ uri: photo }} style={{ width: '100%', maxWidth: 420, aspectRatio: 1, borderRadius: theme.radius.lg }} resizeMode="contain" /> : null}
+          {photo ? <ZoomableImage uri={photo} style={{ width: '100%', maxWidth: 420, aspectRatio: 1, borderRadius: theme.radius.lg }} testID="photo-zoom" /> : null}
           <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: theme.font.lg, marginTop: theme.space.lg }}>{name}</Text>
           <IconButton name="close" size={26} color="#FFFFFF" onPress={() => setViewPhoto(false)} accessibilityLabel="Close" style={{ position: 'absolute', top: 48, right: 16 }} />
         </Pressable>

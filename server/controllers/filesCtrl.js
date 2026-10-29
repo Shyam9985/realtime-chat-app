@@ -91,6 +91,17 @@ exports.getProfilePhoto = async (req, res) => {
   }
 };
 
+// DELETE /files/profile-photo  - the logged in user removes their photo (row and file)
+exports.removeProfilePhoto = async (req, res) => {
+  log('in removeProfilePhoto');
+  try {
+    const result = await filesService.removeProfilePhotoSrvc(req.user?.user_id);
+    return resutils.sendSuccessResponse(req, res, result, RESPONSE_STATUS.DELETED, { function: "remove profile photo" });
+  } catch (error) {
+    return sendFilesError(req, res, error, "remove profile photo controller");
+  }
+};
+
 // streams another member's current profile photo (GET /users/:id/photo)
 exports.getUserPhoto = async (req, res) => {
   log('in getUserPhoto');

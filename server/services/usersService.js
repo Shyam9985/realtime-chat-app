@@ -1,4 +1,5 @@
 const usersMdl = require('../models/usersMdl');
+const presenceService = require('./presenceService');
 const blocksMdl = require('../models/blocksMdl');
 const resutils = require('../utils/response.utils');
 const { parseId, toIso } = require('../utils/validate.utils');
@@ -93,6 +94,7 @@ exports.getProfileSrvc = async (viewerId, userIdRaw) => {
     if (!row) resutils.createError('userNotFound', 'User not found.');
 
     const photoVisible = !!row.profile_photo_url && !row.has_blocked_me;
+    const hidePresence = userId !== me && (!!row.has_blocked_me || !!row.blocked_by_me);
     return {
         user_id: row.user_id,
         first_nm: row.first_nm,
@@ -104,5 +106,8 @@ exports.getProfileSrvc = async (viewerId, userIdRaw) => {
         blocked_by_me: !!row.blocked_by_me,
         conversation_id: row.conversation_id || null,
         is_me: userId === me,
+        // online / last seen: hidden when either of the two has blocked the other (like the photo)
+        online: hidePresence ? null : presenceService.isOnline(userId),
+        last_seen_at: hidePresence ? null : toIso(row.last_seen_at),
     };
 };

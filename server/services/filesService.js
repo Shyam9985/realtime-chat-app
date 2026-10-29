@@ -133,6 +133,19 @@ exports.saveStreamedFileSrvc = async (readStream, meta, uploadDir = DEFAULT_UPLO
     }
 };
 
+// the user removes their profile photo: the rows and the user's pointer go in one transaction, then
+// the files themselves are deleted from disk. no photo to remove answers noPhoto
+exports.removeProfilePhotoSrvc = async (userId) => {
+    log('in removeProfilePhotoSrvc');
+    const { oldPaths } = await filesMdl.removeProfilePhotoMdl(userId);
+    if (!oldPaths.length) resutils.createError("noPhoto", "No profile photo found.");
+    for (const oldPath of oldPaths) {
+        await fs.promises.unlink(fileutils.resolveStoredPath(oldPath)).catch(() => {});   // already gone is fine
+    }
+    log(`[photo] user ${userId} removed their photo (${oldPaths.length} file(s) deleted)`);
+    return { removed: oldPaths.length };
+};
+
 // resolves a user's current profile photo to an absolute path for streaming back
 exports.getProfilePhotoSrvc = async (user_id) => {
     log('in getProfilePhotoSrvc');

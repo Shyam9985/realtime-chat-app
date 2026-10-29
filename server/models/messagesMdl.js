@@ -118,6 +118,16 @@ exports.getHistory = (conversationId, viewerId, cursor, limit) => {
     return dbutils.executeQuery(qry, params, 'get history');
 };
 
+// the opening page of a chat: the messages of the last `days` days the viewer may see, newest first,
+// at most `cap` (days and cap are validated by the service and inlined, like LIMIT)
+exports.getRecentHistory = (conversationId, viewerId, days, cap) => {
+    log('in getRecentHistory');
+    const qry = `${MESSAGE_SELECT} where m.conversation_id = ? and m.is_active = 1 ${VISIBLE_TO}
+          and m.created_at >= now(3) - interval ${Number(days)} day ${MESSAGE_GROUP}
+        order by m.created_at desc, m.message_id desc limit ${Number(cap)}`;
+    return dbutils.executeQuery(qry, [conversationId, viewerId, viewerId], 'get recent history');
+};
+
 // one message, only when the viewer may see it (else nothing, as if it did not exist)
 exports.getVisibleById = (messageId, viewerId) => {
     log('in getVisibleById');

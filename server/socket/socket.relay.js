@@ -64,6 +64,11 @@ const registerRelay = (io) => {
         for (const id of userIds) io.to(room(id)).emit('group:updated', { conversation_id: conversationId });
     });
 
+    // someone came online or went offline: the people with a one-to-one chat with them update the header
+    appEvents.on('presence.changed', ({ userId, online, lastSeenAt, watchers }) => {
+        for (const id of watchers) io.to(room(id)).emit('presence:update', { user_id: userId, online, last_seen_at: lastSeenAt });
+    });
+
     // an exited group deleted from this user's list (their other devices drop it too)
     appEvents.on('conversation.removed', ({ userId, conversationId }) => {
         io.to(room(userId)).emit('conversation:removed', { conversation_id: conversationId });

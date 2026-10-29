@@ -9,11 +9,11 @@ import { Screen, Banner, IconButton, Button, EmptyState, Avatar, GroupAvatar, Di
 import { MessageBubble, DaySeparator, StatusTicks, ReplyQuote, SystemNotice } from '../components/MessageBubble';
 import ScheduleDialog from '../components/ScheduleDialog';
 import { exportChatAsPdf } from '../utils/exportChat';
-import { DELETE_WINDOW_MINUTES, MESSAGE_MAX_LENGTH, dayLabel, firstName, fullName, fullStamp, isGroup, isNotice, isSameDay, minutesSince, noticeText, timeOf } from '../utils/chatFormat';
+import { DELETE_WINDOW_MINUTES, MESSAGE_MAX_LENGTH, dayLabel, firstName, fullName, fullStamp, isGroup, isNotice, isSameDay, minutesSince, noticeText, presenceLabel, timeOf } from '../utils/chatFormat';
 
 const EDIT_WINDOW_MINUTES = 15;
 
-// whatsapp-style header: avatar, name and a line underneath (the email; in a group, who is in it).
+// whatsapp-style header: avatar, name and a line underneath ("Online" / last active; in a group, who is in it).
 // tapping it opens the contact's profile or the group's info
 function HeaderTitle({ user, group, title, subtitle, color, onPress }) {
   return (
@@ -128,7 +128,10 @@ export default function ChatScreen({ route, navigation }) {
     chatApi.getGroup(conversationId).then((g) => { if (alive) setMembers(g.members); }).catch(() => {});
     return () => { alive = false; };
   }, [conversationId, group, isMember, groupVersion]);
-  const subtitle = !group ? other?.email
+  // one-to-one: "Online" / "last active today at 14:05", loaded on open and kept live by presence updates
+  const otherId = other?.user_id;
+  useEffect(() => { if (!group && otherId) chat.loadPresence(otherId); }, [group, otherId]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const subtitle = !group ? presenceLabel(chat.presence[otherId])
     : !isMember ? 'You’re no longer a member'
       : members ? [...members.filter((m) => !m.is_me).map((m) => firstName(fullName(m))), 'You'].join(', ') : 'Tap for group info';
 

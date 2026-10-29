@@ -7,12 +7,13 @@ import { useAuth } from '../contexts/AuthContext';
 import { useChat } from '../contexts/ChatContext';
 import { useToast } from '../contexts/MessageContext';
 import { getProfile, updateProfile } from '../services/profile.service';
-import { loadPhoto, savePhoto } from '../store/photoStore';
-import { getProfilePhoto, uploadFile } from '../services/files.service';
+import { deletePhoto, loadPhoto, savePhoto } from '../store/photoStore';
+import { getProfilePhoto, removeProfilePhoto, uploadFile } from '../services/files.service';
 import { handleLogout, resetPasswordMail } from '../services/auth.service';
 import { listBlocked } from '../services/chat.service';
 import { APP_VERSION } from '../config';
 import { Screen, Avatar, Button, Muted, Divider, Dialog, Spinner, IconButton, Section, FormScroll, PeopleListSkeleton, TextField } from '../components/ui';
+import ZoomableImage from '../components/ZoomableImage';
 import DateField from '../components/DateField';
 import VerifyOtp from '../components/VerifyOtp';
 import UpdatePassword from '../components/UpdatePassword';
@@ -87,6 +88,7 @@ export default function ProfileScreen() {
   const [showPhotoView, setShowPhotoView] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [confirmSignOut, setConfirmSignOut] = useState(false);
+  const [confirmRemovePhoto, setConfirmRemovePhoto] = useState(false);
   const [blocked, setBlocked] = useState(null);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({});
@@ -136,6 +138,23 @@ export default function ProfileScreen() {
       toast.success('Profile photo updated. Your friends see it too.');
     } catch (e) {
       toast.error('Could not update the photo. Please try again.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // removed on the server (row and file) and from this phone; friends see the initials again
+  const removePhoto = async () => {
+    setUploading(true);
+    try {
+      const response = await removeProfilePhoto();
+      // already gone on the server (404) still clears this phone's copy
+      if (!response?.success && response?.statusKey !== 'NO_DATA_FOUND') { toast.error(response?.error || response?.message || 'Could not remove the photo.'); return; }
+      await deletePhoto(user?.user_id).catch(() => {});
+      setPhotoUrl(null);
+      setUser((u) => ({ ...u, profile_photo: null }));
+      authCtx.updateUser({ profile_photo_url: null });
+      toast.success('Profile photo removed.');
     } finally {
       setUploading(false);
     }
@@ -327,11 +346,17 @@ export default function ProfileScreen() {
         actions={[{ label: 'Cancel' }, { label: 'Sign out', style: 'destructive', onPress: confirmLogout, testID: 'confirm-sign-out' }]}
         onClose={() => setConfirmSignOut(false)} />
 
+      <Dialog visible={confirmRemovePhoto} icon="trash-outline" tone="danger" title="Remove profile photo?" message="Your friends will see your initials instead."
+        actions={[{ label: 'Cancel' }, { label: 'Remove', style: 'destructive', onPress: removePhoto, testID: 'confirm-remove-photo' }]}
+        onClose={() => setConfirmRemovePhoto(false)} />
+
       <Modal visible={showPhotoView} transparent animationType="fade" onRequestClose={() => setShowPhotoView(false)}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', alignItems: 'center', justifyContent: 'center', padding: theme.space.xl }}>
-          {photoUrl ? <Image source={{ uri: photoUrl }} style={{ width: '100%', maxWidth: 420, aspectRatio: 1, borderRadius: theme.radius.lg }} resizeMode="contain" /> : null}
+          {photoUrl ? <ZoomableImage uri={photoUrl} style={{ width: '100%', maxWidth: 420, aspectRatio: 1, borderRadius: theme.radius.lg }} testID="photo-zoom" /> : null}
           <Button title="Change Photo" icon="camera-outline" onPress={() => { setShowPhotoView(false); setTimeout(choosePhoto, 250); }}
             style={{ marginTop: theme.space.xl, width: '100%', maxWidth: 420 }} />
+          <Button title="Remove Photo" icon="trash-outline" variant="danger" onPress={() => { setShowPhotoView(false); setTimeout(() => setConfirmRemovePhoto(true), 250); }}
+            style={{ marginTop: theme.space.md, width: '100%', maxWidth: 420 }} testID="photo-remove" />
           <IconButton name="close" size={26} color="#FFFFFF" onPress={() => setShowPhotoView(false)} accessibilityLabel="Close" style={{ position: 'absolute', top: 48, right: 16 }} />
         </View>
       </Modal>

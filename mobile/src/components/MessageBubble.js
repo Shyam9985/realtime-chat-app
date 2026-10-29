@@ -1,5 +1,5 @@
 import React, { useMemo, useRef } from 'react';
-import { Animated, PanResponder, Pressable, Text, Vibration, View } from 'react-native';
+import { Animated, Linking, PanResponder, Pressable, Text, Vibration, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { timeOf, DELETED_PLACEHOLDER } from '../utils/chatFormat';
@@ -14,19 +14,56 @@ export function StatusTicks({ status, color, seenColor }) {
   return null;
 }
 
-// the text with every match of `highlight` marked (case-insensitive), for in-chat search
-function Highlighted({ text, highlight, style, markColor }) {
-  if (!highlight || !text) return <Text selectable={false} style={style}>{text}</Text>;
+// web links in a message: http(s)://... or www.... (opened as https). punctuation that ends a sentence
+// after a link ("see https://x.com.") is not part of it
+const LINK = /\b(?:https?:\/\/|www\.)[^\s<>"]+/gi;
+const TRAILING = /[.,!?;:'")\]}]+$/;
+export const linksIn = (text) => {
+  const found = [];
+  for (const match of text.matchAll(LINK)) {
+    const url = match[0].replace(TRAILING, '');
+    found.push({ start: match.index, end: match.index + url.length, url });
+  }
+  return found;
+};
+const openLink = (url) => {
+  const href = /^https?:\/\//i.test(url) ? url : `https://${url}`;
+  Linking.openURL(href).catch(() => {});
+};
+
+// a piece of text with every match of `highlight` marked (case-insensitive), for in-chat search
+const marked = (text, highlight, markColor, keyBase) => {
+  if (!highlight) return [text];
   const lower = text.toLowerCase();
   const needle = highlight.toLowerCase();
   const parts = [];
   let from = 0;
   for (let at = lower.indexOf(needle); at >= 0; at = lower.indexOf(needle, from)) {
     if (at > from) parts.push(text.slice(from, at));
-    parts.push(<Text key={at} style={{ backgroundColor: markColor, fontWeight: '700' }}>{text.slice(at, at + needle.length)}</Text>);
+    parts.push(<Text key={`${keyBase}-${at}`} style={{ backgroundColor: markColor, fontWeight: '700' }}>{text.slice(at, at + needle.length)}</Text>);
     from = at + needle.length;
   }
   if (from < text.length) parts.push(text.slice(from));
+  return parts;
+};
+
+// the message text: links are tappable (underlined, opened in the browser) and search matches marked,
+// inside links too. a long press on a link still selects the message
+function MessageText({ text, highlight, style, markColor, linkColor, onLongPress }) {
+  if (!text) return <Text selectable={false} style={style}>{text}</Text>;
+  const parts = [];
+  let from = 0;
+  for (const link of linksIn(text)) {
+    if (link.start > from) parts.push(...marked(text.slice(from, link.start), highlight, markColor, `t${from}`));
+    parts.push(
+      <Text key={`l${link.start}`} onPress={() => openLink(link.url)} onLongPress={onLongPress} suppressHighlighting={false}
+        accessibilityRole="link" accessibilityHint="Opens in your browser" style={{ color: linkColor, textDecorationLine: 'underline' }}>
+        {marked(link.url, highlight, markColor, `l${link.start}`)}
+      </Text>
+    );
+    from = link.end;
+  }
+  if (from < text.length) parts.push(...marked(text.slice(from), highlight, markColor, `t${from}`));
   return <Text selectable={false} style={style}>{parts}</Text>;
 }
 
@@ -129,7 +166,8 @@ export function MessageBubble({ message, mine, senderName, onLongPress, onPress,
               <Text style={{ color: meta, fontStyle: 'italic', fontSize: theme.font.md }}>{DELETED_PLACEHOLDER}</Text>
             </View>
           ) : (
-            <Highlighted text={message.content} highlight={highlight} markColor={c.highlight || 'rgba(255,214,10,0.55)'} style={{ color: fg, fontSize: theme.font.md, lineHeight: Math.round(theme.font.md * 1.4) }} />
+            <MessageText text={message.content} highlight={highlight} markColor={c.highlight || 'rgba(255,214,10,0.55)'} onLongPress={onLongPress}
+              linkColor={mine ? fg : c.accent} style={{ color: fg, fontSize: theme.font.md, lineHeight: Math.round(theme.font.md * 1.4) }} />
           )}
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4, marginTop: 2 }}>
             {failed ? <Text style={{ color: '#F15C6D', fontSize: theme.font.xs }}>{message.error || 'Not sent'} · tap to retry</Text> : null}

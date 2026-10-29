@@ -1,4 +1,4 @@
-import { upload, download } from "../store/api.service";
+import { upload, download, remove } from "../store/api.service";
 
 // Ported from the web client's services/files.service.js. One adaptation: a device has no
 // URL.createObjectURL, so the downloaded photo is handed back as a data uri instead of a Blob.
@@ -31,6 +31,15 @@ export async function getUserPhoto(userId) {
         return await blobToDataUri(blob);
     } catch {
         return null;
+    }
+}
+
+// removes the logged in user's photo; the server deletes the file too. answers the api response
+export async function removeProfilePhoto() {
+    try {
+        return await remove("files/profile-photo");
+    } catch (error) {
+        return error;
     }
 }
 

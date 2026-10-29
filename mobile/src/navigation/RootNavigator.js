@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { ImageBackground } from 'react-native';
+import { ImageBackground, Text, View } from 'react-native';
 import { NavigationContainer, DefaultTheme, DarkTheme, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createMaterialTopTabNavigator } from '@react-navigation/material-top-tabs';
+import { Header } from '@react-navigation/elements';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useChat } from '../contexts/ChatContext';
 import { Screen, Spinner } from '../components/ui';
 import { openChatsFromNotifications } from '../services/push.service';
 import LoginScreen from '../screens/LoginScreen';
@@ -26,7 +28,7 @@ import GroupInfoScreen from '../screens/GroupInfoScreen';
 import AddMembersScreen from '../screens/AddMembersScreen';
 
 const Stack = createNativeStackNavigator();
-const Tabs = createBottomTabNavigator();
+const Tabs = createMaterialTopTabNavigator();
 
 const TAB_ICONS = {
   Chats: ['chatbubbles', 'chatbubbles-outline'],
@@ -53,21 +55,54 @@ const useHeaderOptions = () => {
  */
 const TAB_BAR_HEIGHT = 64;
 
-// the app's navigation: chats, profile and about, always at the bottom of the screen
+// a tab's icon; the Chats tab carries the unread badge on its top-right corner
+function TabIcon({ name, focused, color, badge }) {
+  const { theme } = useTheme();
+  return (
+    <View style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}>
+      <Ionicons name={TAB_ICONS[name][focused ? 0 : 1]} size={24} color={color} />
+      {badge ? (
+        <View style={{ position: 'absolute', top: -4, left: 16, minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 4, backgroundColor: theme.colors.accentBright, alignItems: 'center', justifyContent: 'center' }}
+          accessibilityLabel={`${badge} chats with unread messages`}>
+          <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '700' }}>{badge}</Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+// the app's navigation: chats, profile and about, at the bottom of the screen. a swipe left or right
+// moves between them (the pager), a tap on a tab too. each tab keeps its page header (title and the
+// buttons a screen sets with navigation.setOptions)
 function HomeTabs() {
   const { theme } = useTheme();
   const header = useHeaderOptions();
   const insets = useSafeAreaInsets();
   const c = theme.colors;
+  // the Chats tab's badge: how many chats have unread messages (archived ones stay out, like the list)
+  const { conversations } = useChat();
+  const unreadChats = conversations.filter((x) => x.unread_count > 0 && !x.is_archived).length;
+  const badge = unreadChats ? (unreadChats > 99 ? '99+' : String(unreadChats)) : null;
   return (
     <Tabs.Navigator
+      tabBarPosition="bottom"
+      screenLayout={({ options, children }) => (
+        <View style={{ flex: 1, backgroundColor: c.background }}>
+          <Header title={options.title} headerRight={options.headerRight} headerStyle={header.headerStyle} headerTintColor={header.headerTintColor}
+            headerTitleStyle={header.headerTitleStyle} headerShadowVisible={false} headerTitleAlign="left" />
+          {children}
+        </View>
+      )}
       screenOptions={({ route }) => ({
-        ...header,
         tabBarActiveTintColor: c.accent,
         tabBarInactiveTintColor: c.textMuted,
-        tabBarStyle: { backgroundColor: c.tabBarBackground, borderTopColor: c.border, height: TAB_BAR_HEIGHT + insets.bottom, paddingTop: 4, paddingBottom: 4 + insets.bottom },
-        tabBarLabelStyle: { fontSize: 12, lineHeight: 16, fontWeight: '600' },
-        tabBarIcon: ({ focused, color, size }) => <Ionicons name={TAB_ICONS[route.name][focused ? 0 : 1]} size={size} color={color} />,
+        tabBarShowIcon: true,
+        tabBarPressColor: 'transparent',
+        tabBarStyle: { backgroundColor: c.tabBarBackground, borderTopWidth: 1, borderTopColor: c.border, height: TAB_BAR_HEIGHT + insets.bottom, paddingBottom: insets.bottom, elevation: 0, shadowOpacity: 0 },
+        tabBarItemStyle: { height: TAB_BAR_HEIGHT, paddingVertical: 4 },
+        tabBarIndicatorStyle: { height: 0 },
+        tabBarLabelStyle: { fontSize: 12, lineHeight: 16, fontWeight: '600', textTransform: 'none', margin: 0 },
+        tabBarIcon: ({ focused, color }) => <TabIcon name={route.name} focused={focused} color={color} badge={route.name === 'Chats' ? badge : null} />,
       })}
     >
       <Tabs.Screen name="Chats" component={ConversationsScreen} options={{ title: 'Chats' }} />

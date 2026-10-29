@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS `users_lst_t` (
   `password_salt` VARCHAR(255) NULL,
   `profile_photo_url` VARCHAR(500) NULL,
   `last_login` DATETIME NULL,
+  `last_seen_at` DATETIME(3) NULL COMMENT 'when the app last closed its live connection (''last seen'')',
   `is_locked` TINYINT(1) NOT NULL DEFAULT 0,
   `login_attempts` INT UNSIGNED NOT NULL DEFAULT 0,
   `locked_until` DATETIME NULL,

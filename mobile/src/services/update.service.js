@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import Constants, { ExecutionEnvironment } from 'expo-constants';
+import { isRunningInExpoGo } from 'expo';
 import { File, Paths } from 'expo-file-system';
 import * as IntentLauncher from 'expo-intent-launcher';
 import { get } from '../store/api.service';
@@ -14,7 +14,7 @@ import { APP_VERSION_CODE } from '../config';
 const APK_TYPE = 'application/vnd.android.package-archive';
 const FLAG_GRANT_READ_URI_PERMISSION = 1;     // the installer may read our downloaded file
 
-export const updatesSupported = () => Platform.OS === 'android' && Constants.executionEnvironment !== ExecutionEnvironment.StoreClient;
+export const updatesSupported = () => Platform.OS === 'android' && !isRunningInExpoGo();
 
 // "check now": a tapped "new version" notification, or that push arriving while the app is open.
 // the update dialog listens (it lives in App.js, these callers do not know it)

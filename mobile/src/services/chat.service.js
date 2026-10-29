@@ -13,8 +13,10 @@ export const unblockUser = (userId) => data(remove(`users/${userId}/block`));
 
 export const listConversations = () => data(get("conversations")).then((d) => d.conversations);
 export const getOrCreateConversation = (userId) => data(post("conversations", { user_id: userId }));
-export const getHistory = (conversationId, cursor = null, limit = 30) =>
-    data(get(`conversations/${conversationId}/messages`, cursor ? { cursor, limit } : { limit }));
+// days: the opening page holds everything from the last N days (a quiet chat: its newest messages);
+// older pages come with the cursor, `limit` at a time
+export const getHistory = (conversationId, cursor = null, limit = 30, days = null) =>
+    data(get(`conversations/${conversationId}/messages`, cursor ? { cursor, limit } : days ? { days } : { limit }));
 export const markSeen = (conversationId) => data(post(`conversations/${conversationId}/seen`, {}));
 export const markDelivered = (messageId) => data(post(`messages/${messageId}/delivered`, {}));
 export const sendMessage = (conversationId, content, clientMessageId, replyToMessageId = null) =>

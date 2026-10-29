@@ -1,8 +1,7 @@
 import { AppState } from 'react-native';
 import * as TaskManager from 'expo-task-manager';
-import * as Notifications from 'expo-notifications';
 import { post } from '../store/api.service';
-import { pushSupported } from './push.service';
+import { Notifications, pushSupported } from './push.service';
 import { requestUpdateCheck } from './update.service';
 
 /*

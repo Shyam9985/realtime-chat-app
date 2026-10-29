@@ -16,6 +16,8 @@ const MAX_FORWARD_TARGETS = 10;
 const MAX_SEARCH_RESULTS = 100;
 const DEFAULT_PAGE = 30;
 const MAX_PAGE = 100;
+const RECENT_MIN = 20;      // opening a chat: at least this many messages, even if older than the window
+const RECENT_CAP = 300;     // and at most this many from the window, however busy it was
 
 const statusOf = (row) => (row.seen_at ? 'SEEN' : row.delivered_at ? 'DELIVERED' : 'SENT');
 const { nameOf } = conversationsService;
@@ -226,7 +228,7 @@ const decodeCursor = (value) => {
 // FR-010: newest first, ordered by (created_at, message_id); next_cursor continues backwards. only
 // what the caller can see: in a group, what was sent while they were in it (and not by someone they
 // blocked); someone who exited keeps reading what they received
-exports.historySrvc = async (userId, conversationIdRaw, cursorRaw, limitRaw) => {
+exports.historySrvc = async (userId, conversationIdRaw, cursorRaw, limitRaw, daysRaw) => {
     log('in historySrvc');
     const conversationId = parseId(conversationIdRaw, 'Conversation id');
     await conversationsService.assertReaderSrvc(conversationId, userId);
@@ -235,6 +237,20 @@ exports.historySrvc = async (userId, conversationIdRaw, cursorRaw, limitRaw) => 
     if (!Number.isInteger(limit) || limit < 1) limit = DEFAULT_PAGE;
     if (limit > MAX_PAGE) limit = MAX_PAGE;
     const cursor = decodeCursor(cursorRaw);
+
+    // opening a chat with ?days=N: everything from the last N days (at most RECENT_CAP), so the first
+    // screen holds a whole recent conversation. a quiet chat with fewer than RECENT_MIN of them gets its
+    // newest messages instead, so it never opens nearly empty. older pages follow with the cursor
+    if (!cursor && daysRaw !== undefined) {
+        const days = Number.parseInt(daysRaw, 10);
+        if (!Number.isInteger(days) || days < 1 || days > 90) resutils.createError('validationFailed', 'days must be a whole number from 1 to 90.');
+        const recent = await messagesMdl.getRecentHistory(conversationId, Number(userId), days, RECENT_CAP);
+        if (recent.length >= RECENT_MIN) {
+            // there may be older messages before the window: the next scroll asks (an empty answer ends it)
+            return { messages: recent.map(toMessageDto), next_cursor: encodeCursor(recent[recent.length - 1]), has_more: true };
+        }
+        limit = RECENT_MIN;
+    }
 
     const rows = await messagesMdl.getHistory(conversationId, Number(userId), cursor, limit + 1);
     const hasMore = rows.length > limit;

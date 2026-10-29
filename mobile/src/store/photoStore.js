@@ -17,6 +17,13 @@ export async function loadPhoto(userId) {
   return file.exists ? `${file.uri}?v=${file.modificationTime || 0}` : null;
 }
 
+// the photo was removed: this phone's copy goes too
+export async function deletePhoto(userId) {
+  if (!userId) return;
+  const file = nativeFile(userId);
+  if (file.exists) file.delete();
+}
+
 // copies a picked image into app storage, replacing any earlier photo; returns its new uri
 export async function savePhoto(userId, pickedUri) {
   const { File } = require('expo-file-system');

@@ -72,7 +72,7 @@ app.use(
 
 // YaapZone is mobile only: the app's requests carry no origin and are allowed; every browser
 // origin is refused
-const allowedOrigins = [];
+const allowedOrigins = ['http://localhost:8081'];
 // cors setup
 const corsOptions = {
     origin: (origin, callback) => {

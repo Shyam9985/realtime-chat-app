@@ -17,7 +17,9 @@ const ChatContext = createContext(null);
 
 // scheduledVersion: per conversation, bumped when the sender's scheduled messages change (screens refetch)
 // groupVersion: per group, bumped when its members, roles, name or description change (screens refetch)
-const initialState = { conversations: [], conversationsStatus: "idle", conversationsError: null, threads: {}, socketStatus: "disconnected", scheduledVersion: {}, groupVersion: {} };
+// presence: per user { online, last_seen_at } for the "Online" / "last active ..." line
+const initialState = { conversations: [], conversationsStatus: "idle", conversationsError: null, threads: {}, socketStatus: "disconnected", scheduledVersion: {}, groupVersion: {}, presence: {} };
+const OPENING_DAYS = 7;     // a chat opens with its last week of messages
 const emptyThread = () => ({ messages: [], nextCursor: null, hasMore: true, status: "idle", error: null });
 
 const ts = (v) => (v ? new Date(v).getTime() : 0);
@@ -100,6 +102,7 @@ function reducer(state, action) {
         case "PREVIEW_CONTENT": return { ...state, conversations: state.conversations.map((c) => (c.conversation_id === action.message.conversation_id && c.last_message?.message_id === action.message.message_id ? { ...c, last_message: { ...c.last_message, content: action.message.content } } : c)) };
         case "UNREAD_CLEARED": return { ...state, conversations: state.conversations.map((c) => (c.unread_count ? { ...c, unread_count: 0 } : c)) };
         case "SCHEDULED_CHANGED": return { ...state, scheduledVersion: { ...state.scheduledVersion, [action.id]: (state.scheduledVersion[action.id] || 0) + 1 } };
+        case "PRESENCE": return { ...state, presence: { ...state.presence, [action.userId]: { online: action.online, last_seen_at: action.lastSeenAt } } };
         case "GROUP_CHANGED": return { ...state, groupVersion: { ...state.groupVersion, [action.id]: (state.groupVersion[action.id] || 0) + 1 } };
         // a group deleted from the list after exiting it: the chat and its messages leave this phone's state
         case "CONVERSATION_REMOVE": {
@@ -131,7 +134,8 @@ export function ChatProvider({ children }) {
     const loadHistory = useCallback(async (conversationId, cursor = null, refresh = false) => {
         dispatch({ type: "THREAD_LOADING", id: conversationId });
         try {
-            const page = await chatApi.getHistory(conversationId, cursor);
+            // opening (no cursor): the last week at once; scrolling up: older pages
+            const page = await chatApi.getHistory(conversationId, cursor, 30, cursor ? null : OPENING_DAYS);
             dispatch({ type: "THREAD_LOADED", id: conversationId, messages: page.messages, nextCursor: page.next_cursor, hasMore: page.has_more, refresh });
         } catch (error) {
             dispatch({ type: "THREAD_ERROR", id: conversationId, error: error?.error || error?.message || "Could not load messages." });
@@ -258,6 +262,14 @@ export function ChatProvider({ children }) {
         catch (error) { if (error?.statusKey === "NOT_A_MEMBER") dispatch({ type: "CONVERSATION_REMOVE", id: conversationId }); }
     }, []);
 
+    // someone's "Online" / "last active": loaded with their profile, then kept current by presence:update
+    const loadPresence = useCallback(async (userId) => {
+        try {
+            const user = await chatApi.getUserProfile(userId);
+            dispatch({ type: "PRESENCE", userId, online: user.online, lastSeenAt: user.last_seen_at });
+        } catch (_) { /* no line under the name */ }
+    }, []);
+
     // groups. skipped: the people who could not be added (blocked, or no longer on YaapZone)
     const createGroup = useCallback(async (title, description, memberIds) => {
         const { conversation, skipped_user_ids: skipped } = await chatApi.createGroup(title, description, memberIds);
@@ -325,15 +337,16 @@ export function ChatProvider({ children }) {
             // a group changed (members, roles, name): its summary is reloaded, open group screens refetch
             socket.on("group:updated", ({ conversation_id }) => { refreshConversation(conversation_id); dispatch({ type: "GROUP_CHANGED", id: conversation_id }); }),
             socket.on("conversation:removed", ({ conversation_id }) => dispatch({ type: "CONVERSATION_REMOVE", id: conversation_id })),
+            socket.on("presence:update", ({ user_id, online, last_seen_at }) => dispatch({ type: "PRESENCE", userId: user_id, online, lastSeenAt: last_seen_at })),
         ];
         return () => { offs.forEach((off) => off && off()); stopWatchingToken(); };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [authStatus, refreshConversations, refreshConversation, loadHistory, sendSeen, sendDelivered, state.conversations.length]);
 
     const value = useMemo(() => ({ ...state, myId, refreshConversations, openConversation, closeConversation, loadOlder, sendMessage, retryMessage, discardMessage, deleteMessage, startConversation, blockUser, unblockUser,
-        editMessage, forwardMessage, updateConversationSettings, readAll, ensureMessageLoaded, refreshConversation, createGroup, leaveGroup, deleteGroup }),
+        editMessage, forwardMessage, updateConversationSettings, readAll, ensureMessageLoaded, refreshConversation, createGroup, leaveGroup, deleteGroup, loadPresence }),
         [state, myId, refreshConversations, openConversation, closeConversation, loadOlder, sendMessage, retryMessage, discardMessage, deleteMessage, startConversation, blockUser, unblockUser,
-            editMessage, forwardMessage, updateConversationSettings, readAll, ensureMessageLoaded, refreshConversation, createGroup, leaveGroup, deleteGroup]);
+            editMessage, forwardMessage, updateConversationSettings, readAll, ensureMessageLoaded, refreshConversation, createGroup, leaveGroup, deleteGroup, loadPresence]);
     return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;
 }
 

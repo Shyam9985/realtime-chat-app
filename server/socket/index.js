@@ -4,6 +4,7 @@ const { registerHandlers } = require('./socket.handlers');
 const { registerRelay, room } = require('./socket.relay');
 const messagesService = require('../services/messagesService');
 const { registerPushRelay } = require('../services/pushService');
+const presenceService = require('../services/presenceService');
 const { logBlock } = require('../utils/log.utils');
 
 /*
@@ -32,6 +33,12 @@ const initSocket = (httpServer, { allowedOrigins }) => {
         logBlock('[socket] connected:', `user ${userId} socket ${socket.id}`);
 
         registerHandlers(io, socket);
+
+        // online while any of the user's phones is connected; "last seen" when the last one leaves
+        presenceService.connectedSrvc(userId).catch((error) => console.error('[presence] connect failed:', error.message));
+        socket.on('disconnect', () => {
+            presenceService.disconnectedSrvc(userId).catch((error) => console.error('[presence] disconnect failed:', error.message));
+        });
 
         try {
             const count = await messagesService.markPendingDeliveredSrvc(userId);

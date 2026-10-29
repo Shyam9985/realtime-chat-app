@@ -1,7 +1,6 @@
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Constants, { ExecutionEnvironment } from 'expo-constants';
-import * as Notifications from 'expo-notifications';
+import { isRunningInExpoGo } from 'expo';
 import { post } from '../store/api.service';
 
 /*
@@ -13,8 +12,12 @@ import { post } from '../store/api.service';
 const TOKEN_KEY = 'yaapzone.push-token';
 export const CHANNEL_ID = 'messages';
 
-export const pushSupported = () => Platform.OS === 'android' && Constants.executionEnvironment !== ExecutionEnvironment.StoreClient;
+export const pushSupported = () => Platform.OS === 'android' && !isRunningInExpoGo();
 const supported = pushSupported;
+
+// loaded only where push works: importing expo-notifications at all needs its native topic module
+// (ExpoTopicSubscriptionModule), which Expo Go does not have, so a plain import crashes Expo Go at start
+export const Notifications = supported() ? require('expo-notifications') : null;
 
 // tell the server this phone is ours; keep the token so sign-out can withdraw exactly this one
 const sendToken = async (token) => {

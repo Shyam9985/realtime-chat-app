@@ -58,6 +58,22 @@ exports.replaceProfilePhotoMdl = (data) => {
     }, 'replace profile photo');
 };
 
+// the user removes their photo: every photo row deleted and the user's pointer cleared, in ONE
+// transaction. returns the files' paths so the caller removes them from disk after the commit
+exports.removeProfilePhotoMdl = (userId) => {
+    log('in removeProfilePhotoMdl');
+    return dbutils.executeTransaction(async (connection) => {
+        const [old] = await connection.execute(
+            "select file_id, file_path from uploaded_files_lst_t where entity_type = 'USER_PROFILE' and entity_id = ? for update",
+            [userId]);
+        await connection.execute('update users_lst_t set profile_photo_url = null where user_id = ?', [userId]);
+        if (old.length) {
+            await connection.execute(`delete from uploaded_files_lst_t where file_id in (${old.map(() => '?').join(', ')})`, old.map((o) => o.file_id));
+        }
+        return { oldPaths: old.map((o) => o.file_path) };
+    }, 'remove profile photo');
+};
+
 // latest active file attached to an entity (e.g. a user's current profile photo)
 exports.getActiveFileByEntityMdl = (entity_type, entity_id) => {
     log('in getActiveFileByEntityMdl');
