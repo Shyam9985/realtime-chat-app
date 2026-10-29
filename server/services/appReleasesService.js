@@ -67,11 +67,8 @@ exports.publishSrvc = async (releaseKey, body = {}) => {
     }
     const [release] = await appReleasesMdl.getLatest();
     // the push never fails the publish: the release is recorded, and the app finds it at its next start anyway
-    const pushed = await pushService.sendToAllDevices({
-        type: 'update', version: release.version, mandatory: release.is_mandatory ? '1' : '0',
-        title: `YaapZone ${release.version} is available`,
-        body: release.is_mandatory ? 'This update is required. Tap to install it.' : 'Tap to see what’s new and update.',
-    }).catch((error) => { console.error('[push] could not announce the release:', error.message); return { sent: 0, failed: 0 }; });
+    const pushed = await pushService.announceRelease(release)
+        .catch((error) => { console.error('[push] could not announce the release:', error.message); return { sent: 0, failed: 0 }; });
     return { release: toDto(release), notified_devices: pushed.sent };
 };
 

@@ -1,5 +1,4 @@
 const fs = require("fs");
-const path = require("path");
 const { pipeline } = require("stream/promises");
 const resutils = require("../utils/response.utils");
 const RESPONSE_STATUS = require("../utils/standard.messages");
@@ -7,9 +6,8 @@ const filesService = require("../services/filesService");
 const fileutils = require("../utils/files.utils");
 const { log } = require('../utils/log.utils');
 
-// profile photos get their own corner of the uploads area; the service
-// falls back to its default directory when a caller passes nothing
-const PROFILE_PHOTO_DIR = path.join(__dirname, "../uploads/profile-photos");
+// profile photos get their own corner of the uploads area (UPLOADS_DIR, see files.utils)
+const PROFILE_PHOTO_DIR = fileutils.PROFILE_PHOTO_DIR;
 
 // maps service/stream errors to http responses, mirroring settingsCtrl's pattern
 const sendFilesError = (req, res, error, location) => {

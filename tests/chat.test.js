@@ -404,8 +404,8 @@ test('another member\'s profile and photo, and what a block hides', async () => 
     assert.equal(up.status, 201);
     const photo = await fetch(`${app.baseUrl}/apiv1/users/${A.user.user_id}/photo`, { headers: { 'access-token': `Bearer ${B.token}` } });
     assert.equal(photo.status, 200);
-    assert.equal(photo.headers.get('content-type'), 'image/png');
-    assert.deepEqual(Buffer.from(await photo.arrayBuffer()), PNG);
+    assert.equal(photo.headers.get('content-type'), 'image/jpeg', 'every photo is stored as a compressed jpeg');
+    assert.deepEqual([...Buffer.from(await photo.arrayBuffer()).subarray(0, 3)], [0xff, 0xd8, 0xff], 'jpeg bytes');
     const withPhoto = (await as(B).get(`/users/${A.user.user_id}`)).body.data.user;
     assert.equal(withPhoto.has_photo, true);
     assert.ok(withPhoto.profile_photo_url);

@@ -8,6 +8,7 @@ import { useChat } from '../contexts/ChatContext';
 import { useToast } from '../contexts/MessageContext';
 import { getProfile, updateProfile } from '../services/profile.service';
 import { loadPhoto, savePhoto } from '../store/photoStore';
+import { getProfilePhoto, uploadFile } from '../services/files.service';
 import { handleLogout, resetPasswordMail } from '../services/auth.service';
 import { listBlocked } from '../services/chat.service';
 import { APP_VERSION } from '../config';
@@ -18,9 +19,9 @@ import UpdatePassword from '../components/UpdatePassword';
 import * as validate from '../utils/ValidateUtils';
 import { birthDateLabel, fullName } from '../utils/chatFormat';
 
-// what the upload endpoint accepts (server/utils/files.utils.js)
+// what the upload endpoint accepts (server/utils/files.utils.js); the server stores a compressed copy of at most 1 MB
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
-const MAX_BYTES = 10 * 1024 * 1024;
+const MAX_BYTES = 5 * 1024 * 1024;
 
 // label and value, as the web profile card listed the user's details
 function Field({ label, value, last }) {
@@ -98,9 +99,10 @@ export default function ProfileScreen() {
       const response = await getProfile();
       if (response?.success) {
         setUser(response.data);
-        // the photo lives on this device, not on the server
+        // this phone's own copy first (instant, offline); otherwise the one on the server (a new phone)
         const uri = await loadPhoto(response.data?.user_id).catch(() => null);
         if (uri) setPhotoUrl(uri);
+        else if (response.data?.profile_photo) setPhotoUrl(await getProfilePhoto());
       } else {
         toast.error(response?.error || response?.message);
       }
@@ -118,15 +120,22 @@ export default function ProfileScreen() {
     const blob = await (await fetch(asset.uri)).blob();
     const type = (asset.mimeType || blob.type || '').toLowerCase();
     if (!ALLOWED_TYPES.includes(type)) { toast.warning('Please choose a JPG, PNG or WEBP image.'); return; }
-    if ((asset.fileSize || blob.size) > MAX_BYTES) { toast.warning('The photo must be 10 MB or smaller.'); return; }
+    if ((asset.fileSize || blob.size) > MAX_BYTES) { toast.warning('The photo must be 5 MB or smaller.'); return; }
 
-    // kept in this app's own storage on the device; nothing is uploaded
+    // uploaded so other members see it (the server compresses it and replaces the old one), and kept on
+    // this phone too, so it shows at once and offline
     setUploading(true);
     try {
+      const extension = type === 'image/png' ? 'png' : type === 'image/webp' ? 'webp' : 'jpg';
+      const response = await uploadFile(blob, null, { name: `profile.${extension}`, type });
+      if (!response?.success) { toast.error(response?.error || response?.message || 'Could not upload the photo.'); return; }
       setPhotoUrl(await savePhoto(user?.user_id, asset.uri));
-      toast.success('Profile photo updated.');
+      const photoPath = response.data?.file_path || null;
+      setUser((u) => ({ ...u, profile_photo: photoPath }));
+      authCtx.updateUser({ profile_photo_url: photoPath });
+      toast.success('Profile photo updated. Your friends see it too.');
     } catch (e) {
-      toast.error('Unable to save the photo on this device.');
+      toast.error('Could not update the photo. Please try again.');
     } finally {
       setUploading(false);
     }

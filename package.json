@@ -38,6 +38,7 @@
     "node-schedule": "^2.1.1",
     "nodemailer": "^9.0.3",
     "redis": "^6.2.1",
+    "sharp": "^0.35.5",
     "socket.io": "^4.8.4",
     "ua-parser-js": "^2.0.10"
   }

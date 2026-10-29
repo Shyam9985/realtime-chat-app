@@ -35,6 +35,29 @@ exports.insertProfilePhotoMdl = (data) => {
     return dbutils.executeTransactionQueries(queries, 'insert profile photo transaction');
 }
 
+// a new profile photo REPLACES the old one, in ONE transaction: the new row, the user's pointer, and
+// the old rows deleted. returns the old files' paths so the caller removes them from disk after the
+// commit (a file is never deleted for a change that then rolls back)
+exports.replaceProfilePhotoMdl = (data) => {
+    log('in replaceProfilePhotoMdl');
+    return dbutils.executeTransaction(async (connection) => {
+        const [old] = await connection.execute(
+            "select file_id, file_path from uploaded_files_lst_t where entity_type = 'USER_PROFILE' and entity_id = ? for update",
+            [data.entity_id]);
+        const [inserted] = await connection.execute(
+            `insert into uploaded_files_lst_t
+                (original_nm, stored_nm, file_path, extension, mime_type, size_bytes, checksum_sha256, entity_type, entity_id, uploaded_by)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [data.original_nm, data.stored_nm, data.file_path, data.extension, data.mime_type,
+                data.size_bytes, data.checksum_sha256, data.entity_type, data.entity_id, data.uploaded_by]);
+        await connection.execute('update users_lst_t set profile_photo_url = ? where is_active = 1 and user_id = ?', [data.file_path, data.entity_id]);
+        if (old.length) {
+            await connection.execute(`delete from uploaded_files_lst_t where file_id in (${old.map(() => '?').join(', ')})`, old.map((o) => o.file_id));
+        }
+        return { fileId: inserted.insertId, oldPaths: old.map((o) => o.file_path) };
+    }, 'replace profile photo');
+};
+
 // latest active file attached to an entity (e.g. a user's current profile photo)
 exports.getActiveFileByEntityMdl = (entity_type, entity_id) => {
     log('in getActiveFileByEntityMdl');

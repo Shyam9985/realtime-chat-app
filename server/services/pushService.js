@@ -8,9 +8,18 @@ const { log } = require('../utils/log.utils');
  * Push notifications. Every new message is announced on the app event bus (the same announcement the
  * socket relay turns into message:new); this turns it into a Firebase push to each recipient's phones.
  * It runs after the message is saved and never blocks or fails a send: a slow or broken Firebase only
- * means no notification. The push is DATA-only (no "notification" part): the phone's background task
- * decides what to show, and marks the message delivered even while the app is closed.
+ * means no notification. The push is a data message in the layout expo-notifications understands on
+ * android: it shows `title` / `message` itself on the `channelId` channel (no app code needed, so it
+ * works however the phone is asleep), and `body` (a JSON string) becomes the notification's data, which
+ * a tap reads to open the chat. The phone's background task, which also receives it, only marks the
+ * message delivered.
  */
+const CHANNEL_ID = 'messages';           // created by the app (push.service.js) before it registers
+
+// the fields expo-notifications reads to present a data push, plus our own for the background task
+const notificationFields = ({ title, text, data }) => ({
+    title, message: text, channelId: CHANNEL_ID, body: JSON.stringify(data),
+});
 const BODY_MAX = 240;            // the notification shows a preview, not the whole message
 const BATCH = 500;               // firebase's limit per multicast call
 
@@ -26,8 +35,7 @@ const contentOf = async (message) => {
     const group = conversation?.type_code === 'GROUP';
     return {
         title: group ? conversation.title : sender,
-        body: preview(group ? `${sender.split(' ')[0]}: ${message.content}` : message.content),
-        is_group: group ? '1' : '0',
+        text: preview(group ? `${sender.split(' ')[0]}: ${message.content}` : message.content),
     };
 };
 
@@ -65,16 +73,26 @@ const sendToAllDevices = async (data) => {
 // group notices ("Maya added Noah") are not pushed
 const onMessageCreated = async ({ message, recipientIds }) => {
     if (message.message_type === 'SYSTEM' || !recipientIds.length) return;
-    const content = await contentOf(message);
-    // firebase data values must be strings
+    const { title, text } = await contentOf(message);
+    // firebase data values must be strings. type / message_id are read by the background task (delivered)
     await sendToUsers(recipientIds, {
         type: 'message',
         message_id: String(message.message_id),
         conversation_id: String(message.conversation_id),
-        sender_id: String(message.sender_id),
-        ...content,
+        ...notificationFields({ title, text, data: { type: 'message', conversation_id: message.conversation_id, message_id: message.message_id } }),
     });
 };
+
+// "YaapZone x.y.z is available" to every registered phone; a tap opens the update dialog
+const announceRelease = (release) => sendToAllDevices({
+    type: 'update',
+    version: release.version,
+    ...notificationFields({
+        title: `YaapZone ${release.version} is available`,
+        text: release.is_mandatory ? 'This update is required. Tap to install it.' : 'Tap to see what’s new and update.',
+        data: { type: 'update', version: release.version },
+    }),
+});
 
 let registered = false;
 const registerPushRelay = () => {
@@ -85,4 +103,4 @@ const registerPushRelay = () => {
     });
 };
 
-module.exports = { registerPushRelay, sendToUsers, sendToAllDevices };
+module.exports = { registerPushRelay, sendToUsers, sendToAllDevices, announceRelease };

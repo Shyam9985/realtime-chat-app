@@ -17,11 +17,20 @@ require('dotenv').config({ quiet: true });
 
 const ROOT = path.join(__dirname, '..');
 const APK = path.join(ROOT, 'mobile/android/app/build/outputs/apk/release/app-release.apk');
-const fail = (message) => { console.error(`\n✖ ${message}`); process.exit(1); };
-const step = (message) => console.log(`\n▶ ${message}`);
+// plain text only: some windows consoles drop symbols like arrows and ticks (and the lines with them)
+const fail = (message) => { console.error(`\nERROR: ${message}`); process.exit(1); };
+const step = (message) => console.log(`\n>> ${message}`);
+console.log('publish-release: starting');
 
 const args = process.argv.slice(2);
-const option = (name) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : undefined; };
+// the words after an option, up to the next --option: powershell can drop the quotes around the notes
+const option = (name) => {
+    const i = args.indexOf(name);
+    if (i < 0) return undefined;
+    const words = [];
+    for (let j = i + 1; j < args.length && !args[j].startsWith('--'); j += 1) words.push(args[j]);
+    return words.join(' ');
+};
 const notes = option('--notes');
 const mandatory = args.includes('--mandatory');
 const skipUpload = args.includes('--skip-upload');
@@ -74,6 +83,6 @@ const apkVersionCode = () => {
     });
     const body = await res.json().catch(() => null);
     if (!res.ok) fail(`The server refused (${res.status}): ${body?.error || body?.message || 'no answer'}${skipUpload ? '' : '\n  The GitHub Release exists: fix the problem, then re-run with --skip-upload.'}`);
-    console.log(`\n✔ YaapZone ${version} is published: ${apkUrl}`);
+    console.log(`\nOK: YaapZone ${version} is published: ${apkUrl}`);
     console.log(`  "update available" was sent to ${body.data.notified_devices} phone(s); everyone else sees it at their next start.`);
 })().catch((error) => fail(error.message));

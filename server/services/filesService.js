@@ -12,7 +12,7 @@ const { parseId } = require("../utils/validate.utils");
 const { log } = require('../utils/log.utils');
 
 // used when the caller does not specify a destination
-const DEFAULT_UPLOAD_DIR = path.join(__dirname, "../uploads");
+const DEFAULT_UPLOAD_DIR = fileutils.PROFILE_PHOTO_DIR;
 
 // builds a typed error that pipeline can carry out of the Transform stream
 const validationError = (message) => {
@@ -21,8 +21,9 @@ const validationError = (message) => {
     return error;
 };
 
-// validates an uploaded image and streams it to disk under a crypto-random name;
-// chunks flow request -> inspector -> disk, so memory never holds the whole file
+// validates an uploaded image (up to 5 MB) and streams it to a temporary file; chunks flow
+// request -> inspector -> disk, so memory never holds the whole upload. the photo actually kept is a
+// compressed JPEG of at most 1 MB, and it replaces the user's previous photo completely (row and file)
 exports.saveStreamedFileSrvc = async (readStream, meta, uploadDir = DEFAULT_UPLOAD_DIR) => {
     log('in saveStreamedFileSrvc');
     // metadata checks need no bytes — fail before touching the stream or the disk
@@ -82,42 +83,53 @@ exports.saveStreamedFileSrvc = async (readStream, meta, uploadDir = DEFAULT_UPLO
         },
     });
 
+    // the upload lands in a temporary file; only its compressed copy is kept
+    const uploadPath = `${filePath}.upload`;
+    const keptName = `${path.basename(storedName, extension)}.jpg`;
+    const keptPath = path.join(uploadDir, keptName);
     try {
         // pipeline moves the chunks and owns backpressure: when the disk lags,
         // it pauses the request and resumes it once the write buffer drains
-        await pipeline(readStream, inspector, fs.createWriteStream(filePath));
+        await pipeline(readStream, inspector, fs.createWriteStream(uploadPath));
         log(`[upload] stream complete — ${receivedBytes} bytes in ${chunkCount} chunks, file is on disk`);
 
         if (!receivedBytes) {
             resutils.createError("validationFailed", "No file data received in the request body.");
         }
+        log(`[upload] sha256 of the upload (built chunk by chunk): ${hash.digest("hex")}`);
+
+        const photo = await fileutils.compressProfilePhoto(uploadPath);
+        await fs.promises.writeFile(keptPath, photo);
+        log(`[upload] compressed ${receivedBytes} -> ${photo.length} bytes (jpeg)`);
 
         const record = {
             original_nm: originalName,
-            stored_nm: storedName,
-            file_path: path.relative(path.join(__dirname, ".."), filePath).replace(/\\/g, "/"),
-            extension: extension.slice(1),
-            mime_type: meta.mimeType,
-            size_bytes: receivedBytes,
-            checksum_sha256: hash.digest("hex"),
+            stored_nm: keptName,
+            file_path: fileutils.toStoredPath(keptPath),
+            extension: "jpg",
+            mime_type: "image/jpeg",
+            size_bytes: photo.length,
+            checksum_sha256: fileutils.sha256(photo),
             entity_type: "USER_PROFILE",
             entity_id: meta.uploadedBy || null, // a profile photo belongs to its uploader
             uploaded_by: meta.uploadedBy || null,
         };
 
-        log(`[upload] sha256 (built chunk by chunk): ${record.checksum_sha256}`);
+        // new row + user's pointer + the old rows removed, in one transaction; then the old files
+        const { fileId, oldPaths } = await filesMdl.replaceProfilePhotoMdl(record);
+        log(`[upload] db transaction committed — new photo ${fileId}, ${oldPaths.length} old one(s) replaced`);
+        for (const oldPath of oldPaths) {
+            await fs.promises.unlink(fileutils.resolveStoredPath(oldPath)).catch(() => {});   // already gone is fine
+        }
 
-        // history row + user's current-photo pointer land in one transaction
-        const [insertResult] = await filesMdl.insertProfilePhotoMdl(record);
-        log(`[upload] db transaction committed — history row + users_lst_t.profile_photo_url`);
-
-        return { file_id: insertResult.insertId, ...record };
+        return { file_id: fileId, ...record };
     } catch (error) {
-        console.log(`[upload] FAILED (${error.message}) — removing partial file from disk`);
-
-        // any failure from here on can leave a partial file behind — never keep orphans
-        await fs.promises.unlink(filePath).catch(() => {});
+        console.log(`[upload] FAILED (${error.message}) — removing the files of this attempt`);
+        // never keep orphans: neither the upload nor a compressed copy of a failed attempt
+        await fs.promises.unlink(keptPath).catch(() => {});
         throw error;
+    } finally {
+        await fs.promises.unlink(uploadPath).catch(() => {});
     }
 };
 
@@ -130,7 +142,7 @@ exports.getProfilePhotoSrvc = async (user_id) => {
     }
 
     // db rows can outlive files (manual deletes, disk moves) — verify before streaming
-    const absolutePath = path.join(__dirname, "..", photo.file_path);
+    const absolutePath = fileutils.resolveStoredPath(photo.file_path);
     try {
         await fs.promises.access(absolutePath);
     } catch {
