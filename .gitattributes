@@ -1,0 +1,6 @@
+# never convert line endings in binary files (a pdf can look like text to git)
+*.pdf binary
+*.png binary
+*.jpg binary
+*.mwb binary
+*.apk binary
