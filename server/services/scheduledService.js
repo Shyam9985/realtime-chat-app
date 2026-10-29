@@ -1,4 +1,5 @@
 const scheduledMdl = require('../models/scheduledMdl');
+const keysMdl = require('../models/keysMdl');
 const messagesService = require('./messagesService');
 const conversationsService = require('./conversationsService');
 const resutils = require('../utils/response.utils');
@@ -20,6 +21,8 @@ const toDto = (row) => ({
     scheduled_message_id: row.scheduled_message_id,
     conversation_id: row.conversation_id,
     content: row.content,
+    key_version: row.key_version,
+    enc_format: row.enc_format,
     reply_to_message_id: row.reply_to_message_id,
     send_at: toIso(row.send_at),
     status: row.status,
@@ -37,13 +40,23 @@ const loadOwnPending = async (userId, scheduledId) => {
     return row;
 };
 
-// { content, sendAt, replyToMessageId } as scheduledVldtr.validateCreate returns them
-exports.createSrvc = async (userId, conversationId, { content, sendAt, replyToMessageId: replyToId = null }) => {
+// the text is encrypted when it is scheduled, so it must use the chat's current key at that moment
+// (it goes out as it is later, even if the chat has a newer key by then)
+const assertCurrentKey = async (conversationId, keyVersion) => {
+    const { state } = await keysMdl.getKeyState(conversationId);
+    if (!state || state.needs_new_key || state.current_key_version !== keyVersion) {
+        resutils.createError('keyOutdated', 'This chat has a newer key. Fetch it and schedule again.');
+    }
+};
+
+// { content, keyVersion, sendAt, replyToMessageId } as scheduledVldtr.validateCreate returns them
+exports.createSrvc = async (userId, conversationId, { content, keyVersion, sendAt, replyToMessageId: replyToId = null }) => {
     log('in scheduled createSrvc');
     await conversationsService.assertMemberSrvc(conversationId, userId);
     const replyToMessageId = await messagesService.validateReplyTarget(conversationId, replyToId, userId);
+    await assertCurrentKey(conversationId, keyVersion);
 
-    const result = await scheduledMdl.create({ conversationId, senderId: userId, content, replyToMessageId, sendAt });
+    const result = await scheduledMdl.create({ conversationId, senderId: userId, content, keyVersion, replyToMessageId, sendAt });
     const [row] = await scheduledMdl.getById(result.insertId);
     changed(userId, conversationId);
     return { scheduled: toDto(row) };
@@ -56,12 +69,13 @@ exports.listSrvc = async (userId, conversationId) => {
     return { scheduled: rows.map(toDto) };
 };
 
-// { content?, sendAt? } (undefined = unchanged) - only while it is still pending
-exports.updateSrvc = async (userId, scheduledId, { content, sendAt }) => {
+// { content?, keyVersion?, sendAt? } (undefined = unchanged) - only while it is still pending
+exports.updateSrvc = async (userId, scheduledId, { content, keyVersion, sendAt }) => {
     log('in scheduled updateSrvc');
     const row = await loadOwnPending(userId, scheduledId);
+    if (content !== undefined) await assertCurrentKey(row.conversation_id, keyVersion);
 
-    const result = await scheduledMdl.update(row.scheduled_message_id, userId, { content, sendAt });
+    const result = await scheduledMdl.update(row.scheduled_message_id, userId, { content, keyVersion, sendAt });
     if (!result.affectedRows) resutils.createError('scheduledNotPending', 'This message has already been sent or cancelled.');
     const [updated] = await scheduledMdl.getById(row.scheduled_message_id);
     changed(userId, row.conversation_id);
@@ -85,6 +99,8 @@ const sendOne = async (row) => {
         const { message } = await messagesService.createMessage(row.sender_id, {
             conversationId: row.conversation_id,
             content: row.content,
+            keyVersion: row.key_version,
+            checkKey: false,
             clientMessageId: `sched-${row.scheduled_message_id}`,
             replyToMessageId: row.reply_to_message_id
         });

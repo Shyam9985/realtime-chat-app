@@ -62,9 +62,11 @@ exports.getMemberIds = async (conversationId) => {
 // the newest message THIS member can see (their own pointer), so a group they exited stops moving and
 // a sender they blocked never shows up in it. groups they exited stay listed, read-only (left_at)
 const SUMMARY_SELECT = `select c.conversation_id, ct.type_code as conversation_type, c.title, c.description, c.created_by, c.created_at,
+            c.current_key_version, c.needs_new_key,
             me.custom_title, me.member_role as my_role, me.left_at, me.is_pinned, me.pinned_at, me.is_archived, me.archived_at,
             lm.message_id as last_message_id, lm.sender_id as last_sender_id, lm.is_deleted as last_is_deleted,
-            case when lm.is_deleted = 1 then null else lm.content end as last_content, lm.created_at as last_created_at,
+            case when lm.is_deleted = 1 then null else lm.content end as last_content, lm.key_version as last_key_version, lm.enc_format as last_enc_format,
+            lm.created_at as last_created_at,
             lmt.type_code as last_message_type, lm.system_event as last_system_event, lm.system_target_user_id as last_system_target_user_id,
             lsu.first_nm as last_sender_first_nm, lsu.last_nm as last_sender_last_nm, ltu.first_nm as last_target_first_nm, ltu.last_nm as last_target_last_nm,
             -- the last message's ticks, aggregated over its recipients exactly like the message history does

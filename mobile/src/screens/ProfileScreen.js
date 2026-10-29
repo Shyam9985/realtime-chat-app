@@ -8,6 +8,7 @@ import { useChat } from '../contexts/ChatContext';
 import { useToast } from '../contexts/MessageContext';
 import { getProfile, updateProfile } from '../services/profile.service';
 import { deletePhoto, loadPhoto, savePhoto } from '../store/photoStore';
+import * as keyStore from '../crypto/keyStore';
 import { getProfilePhoto, removeProfilePhoto, uploadFile } from '../services/files.service';
 import { handleLogout, resetPasswordMail } from '../services/auth.service';
 import { listBlocked } from '../services/chat.service';
@@ -89,6 +90,15 @@ export default function ProfileScreen() {
   const [uploading, setUploading] = useState(false);
   const [confirmSignOut, setConfirmSignOut] = useState(false);
   const [confirmRemovePhoto, setConfirmRemovePhoto] = useState(false);
+  const [makingCode, setMakingCode] = useState(false);
+
+  // a new recovery code (mailed and shown once); the old one stops opening the backup
+  const newRecoveryCode = async () => {
+    setMakingCode(true);
+    try { authCtx.showRecoveryCode(await keyStore.newRecoveryCode()); }
+    catch (e) { toast.error(e?.error || e?.message || 'Could not make a new recovery code.'); }
+    finally { setMakingCode(false); }
+  };
   const [blocked, setBlocked] = useState(null);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({});
@@ -294,6 +304,13 @@ export default function ProfileScreen() {
             {step === 'update' && (
               <UpdatePassword email={user.email} requestFor="reset-password" messageKey={messageKey} onSuccess={() => { setStep('send'); setMessageKey(''); }} />
             )}
+          </View>
+        </Section>
+
+        <Section title="Encryption">
+          <View style={{ padding: theme.space.lg }}>
+            <Muted style={{ marginBottom: theme.space.md }}>Your chats are end-to-end encrypted: only your phones can read them. Lost your recovery code? Make a new one; the old one stops working.</Muted>
+            <Button title={makingCode ? 'Making a new code...' : 'New recovery code'} icon="key-outline" variant="secondary" loading={makingCode} onPress={newRecoveryCode} testID="new-recovery-code" />
           </View>
         </Section>
 

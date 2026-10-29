@@ -10,6 +10,11 @@ exports.sendEmail = async (mailIds = [], data) => {
 
     const results = [];
 
+    // EMAIL_SEND_DISABLED=true (the test run): nothing leaves the server, every attempt reports not sent
+    if (process.env.EMAIL_SEND_DISABLED === 'true') {
+        return mailIds.map((email) => ({ email, success: false, messageId: null, error: { message: 'email sending is disabled' } }));
+    }
+
     try {
 
         const transporter = nodemailer.createTransport({

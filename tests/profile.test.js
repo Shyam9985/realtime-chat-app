@@ -14,7 +14,7 @@ const patchProfile = (u, body) => fetch(`${app.baseUrl}/apiv1/profile`, {
     method: 'PATCH', headers: { 'content-type': 'application/json', 'access-token': `Bearer ${u.token}` }, body: JSON.stringify(body)
 }).then(async (res) => ({ status: res.status, body: await res.json().catch(() => null) }));
 const signup = (dob, label = 'dob') => h.api(app.baseUrl).post('/auth/signup', {
-    email: `it_${Date.now()}_${Math.random().toString(36).slice(2, 7)}_${label}@test.local`, password: 'Integration@123', fst_nm: 'Dob', ...(dob === undefined ? {} : { date_of_birth: dob })
+    email: `it_${Date.now()}_${Math.random().toString(36).slice(2, 7)}_${label}@test.local`, password: 'Integration@123', fst_nm: 'Dob', keys: h.fakeKeySet(), ...(dob === undefined ? {} : { date_of_birth: dob })
 });
 const yearsAgo = (years, days = 0) => {
     const d = new Date();

@@ -7,14 +7,15 @@ const { log } = require('../utils/log.utils');
  * the job (or one server instance) gets to send it. A claim older than a few minutes (the server
  * stopped mid-send) is reclaimed; the send itself is idempotent, so a reclaim never sends twice.
  */
-const COLUMNS = `scheduled_message_id, conversation_id, sender_id, content, reply_to_message_id, send_at, status,
+const COLUMNS = `scheduled_message_id, conversation_id, sender_id, content, key_version, enc_format, reply_to_message_id, send_at, status,
     sent_message_id, failure_reason, created_at, updated_at`;
 
-exports.create = ({ conversationId, senderId, content, replyToMessageId, sendAt }) => {
+// content is encrypted (like a message) with chat key keyVersion, and is sent as it is at send_at
+exports.create = ({ conversationId, senderId, content, keyVersion, replyToMessageId, sendAt }) => {
     log('in scheduled create');
-    const qry = `insert into scheduled_messages_t (conversation_id, sender_id, content, reply_to_message_id, send_at)
-        values (?, ?, ?, ?, ?)`;
-    return dbutils.executeQuery(qry, [conversationId, senderId, content, replyToMessageId, sendAt], 'create scheduled message');
+    const qry = `insert into scheduled_messages_t (conversation_id, sender_id, content, key_version, enc_format, reply_to_message_id, send_at)
+        values (?, ?, ?, ?, 1, ?, ?)`;
+    return dbutils.executeQuery(qry, [conversationId, senderId, content, keyVersion, replyToMessageId, sendAt], 'create scheduled message');
 };
 
 exports.getById = (scheduledId) => {
@@ -33,11 +34,11 @@ exports.listForSender = (conversationId, senderId) => {
 };
 
 // only a pending message of this sender can change; affectedRows 0 otherwise
-exports.update = (scheduledId, senderId, { content, sendAt }) => {
+exports.update = (scheduledId, senderId, { content, keyVersion, sendAt }) => {
     log('in scheduled update');
     const sets = [];
     const params = [];
-    if (content !== undefined) { sets.push('content = ?'); params.push(content); }
+    if (content !== undefined) { sets.push('content = ?', 'key_version = ?'); params.push(content, keyVersion); }
     if (sendAt !== undefined) { sets.push('send_at = ?'); params.push(sendAt); }
     const qry = `update scheduled_messages_t set ${sets.join(', ')}
         where scheduled_message_id = ? and sender_id = ? and status = 'PENDING' and is_active = 1`;

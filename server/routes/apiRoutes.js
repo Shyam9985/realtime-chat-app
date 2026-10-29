@@ -11,6 +11,7 @@ const healthRtr = require('./healthRtr');
 const scheduledRtr = require('./scheduledRtr');
 const devicesRtr = require('./devicesRtr');
 const appRtr = require('./appRtr');
+const keysRtr = require('./keysRtr');
 
 router.use('/health', healthRtr);
 router.use('/auth', authRtr);
@@ -25,5 +26,7 @@ router.use('/scheduled', scheduledRtr);
 router.use('/devices', devicesRtr);
 // app updates: the newest published build
 router.use('/app', appRtr);
+// end-to-end encryption: padlocks, locked key backups and locked chat keys
+router.use('/keys', keysRtr);
 
 module.exports = router;

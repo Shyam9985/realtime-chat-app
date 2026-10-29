@@ -1,4 +1,6 @@
-// first: the push task must exist before anything else, because android may start the app without any
+// first: secure random numbers for the encryption libraries (they look for them when they load)
+import './src/crypto/polyfill';
+// then the push task must exist before anything else, because android may start the app without any
 // screen just to run it (a push arriving while YaapZone is closed)
 import './src/services/pushTask';
 import { registerRootComponent } from 'expo';

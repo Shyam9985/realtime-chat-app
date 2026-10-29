@@ -1,6 +1,8 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 const authMdl = require('../models/authMdl');
+const keysMdl = require('../models/keysMdl');
+const keysService = require('./keysService');
 const resutils = require('../utils/response.utils');
 const emailutils = require('../utils/email.utils');
 const { log } = require('../utils/log.utils');
@@ -85,18 +87,17 @@ exports.generateJWToken = async (user, session_id) => {
     return { token, obj };
 }
 
-// creates a new user with a hashed password
-exports.signUpSrvc = async (payload) => {
+// creates a new user with a hashed password and their encryption keys (one transaction), then mails
+// the recovery code (best effort: the app shows it on screen too)
+exports.signUpSrvc = async (payload, keys) => {
     log('in signUpSrvc');
     const saltKey = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(payload.password, saltKey);
 
     try {
-        const response = await authMdl.signUp({ ...payload, passwordHash, saltKey }, {});
-
-        if (!response?.affectedRows) resutils.createError('noDataInserted', 'Unable to create user. please try again');
-
-        return { user_id: response.insertId };
+        const { userId } = await keysMdl.signUpWithKeys({ user: { ...payload, passwordHash, saltKey }, keys });
+        const emailed = await keysService.sendRecoveryCodeSrvc({ userId, email: payload.email, name: payload.fst_nm }, keys.recoveryCode);
+        return { user_id: userId, recovery_code_emailed: emailed };
 
     } catch (error) {
         if (error.name === 'DatabaseError' && error.code === 'ER_DUP_ENTRY') {
@@ -142,7 +143,7 @@ exports.establishSessionSrvc = async (userRow, sessionId, expiresAt, context = {
     await authMdl.insertLoginHistory({ user_id: userRow.user_id, ip_address: context.ipAddress, device_info: context.deviceInfo, remarks: 'logged in successfully.' });
     await authMdl.updateLastLoginTime(userRow.email);
 
-    return { token: tokenRes.token, user: buildUserObj(userRow) };
+    return { token: tokenRes.token, user: buildUserObj(userRow), keys: await keysService.findMyKeysSrvc(userRow.user_id) };
 }
 
 // expires the stored session record
@@ -235,8 +236,9 @@ exports.verifyEmailOtpSrvc = async (payload, user) => {
     return { verified: true };
 }
 
-// updates the password after checking the OTP was verified and not expired
-exports.updatePasswordSrvc = async (payload) => {
+// updates the password after checking the OTP was verified and not expired. keyBackup: the private
+// key locked again with the new password (the phone has the key); null marks the old backup out of date
+exports.updatePasswordSrvc = async (payload, keyBackup = null) => {
     log('in updatePasswordSrvc');
     const forgotMailRes = await authMdl.getLatestMailByRequest(payload, payload?.usedFor);
     const response = forgotMailRes?.[0];
@@ -250,12 +252,12 @@ exports.updatePasswordSrvc = async (payload) => {
     const saltKey = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(payload.newPassword, saltKey);
 
-    const updateRes = await authMdl.updateUserPassword(payload.email, passwordHash, saltKey);
+    const updateRes = await keysMdl.updatePasswordWithBackup({ email: payload.email, passwordHash, saltKey, backup: keyBackup });
 
     // zero rows means the otp was issued for an email that is not an active account
-    if (!updateRes?.affectedRows) resutils.createError('userNotFound', 'No active account found for this email address. Please request a new OTP with the email you registered with.');
+    if (!updateRes?.changed) resutils.createError('userNotFound', 'No active account found for this email address. Please request a new OTP with the email you registered with.');
 
     await authMdl.expireOtp(payload.otpKey);
 
-    return { updated: true };
+    return { updated: true, key_backup_updated: updateRes.backupUpdated };
 }

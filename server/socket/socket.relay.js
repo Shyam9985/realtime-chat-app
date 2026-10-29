@@ -69,6 +69,11 @@ const registerRelay = (io) => {
         for (const id of watchers) io.to(room(id)).emit('presence:update', { user_id: userId, online, last_seen_at: lastSeenAt });
     });
 
+    // a new chat key version: every member fetches their locked copy (the server cannot send the key itself)
+    appEvents.on('conversation.key', ({ conversation_id, key_version, memberIds }) => {
+        for (const id of memberIds) io.to(room(id)).emit('conversation:key', { conversation_id, key_version });
+    });
+
     // an exited group deleted from this user's list (their other devices drop it too)
     appEvents.on('conversation.removed', ({ userId, conversationId }) => {
         io.to(room(userId)).emit('conversation:removed', { conversation_id: conversationId });

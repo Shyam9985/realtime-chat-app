@@ -303,6 +303,23 @@ const RESPONSE_STATUS = {
         code: 403,
         statusKey: "ACCOUNT_INACTIVE",
         message: "This account is inactive."
+    },
+
+    // ---- end-to-end encryption ----
+    KEY_OUTDATED: {
+        code: 409,
+        statusKey: "KEY_OUTDATED",
+        message: "This chat has a newer key. Fetch it and send again."
+    },
+    KEYS_MISMATCH: {
+        code: 409,
+        statusKey: "KEYS_MISMATCH",
+        message: "Your encryption keys changed on another device."
+    },
+    NO_KEYS: {
+        code: 404,
+        statusKey: "NO_KEYS",
+        message: "No encryption keys found for this account."
     }
 
 };

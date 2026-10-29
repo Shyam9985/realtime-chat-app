@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const conversationsCtrl = require('../controllers/conversationsCtrl');
+const keysCtrl = require('../controllers/keysCtrl');
 const { isAuthenticated } = require('../middleware/authMdlwre');
 const { audit } = require('../middleware/auditMdlwre');
 const { checkRateLimit } = require('../middleware/rateLimitmdlwre');
@@ -19,7 +20,9 @@ router.patch('/:id/members/:userId', isAuthenticated, checkRateLimit(1, 10), aud
 router.post('/:id/leave', isAuthenticated, checkRateLimit(1, 10), audit('GROUP', 'LEAVE'), conversationsCtrl.leaveGroup);
 router.get('/:id/messages', isAuthenticated, checkRateLimit(5, 60), conversationsCtrl.history);
 router.post('/:id/seen', isAuthenticated, checkRateLimit(5, 60), conversationsCtrl.markSeen);
-router.get('/:id/messages/search', isAuthenticated, checkRateLimit(1, 20), conversationsCtrl.search);
+// the chat key: its current version and the members' padlocks; a new version (one locked copy per member)
+router.get('/:id/keys', isAuthenticated, checkRateLimit(2, 30), keysCtrl.keyState);
+router.post('/:id/keys', isAuthenticated, checkRateLimit(1, 20), audit('CONVERSATION', 'NEW_KEY'), keysCtrl.createConversationKey);
 router.patch('/:id/settings', isAuthenticated, checkRateLimit(1, 20), conversationsCtrl.updateSettings);
 router.get('/:id/scheduled', isAuthenticated, checkRateLimit(2, 30), conversationsCtrl.listScheduled);
 router.post('/:id/scheduled', isAuthenticated, checkRateLimit(0.5, 10), audit('SCHEDULED_MESSAGE', 'CREATE'), conversationsCtrl.createScheduled);

@@ -48,19 +48,19 @@ const handle = (fname, status, run) => async (req, res) => {
     }
 };
 
-// PATCH /messages/:id  { content }  - edit own message within the window
+// PATCH /messages/:id  { content, key_version }  - edit own message within the window
 exports.edit = handle('messages edit', RESPONSE_STATUS.UPDATED, (req) => {
-    const { messageId, content } = messagesVldtr.validateEdit(req.params, req.body || {});
-    return messagesService.editSrvc(req.user.user_id, messageId, content);
+    const { messageId, content, keyVersion } = messagesVldtr.validateEdit(req.params, req.body || {});
+    return messagesService.editSrvc(req.user.user_id, messageId, content, keyVersion);
 });
 
 // GET /messages/:id/edits  - every version of own message, oldest first
 exports.editHistory = handle('messages edit history', RESPONSE_STATUS.DATA_FOUND, (req) => messagesService.editHistorySrvc(req.user.user_id, messagesVldtr.messageId(req.params.id)));
 
-// POST /messages/:id/forward  { conversation_ids: [] }  - per-target results
+// POST /messages/:id/forward  { targets: [{ conversation_id, content, key_version }] }  - per-target results
 exports.forward = handle('messages forward', RESPONSE_STATUS.SUCCESS, (req) => {
-    const { messageId, conversationIds } = messagesVldtr.validateForward(req.params, req.body || {});
-    return messagesService.forwardSrvc(req.user.user_id, messageId, conversationIds);
+    const { messageId, targets } = messagesVldtr.validateForward(req.params, req.body || {});
+    return messagesService.forwardSrvc(req.user.user_id, messageId, targets);
 });
 
 // GET /messages/:id/receipts  - message info in a group: each recipient's delivered / read time (sender only)
