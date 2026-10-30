@@ -1,6 +1,7 @@
 const resutils = require('../utils/response.utils');
 const RESPONSE_STATUS = require('../utils/standard.messages');
 const profileService = require('../services/profileService');
+const accountService = require('../services/accountService');
 const profileVldtr = require('../validators/profileVldtr');
 const { log } = require('../utils/log.utils');
 
@@ -13,6 +14,12 @@ const sendProfileError = (req, res, error, fname) => {
     }
     if (error.name === 'validationFailed') {
         return resutils.sendErrorResponse(req, res, error.message, RESPONSE_STATUS.VALIDATION_ERROR, { function: fname });
+    }
+    if (error.name === 'wrongPassword') {
+        return resutils.sendErrorResponse(req, res, error.message, RESPONSE_STATUS.INVALID_CREDENTIALS, { function: fname });
+    }
+    if (error.name === 'userNotFound') {
+        return resutils.sendErrorResponse(req, res, error.message, RESPONSE_STATUS.NOT_FOUND, { function: fname });
     }
 
     return resutils.sendErrorResponse(req, res, 'We could not load your profile right now. Please try again in a moment.',
@@ -40,5 +47,17 @@ exports.updateProfile = async (req, res) => {
         return resutils.sendSuccessResponse(req, res, result, RESPONSE_STATUS.UPDATED, { function: 'update profile controller' });
     } catch (error) {
         return sendProfileError(req, res, error, 'update profile controller');
+    }
+}
+
+// DELETE /profile  { password }  - the account and everything it wrote, for good
+exports.deleteAccount = async (req, res) => {
+    log('in deleteAccount');
+    try {
+        const { password } = profileVldtr.validateDeleteAccount(req.body || {});
+        const result = await accountService.deleteAccountSrvc(req.user, password);
+        return resutils.sendSuccessResponse(req, res, result, RESPONSE_STATUS.DELETED, { function: 'delete account controller' });
+    } catch (error) {
+        return sendProfileError(req, res, error, 'delete account controller');
     }
 }

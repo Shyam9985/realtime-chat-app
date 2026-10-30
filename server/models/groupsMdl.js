@@ -204,6 +204,66 @@ exports.updateInfo = ({ conversationId, actorId, title, description, systemTypeI
     }, 'update group info');
 };
 
+// the group's current photo files (entity GROUP_PHOTO), locked for the transaction
+const lockGroupPhotos = async (connection, conversationId) => {
+    const [rows] = await connection.execute(
+        "select file_id, file_path from uploaded_files_lst_t where entity_type = 'GROUP_PHOTO' and entity_id = ? for update", [conversationId]);
+    return rows;
+};
+
+/*
+ * Admins only: a new group photo REPLACES the old one, in ONE transaction: the new file row, the group's
+ * pointer, the old rows deleted and the "changed the group photo" notice. returns the old files' paths
+ * so the caller removes them from disk after the commit (a file is never deleted for a change that then
+ * rolls back). the admin check runs on the locked members, like every other group change
+ */
+exports.replaceGroupPhoto = ({ conversationId, actorId, record, systemTypeId }) => {
+    log('in replaceGroupPhoto');
+    return dbutils.executeTransaction(async (connection) => {
+        const members = await lockMembers(connection, conversationId);
+        const refused = adminCheck(members, actorId);
+        if (refused) return { refused };
+        const old = await lockGroupPhotos(connection, conversationId);
+        const [inserted] = await connection.execute(
+            `insert into uploaded_files_lst_t
+                (original_nm, stored_nm, file_path, extension, mime_type, size_bytes, checksum_sha256, entity_type, entity_id, uploaded_by)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [record.original_nm, record.stored_nm, record.file_path, record.extension, record.mime_type,
+                record.size_bytes, record.checksum_sha256, record.entity_type, record.entity_id, record.uploaded_by]);
+        await connection.execute('update conversations_lst_t set photo_url = ? where conversation_id = ?', [record.file_path, conversationId]);
+        if (old.length) {
+            await connection.execute(`delete from uploaded_files_lst_t where file_id in (${old.map(() => '?').join(', ')})`, old.map((o) => o.file_id));
+        }
+        const noticeId = await notice(connection, { conversationId, actorId, systemTypeId, event: 'PHOTO_CHANGED', recipientIds: ids(members) });
+        return { fileId: inserted.insertId, oldPaths: old.map((o) => o.file_path), noticeIds: [noticeId], memberIds: ids(members) };
+    }, 'replace group photo');
+};
+
+// admins only: the photo removed (rows and pointer, with a notice); the files go after the commit
+exports.removeGroupPhoto = ({ conversationId, actorId, systemTypeId }) => {
+    log('in removeGroupPhoto');
+    return dbutils.executeTransaction(async (connection) => {
+        const members = await lockMembers(connection, conversationId);
+        const refused = adminCheck(members, actorId);
+        if (refused) return { refused };
+        const old = await lockGroupPhotos(connection, conversationId);
+        if (!old.length) return { refused: 'noPhoto' };
+        await connection.execute('update conversations_lst_t set photo_url = null where conversation_id = ?', [conversationId]);
+        await connection.execute(`delete from uploaded_files_lst_t where file_id in (${old.map(() => '?').join(', ')})`, old.map((o) => o.file_id));
+        const noticeId = await notice(connection, { conversationId, actorId, systemTypeId, event: 'PHOTO_REMOVED', recipientIds: ids(members) });
+        return { oldPaths: old.map((o) => o.file_path), noticeIds: [noticeId], memberIds: ids(members) };
+    }, 'remove group photo');
+};
+
+// the group's current photo row (members and people who exited may see it)
+exports.getGroupPhoto = (conversationId) => {
+    log('in getGroupPhoto');
+    const qry = `select f.file_path, f.mime_type, f.size_bytes from conversations_lst_t c
+        join uploaded_files_lst_t f on f.file_path = c.photo_url and f.entity_type = 'GROUP_PHOTO' and f.entity_id = c.conversation_id and f.is_active = 1
+        where c.conversation_id = ? and c.is_active = 1`;
+    return dbutils.executeQuery(qry, [conversationId], 'get group photo');
+};
+
 // a group the member already exited leaves their list. the row stays (is_active 0) so a later re-add
 // reopens it
 exports.hideExitedGroup = (conversationId, userId) => {
@@ -216,7 +276,7 @@ exports.hideExitedGroup = (conversationId, userId) => {
 // the group's own details: name, description, who created it and when
 exports.getGroup = (conversationId) => {
     log('in getGroup');
-    const qry = `select c.conversation_id, c.title, c.description, c.created_by, c.created_at, cu.first_nm as creator_first_nm, cu.last_nm as creator_last_nm
+    const qry = `select c.conversation_id, c.title, c.description, c.photo_url, c.created_by, c.created_at, cu.first_nm as creator_first_nm, cu.last_nm as creator_last_nm
         from conversations_lst_t c join users_lst_t cu on cu.user_id = c.created_by
         where c.conversation_id = ? and c.is_active = 1`;
     return dbutils.executeQuery(qry, [conversationId], 'get group');

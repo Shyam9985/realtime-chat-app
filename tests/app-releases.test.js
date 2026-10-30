@@ -54,9 +54,8 @@ test('UP-04 no sign-in needed; a missing or bad version_code is refused', async 
     assert.equal((await anon().get('/app/latest?version_code=-5')).status, 400);
 });
 
-const publish = (body, key = process.env.RELEASE_PUBLISH_KEY) => fetch(`${app.baseUrl}/apiv1/app/releases`, {
-    method: 'POST', headers: { 'content-type': 'application/json', ...(key ? { 'x-release-key': key } : {}) }, body: JSON.stringify(body)
-}).then(async (res) => ({ status: res.status, body: await res.json().catch(() => null) }));
+// the publish script runs without a sign-in, so like other such requests each comes from its own address
+const publish = (body, key = process.env.RELEASE_PUBLISH_KEY) => h.anonymousCall(app.baseUrl, 'POST', '/app/releases', body, undefined, key ? { 'x-release-key': key } : {});
 const good = { version: '99.4.0', version_code: 990400, apk_url: 'https://example.test/99.4.0.apk', notes: 'Release notes', is_mandatory: true };
 
 test('UP-05 publishing needs the release key', async () => {

@@ -120,7 +120,7 @@ function reducer(state, action) {
 const uuid = () => (globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (ch) => { const r = (Math.random() * 16) | 0; return (ch === "x" ? r : (r & 0x3) | 0x8).toString(16); }));
 
 export function ChatProvider({ children }) {
-    const { status: authStatus, user } = useAuth();
+    const { status: authStatus, user, handleLogOut } = useAuth();
     const [state, dispatch] = useReducer(reducer, initialState);
     const active = useRef(null);
     const myId = user?.user_id ?? null;
@@ -347,6 +347,8 @@ export function ChatProvider({ children }) {
             // a group changed (members, roles, name): its summary is reloaded, open group screens refetch
             socket.on("group:updated", ({ conversation_id }) => { refreshConversation(conversation_id); dispatch({ type: "GROUP_CHANGED", id: conversation_id }); }),
             socket.on("conversation:removed", ({ conversation_id }) => dispatch({ type: "CONVERSATION_REMOVE", id: conversation_id })),
+            // the account was deleted on another phone: this one forgets its keys and signs out
+            socket.on("account:deleted", () => { keyStore.deleteLocalKeys(myId).finally(() => handleLogOut()); }),
             socket.on("presence:update", ({ user_id, online, last_seen_at }) => dispatch({ type: "PRESENCE", userId: user_id, online, lastSeenAt: last_seen_at })),
         ];
         return () => { offs.forEach((off) => off && off()); stopWatchingToken(); };

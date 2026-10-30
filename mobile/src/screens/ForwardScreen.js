@@ -81,7 +81,7 @@ export default function ForwardScreen({ route, navigation }) {
               <Pressable onPress={() => toggle(item.conversation_id)} disabled={full} accessibilityRole="checkbox" accessibilityState={{ checked: on, disabled: full }}
                 accessibilityLabel={titleOf(item)} testID={`forward-target-${item.conversation_id}`}
                 style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: theme.space.md, paddingHorizontal: theme.space.lg, paddingVertical: 10, backgroundColor: pressed ? c.surfaceAlt : c.surface, opacity: full ? 0.5 : 1 })}>
-                {isGroup(item) ? <GroupAvatar size={44} /> : <Avatar user={item.other_user} size={44} />}
+                {isGroup(item) ? <GroupAvatar size={44} conversationId={item.conversation_id} photoUrl={item.photo_url} /> : <Avatar user={item.other_user} size={44} />}
                 <Text numberOfLines={1} style={{ flex: 1, color: c.text, fontSize: theme.font.md, fontWeight: '600' }}>{titleOf(item)}</Text>
                 <Ionicons name={on ? 'checkmark-circle' : 'ellipse-outline'} size={24} color={on ? c.accent : c.textMuted} />
               </Pressable>

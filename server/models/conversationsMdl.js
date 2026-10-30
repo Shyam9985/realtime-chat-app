@@ -60,48 +60,76 @@ exports.getMemberIds = async (conversationId) => {
 
 // one conversation as the list shows it (same shape as listForUser, for a single id). the preview is
 // the newest message THIS member can see (their own pointer), so a group they exited stops moving and
-// a sender they blocked never shows up in it. groups they exited stay listed, read-only (left_at)
-const SUMMARY_SELECT = `select c.conversation_id, ct.type_code as conversation_type, c.title, c.description, c.created_by, c.created_at,
-            c.current_key_version, c.needs_new_key,
-            me.custom_title, me.member_role as my_role, me.left_at, me.is_pinned, me.pinned_at, me.is_archived, me.archived_at,
-            lm.message_id as last_message_id, lm.sender_id as last_sender_id, lm.is_deleted as last_is_deleted,
-            case when lm.is_deleted = 1 then null else lm.content end as last_content, lm.key_version as last_key_version, lm.enc_format as last_enc_format,
-            lm.created_at as last_created_at,
-            lmt.type_code as last_message_type, lm.system_event as last_system_event, lm.system_target_user_id as last_system_target_user_id,
-            lsu.first_nm as last_sender_first_nm, lsu.last_nm as last_sender_last_nm, ltu.first_nm as last_target_first_nm, ltu.last_nm as last_target_last_nm,
-            -- the last message's ticks, aggregated over its recipients exactly like the message history does
-            (select case when count(*) > 0 and sum(r2.seen_at is null) = 0 then 'SEEN'
-                         when count(*) > 0 and sum(r2.delivered_at is null) = 0 then 'DELIVERED' else 'SENT' end
-                from message_receipts_t r2 where r2.message_id = lm.message_id and r2.is_active = 1 and r2.excluded_at is null) as last_status,
-            ou.user_id as other_user_id, ou.first_nm as other_first_nm, ou.last_nm as other_last_nm, ou.email as other_email,
-            ou.profile_photo_url as other_profile_photo_url,
-            (select count(*) from conversation_members_t gm
-                where gm.conversation_id = c.conversation_id and gm.is_active = 1 and gm.left_at is null) as member_count,
-            (select count(*) from message_receipts_t r join messages_lst_t m2 on m2.message_id = r.message_id
-                where r.user_id = me.user_id and r.seen_at is null and r.is_active = 1 and m2.conversation_id = c.conversation_id and m2.is_deleted = 0) as unread_count,
-            exists(select 1 from user_blocks_t b where b.blocker_id = me.user_id and b.blocked_id = ou.user_id and b.is_active = 1) as blocked_by_me
+// a sender they blocked never shows up in it. groups they exited stay listed, read-only (left_at).
+// built from CTEs over this member's rows only, so the work grows with their chats, never with the
+// whole table:
+//  - mine:        their membership rows (idx_member_user), one conversation when oneId is given
+//  - members:     how many people are in each of those chats now (uq_member_conv_user)
+//  - unread:      their unseen receipts, counted per chat (idx_receipt_user_seen)
+//  - last_ticks:  the receipts of each chat's last message, aggregated the way the history does
+// params: userId, [conversationId], userId (unread)
+const summaryQuery = (oneId) => `with mine as (
+        select me.conversation_id, me.user_id, me.custom_title, me.member_role, me.left_at, me.is_pinned, me.pinned_at, me.is_archived,
+            me.archived_at, me.last_message_id
         from conversation_members_t me
-        join conversations_lst_t c on c.conversation_id = me.conversation_id and c.is_active = 1
-        join conversations_type_master_t ct on ct.conversation_type_id = c.conversation_type_id
-        left join messages_lst_t lm on lm.message_id = me.last_message_id
-        left join message_type_master_t lmt on lmt.message_type_id = lm.message_type_id
-        left join users_lst_t lsu on lsu.user_id = lm.sender_id
-        left join users_lst_t ltu on ltu.user_id = lm.system_target_user_id
-        left join conversation_members_t om on om.conversation_id = c.conversation_id and om.user_id <> me.user_id and om.is_active = 1 and ct.type_code = 'ONE_TO_ONE'
-        left join users_lst_t ou on ou.user_id = om.user_id
-        where me.user_id = ? and me.is_active = 1`;
+        where me.user_id = ? and me.is_active = 1 ${oneId ? 'and me.conversation_id = ?' : ''}),
+    members as (
+        select gm.conversation_id, count(*) as member_count
+        from mine
+        join conversation_members_t gm on gm.conversation_id = mine.conversation_id and gm.is_active = 1 and gm.left_at is null
+        group by gm.conversation_id),
+    unread as (
+        select m2.conversation_id, count(*) as unread_count
+        from message_receipts_t r
+        join messages_lst_t m2 on m2.message_id = r.message_id and m2.is_deleted = 0
+        join mine on mine.conversation_id = m2.conversation_id
+        where r.user_id = ? and r.seen_at is null and r.is_active = 1
+        group by m2.conversation_id),
+    last_ticks as (
+        select r2.message_id, count(*) as receipts, sum(r2.delivered_at is null) as undelivered, sum(r2.seen_at is null) as unseen
+        from mine
+        join message_receipts_t r2 on r2.message_id = mine.last_message_id and r2.is_active = 1 and r2.excluded_at is null
+        group by r2.message_id)
+    select c.conversation_id, ct.type_code as conversation_type, c.title, c.description, c.created_by, c.created_at,
+        c.current_key_version, c.needs_new_key, c.photo_url,
+        me.custom_title, me.member_role as my_role, me.left_at, me.is_pinned, me.pinned_at, me.is_archived, me.archived_at,
+        lm.message_id as last_message_id, lm.sender_id as last_sender_id, lm.is_deleted as last_is_deleted,
+        case when lm.is_deleted = 1 then null else lm.content end as last_content, lm.key_version as last_key_version, lm.enc_format as last_enc_format,
+        lm.created_at as last_created_at,
+        lmt.type_code as last_message_type, lm.system_event as last_system_event, lm.system_target_user_id as last_system_target_user_id,
+        lsu.first_nm as last_sender_first_nm, lsu.last_nm as last_sender_last_nm, ltu.first_nm as last_target_first_nm, ltu.last_nm as last_target_last_nm,
+        -- the last message's ticks, aggregated over its recipients exactly like the message history does
+        case when lt.receipts > 0 and lt.unseen = 0 then 'SEEN'
+             when lt.receipts > 0 and lt.undelivered = 0 then 'DELIVERED' else 'SENT' end as last_status,
+        ou.user_id as other_user_id, ou.first_nm as other_first_nm, ou.last_nm as other_last_nm, ou.email as other_email,
+        ou.profile_photo_url as other_profile_photo_url,
+        coalesce(mc.member_count, 0) as member_count,
+        coalesce(un.unread_count, 0) as unread_count,
+        (b.block_id is not null) as blocked_by_me
+    from mine me
+    join conversations_lst_t c on c.conversation_id = me.conversation_id and c.is_active = 1
+    join conversations_type_master_t ct on ct.conversation_type_id = c.conversation_type_id
+    left join messages_lst_t lm on lm.message_id = me.last_message_id
+    left join message_type_master_t lmt on lmt.message_type_id = lm.message_type_id
+    left join users_lst_t lsu on lsu.user_id = lm.sender_id
+    left join users_lst_t ltu on ltu.user_id = lm.system_target_user_id
+    left join conversation_members_t om on om.conversation_id = c.conversation_id and om.user_id <> me.user_id and om.is_active = 1 and ct.type_code = 'ONE_TO_ONE'
+    left join users_lst_t ou on ou.user_id = om.user_id
+    left join user_blocks_t b on b.blocker_id = me.user_id and b.blocked_id = ou.user_id and b.is_active = 1
+    left join members mc on mc.conversation_id = c.conversation_id
+    left join unread un on un.conversation_id = c.conversation_id
+    left join last_ticks lt on lt.message_id = lm.message_id`;
 
 exports.listForUser = (userId) => {
     log('in listForUser');
     // pinned chats first, the most recently pinned on top; then everything by latest activity
-    const qry = `${SUMMARY_SELECT} order by me.is_pinned desc, me.pinned_at desc, coalesce(lm.created_at, c.created_at) desc, c.conversation_id desc`;
-    return dbutils.executeQuery(qry, [userId], 'list conversations');
+    const qry = `${summaryQuery(false)} order by me.is_pinned desc, me.pinned_at desc, coalesce(lm.created_at, c.created_at) desc, c.conversation_id desc`;
+    return dbutils.executeQuery(qry, [userId, userId], 'list conversations');
 };
 
 exports.getSummaryForUser = (userId, conversationId) => {
     log('in getSummaryForUser');
-    const qry = `${SUMMARY_SELECT} and c.conversation_id = ?`;
-    return dbutils.executeQuery(qry, [userId, conversationId], 'get conversation summary');
+    return dbutils.executeQuery(summaryQuery(true), [userId, conversationId, userId], 'get conversation summary');
 };
 
 // this member's own settings for a chat. only the fields given are changed; pinning and archiving

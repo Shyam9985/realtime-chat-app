@@ -11,11 +11,16 @@ let app, A, B, C, busy, quiet;
 const as = (u) => h.api(app.baseUrl, u.token);
 const page = async (conversationId, query) => (await as(A).get(`/conversations/${conversationId}/messages?${query}`)).body.data;
 
-// n messages from A, then moved daysAgo into the past (one second apart, keeping their order)
+// n messages from A, then moved daysAgo into the past (one second apart, keeping their order). they are
+// written straight to the table: the test is about reading pages, and sending 60 messages through the api
+// in a burst would only test the per-user send limit
 const sendAged = async (conversationId, n, daysAgo, label) => {
     const ids = [];
+    const [{ text_id: textTypeId }] = await h.sql("select message_type_id as text_id from message_type_master_t where type_code = 'TEXT'");
     for (let i = 0; i < n; i += 1) {
-        ids.push((await as(A).post('/messages', { conversation_id: conversationId, content: `${label} ${i}`, client_message_id: `hw-${label.replace(/\W/g, '')}-${i}-${Date.now() % 1e7}` })).body.data.message.message_id);
+        const result = await h.sql('insert into messages_lst_t (conversation_id, sender_id, message_type_id, content, key_version, enc_format) values (?, ?, ?, ?, 1, 1)',
+            [conversationId, A.user.user_id, textTypeId, h.encryptText(`${label} ${i}`)]);
+        ids.push(result.insertId);
     }
     if (daysAgo) {
         await h.sql(`update messages_lst_t set created_at = now(3) - interval ${daysAgo} day - interval (? - message_id) second where message_id in (${ids.map(() => '?').join(',')})`,

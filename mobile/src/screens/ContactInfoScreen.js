@@ -124,6 +124,12 @@ export default function ContactInfoScreen({ route, navigation }) {
         </Section>
 
         {!profile.is_me ? (
+          <Section title="Encryption">
+            <InfoRow icon="lock-closed-outline" label="End-to-end encrypted" value="Messages between you are encrypted on your phones. Only the two of you can read them, not even YaapZone." last />
+          </Section>
+        ) : null}
+
+        {!profile.is_me ? (
           <Section title="Privacy">
             <Pressable onPress={profile.blocked_by_me ? unblock : () => setConfirmBlock(true)} accessibilityRole="button" testID={profile.blocked_by_me ? 'contact-unblock' : 'contact-block'}
               style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: theme.space.md, paddingHorizontal: theme.space.lg, paddingVertical: 14, backgroundColor: pressed ? c.surfaceAlt : 'transparent' })}>

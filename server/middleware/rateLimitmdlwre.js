@@ -9,24 +9,21 @@ const rateLimitMap = new Map();
 // rate limie object structure token bucket
 // {capacity : 0 ,currentTokens : 0 , refillRate : 0 , lastRefillTimestamp : 0}
 
-// generate request key for rate limiting with the combination of user + method + route
-function generateReteLimitKey(user, req) {
+// generate request key for rate limiting with the combination of user + method + route.
+function generateReteLimitKey(user, req, by = null) {
   const method = req.method;
   const ip = req.ip;
   const url = req.route?.path ? req?.baseUrl + req?.route?.path : req.originalUrl || req.url;
-  // console.log("generateReteLimitKey", user, ip, method, url);
 
-  const primary = user?.user_id > 0 ? user?.user_id : ip;
+  const email = by === 'email' && typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+  const primary = email ? 'email:' + email : user?.user_id > 0 ? user?.user_id : ip;
   return primary + ":" + method + ":" + url;
 }
-// rate limit check middleware
-const checkRateLimit = (refillRate, capacity) => async (req, res, next) => {
-  // RATE_LIMIT_BYPASS=true is for automated test runs only; never set it on a real deployment
-  if (process.env.RATE_LIMIT_BYPASS === 'true') return next();
-
+// rate limit check middleware. options.by = 'email': one bucket per email address (see above)
+const checkRateLimit = (refillRate, capacity, options = {}) => async (req, res, next) => {
   logBlock('[rateLimit] checkRateLimit:', `refillRate: ${refillRate}, capacity: ${capacity}`);
   // generate the key for the current request based on user, method and route
-  const key = generateReteLimitKey(req.user, req);
+  const key = generateReteLimitKey(req.user, req, options.by);
   const now = datefns.getTime(new Date());
 
   // REDIS - PRIMARY

@@ -36,3 +36,10 @@ exports.validateUpdate = async (body = {}) => {
     if (!Object.keys(fields).length) resutils.createError('validationFailed', 'Nothing to change.');
     return fields;
 };
+
+// DELETE /profile  { password }  - the account is deleted only with the password typed again
+exports.validateDeleteAccount = (body = {}) => {
+    log('in profile validateDeleteAccount');
+    if (typeof body.password !== 'string' || !body.password) resutils.createError('validationFailed', 'Enter your password to delete your account.');
+    return { password: body.password };
+};

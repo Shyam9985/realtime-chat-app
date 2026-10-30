@@ -17,7 +17,15 @@ const track = (s) => { sockets.push(s); return s; };
 const as = (u) => h.api(app.baseUrl, u.token);
 const call = (u, method, path, body) => h.request(app.baseUrl, u.token, method, path, body);
 const id = (u) => u.user.user_id;
-const createGroup = (u, title, members, extra = {}) => as(u).post('/conversations/groups', { title, member_ids: members.map(id), ...extra });
+// these tests create many groups as one user in quick succession: past the per-user creation limit the
+// server says how long to wait (Retry-After), and this waits that long and tries again, as the app should
+const createGroup = async (u, title, members, extra = {}) => {
+    for (;;) {
+        const res = await as(u).post('/conversations/groups', { title, member_ids: members.map(id), ...extra });
+        if (res.status !== 429) return res;
+        await h.sleep((Number(res.headers.get('retry-after')) || 2) * 1000);
+    }
+};
 const summaryOf = async (u, conversationId) => (await as(u).get('/conversations')).body.data.conversations.find((c) => c.conversation_id === conversationId);
 const historyOf = async (u, conversationId) => (await as(u).get(`/conversations/${conversationId}/messages?limit=100`)).body.data.messages;
 const send = async (socket, conversation_id, content, extra = {}) => {

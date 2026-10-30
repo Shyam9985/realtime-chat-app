@@ -15,6 +15,7 @@ const MAX_STORED_PHOTO_BYTES = 1024 * 1024;  // 1 MB: the most a stored (compres
 // free render instance loses its own disk on every deploy); by default server/uploads
 const UPLOADS_ROOT = process.env.UPLOADS_DIR ? path.resolve(process.cwd(), process.env.UPLOADS_DIR) : path.join(__dirname, '../uploads');
 const PROFILE_PHOTO_DIR = path.join(UPLOADS_ROOT, 'profile-photos');
+const GROUP_PHOTO_DIR = path.join(UPLOADS_ROOT, 'group-photos');
 
 // a stored file_path (relative to the uploads root, e.g. "profile-photos/ab12.jpg") as an absolute path.
 // rows from before UPLOADS_DIR existed stored "uploads/..." relative to server/
@@ -77,6 +78,7 @@ module.exports = {
     MAX_STORED_PHOTO_BYTES,
     UPLOADS_ROOT,
     PROFILE_PHOTO_DIR,
+    GROUP_PHOTO_DIR,
     resolveStoredPath,
     toStoredPath,
     compressProfilePhoto,

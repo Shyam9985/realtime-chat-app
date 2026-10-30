@@ -1,12 +1,18 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { useChat } from '../contexts/ChatContext';
 import { useToast } from '../contexts/MessageContext';
 import * as chatApi from '../services/chat.service';
-import { Screen, Avatar, GroupAvatar, Button, Muted, Dialog, ProfileSkeleton, Section, Divider, IconButton, TextField } from '../components/ui';
+import { Screen, Avatar, GroupAvatar, Button, Muted, Dialog, ProfileSkeleton, Section, Divider, IconButton, TextField, useGroupPhoto } from '../components/ui';
+import ZoomableImage from '../components/ZoomableImage';
+import { pickedFileSize, pickedImageType, removeGroupPhoto, uploadPickedPhoto } from '../services/files.service';
 import { fullName } from '../utils/chatFormat';
+
+const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const PHOTO_MAX_BYTES = 5 * 1024 * 1024;     // the server keeps a compressed copy of at most 1 MB
 
 const memberSince = (value) => (value ? new Date(value).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' }) : '');
 
@@ -67,7 +73,12 @@ export default function GroupInfoScreen({ route, navigation }) {
   const [editOpen, setEditOpen] = useState(false);
   const [editTitle, setEditTitle] = useState('');
   const [editDescription, setEditDescription] = useState('');
+  const [photoMenu, setPhotoMenu] = useState(false);
+  const [viewPhoto, setViewPhoto] = useState(false);
+  const [photoBusy, setPhotoBusy] = useState(false);
   const version = chat.groupVersion[conversationId] || 0;
+  const photoUrl = group?.photo_url || conversation?.photo_url || null;
+  const photo = useGroupPhoto(conversationId, photoUrl);
 
   const load = useCallback(async () => {
     if (!isMember) { setGroup(null); setStatus('ready'); return; }
@@ -105,6 +116,41 @@ export default function GroupInfoScreen({ route, navigation }) {
     try { const conv = await chat.startConversation(member.user_id); navigation.navigate('Chat', { conversationId: conv.conversation_id, title: fullName(member) }); }
     catch (e) { failed(e, 'Could not open the chat.'); }
   };
+  // admins: a new group photo (the server compresses it and replaces the old one; every member sees it)
+  const choosePhoto = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.85, allowsEditing: true, aspect: [1, 1] });
+    if (result.canceled || !result.assets?.length) return;
+    const asset = result.assets[0];
+    const type = pickedImageType(asset, null);
+    if (!PHOTO_TYPES.includes(type)) { toast.warning('Please choose a JPG, PNG or WEBP image.'); return; }
+    if (pickedFileSize(asset) > PHOTO_MAX_BYTES) { toast.warning('The photo must be 5 MB or smaller.'); return; }
+    setPhotoBusy(true);
+    try {
+      const extension = type === 'image/png' ? 'png' : type === 'image/webp' ? 'webp' : 'jpg';
+      const response = await uploadPickedPhoto(`conversations/${conversationId}/photo`, asset.uri, { name: `group.${extension}`, type });
+      if (!response?.success) { toast.error(response?.error || response?.message || 'Could not change the group photo.'); return; }
+      await load();
+      chat.refreshConversation(conversationId);
+      toast.success('Group photo updated.');
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
+  const deletePhoto = async () => {
+    setPhotoBusy(true);
+    try {
+      const response = await removeGroupPhoto(conversationId);
+      if (!response?.success && response?.statusKey !== 'NO_DATA_FOUND') { toast.error(response?.error || response?.message || 'Could not remove the group photo.'); return; }
+      await load();
+      chat.refreshConversation(conversationId);
+      toast.success('Group photo removed.');
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
+  // the big picture: admins get the photo options, everyone else can open the photo
+  const pressPhoto = () => { if (admin) setPhotoMenu(true); else if (photo) setViewPhoto(true); };
+
   const saveInfo = async () => {
     try {
       const result = await chatApi.updateGroup(conversationId, { title: editTitle, description: editDescription });
@@ -156,7 +202,14 @@ export default function GroupInfoScreen({ route, navigation }) {
     <Screen>
       <ScrollView contentContainerStyle={{ paddingBottom: theme.space.xxl }} testID="group-info">
         <View style={{ alignItems: 'center', paddingVertical: theme.space.xl, paddingHorizontal: theme.space.lg, gap: theme.space.sm, backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border }}>
-          <GroupAvatar size={112} />
+          <Pressable onPress={pressPhoto} disabled={photoBusy || (!admin && !photo)} accessibilityRole="button" accessibilityLabel={admin ? 'Group photo options' : 'View group photo'} testID="group-photo">
+            <GroupAvatar size={112} conversationId={conversationId} photoUrl={photoUrl} />
+            {admin ? (
+              <View style={{ position: 'absolute', right: 2, bottom: 2, width: 34, height: 34, borderRadius: 17, backgroundColor: c.accent, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: c.surface }}>
+                {photoBusy ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Ionicons name="camera" size={17} color="#FFFFFF" />}
+              </View>
+            ) : null}
+          </Pressable>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
             <Text style={{ fontSize: theme.font.xxl, fontWeight: '700', color: c.text, textAlign: 'center', flexShrink: 1 }} testID="group-title">{title}</Text>
             {admin ? <IconButton name="pencil" size={18} color={c.accent} accessibilityLabel="Edit name and description" testID="group-edit"
@@ -166,6 +219,13 @@ export default function GroupInfoScreen({ route, navigation }) {
           {description ? <Text style={{ color: c.text, fontSize: theme.font.md, textAlign: 'center', marginTop: theme.space.xs }} testID="group-description-text">{description}</Text> : null}
           {group ? <Muted>Created by {group.created_by.user_id === chat.myId ? 'you' : group.created_by.name}, {memberSince(group.created_at)}</Muted> : null}
         </View>
+
+        <Section title="Encryption">
+          <View style={{ flexDirection: 'row', gap: theme.space.md, alignItems: 'flex-start', paddingHorizontal: theme.space.lg, paddingVertical: theme.space.md }}>
+            <Ionicons name="lock-closed-outline" size={20} color={c.accent} style={{ marginTop: 2 }} />
+            <Muted style={{ flex: 1, lineHeight: Math.round(theme.font.sm * 1.5) }}>Messages in this group are end-to-end encrypted. Only its members can read them, not even YaapZone. When someone leaves, new messages use a new key they don’t have.</Muted>
+          </View>
+        </Section>
 
         {isMember && group ? (
           <Section title={`${members.length} member${members.length === 1 ? '' : 's'}`}>
@@ -208,6 +268,21 @@ export default function GroupInfoScreen({ route, navigation }) {
       </Dialog>
 
       <Dialog {...dialog} onClose={() => setConfirm(null)} />
+
+      <Dialog visible={photoMenu} icon="image-outline" title="Group photo" onClose={() => setPhotoMenu(false)}
+        message={photo ? 'Everyone in the group sees this photo.' : 'Add a photo everyone in the group sees.'}
+        actions={[
+          ...(photo ? [{ label: 'View', onPress: () => setTimeout(() => setViewPhoto(true), 250) }] : []),
+          ...(photo ? [{ label: 'Remove', style: 'destructive', onPress: deletePhoto, testID: 'group-photo-remove' }] : []),
+          { label: photo ? 'Change' : 'Choose', style: 'primary', onPress: () => setTimeout(choosePhoto, 250), testID: 'group-photo-choose' },
+        ]} />
+
+      <Modal visible={viewPhoto} transparent animationType="fade" onRequestClose={() => setViewPhoto(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', alignItems: 'center', justifyContent: 'center', padding: theme.space.xl }}>
+          {photo ? <ZoomableImage uri={photo} style={{ width: '100%', maxWidth: 420, aspectRatio: 1, borderRadius: theme.radius.lg }} testID="group-photo-zoom" /> : null}
+          <IconButton name="close" size={26} color="#FFFFFF" onPress={() => setViewPhoto(false)} accessibilityLabel="Close" style={{ position: 'absolute', top: 48, right: 16 }} />
+        </View>
+      </Modal>
 
       <Dialog visible={editOpen} icon="pencil-outline" title="Edit group" message="The name and description are the same for everyone in the group."
         onClose={() => setEditOpen(false)} actions={[{ label: 'Cancel' }, { label: 'Save', style: 'primary', onPress: saveInfo, testID: 'group-edit-save' }]}>
