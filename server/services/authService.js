@@ -87,8 +87,8 @@ exports.generateJWToken = async (user, session_id) => {
     return { token, obj };
 }
 
-// creates a new user with a hashed password and their encryption keys (one transaction), then mails
-// the recovery code (best effort: the app shows it on screen too)
+// creates a new user with a hashed password and their encryption keys (one transaction); the recovery
+// code is mailed after the answer (best effort: the app shows it on screen too)
 exports.signUpSrvc = async (payload, keys) => {
     log('in signUpSrvc');
     const saltKey = await bcrypt.genSalt(10);
@@ -96,8 +96,8 @@ exports.signUpSrvc = async (payload, keys) => {
 
     try {
         const { userId } = await keysMdl.signUpWithKeys({ user: { ...payload, passwordHash, saltKey }, keys });
-        const emailed = await keysService.sendRecoveryCodeSrvc({ userId, email: payload.email, name: payload.fst_nm }, keys.recoveryCode);
-        return { user_id: userId, recovery_code_emailed: emailed };
+        keysService.queueRecoveryCodeEmail({ userId, email: payload.email, name: payload.fst_nm }, keys.recoveryCode);
+        return { user_id: userId, recovery_code_emailed: true };
 
     } catch (error) {
         if (error.name === 'DatabaseError' && error.code === 'ER_DUP_ENTRY') {

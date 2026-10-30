@@ -64,6 +64,12 @@ const sendRecoveryCodeSrvc = async ({ userId, email, name }, code) => {
     }
 };
 
+// the recovery-code mail goes out after the answer: the user already sees the code on screen, so a slow
+// or failing mail server must never hold up (or fail) a sign-up. the outcome is in the email log
+const queueRecoveryCodeEmail = (who, code) => {
+    setImmediate(() => { sendRecoveryCodeSrvc(who, code).catch(() => {}); });
+};
+
 // GET /keys/me
 exports.getMyKeysSrvc = async (userId) => {
     log('in getMyKeysSrvc');
@@ -82,10 +88,10 @@ exports.findMyKeysSrvc = async (userId) => {
 exports.setMyKeysSrvc = async (user, keys) => {
     log('in setMyKeysSrvc');
     const keyVersion = await keysMdl.setUserKeys(user.user_id, keys);
-    const emailed = await sendRecoveryCodeSrvc({ userId: user.user_id, email: user.email, name: user.first_nm }, keys.recoveryCode);
+    queueRecoveryCodeEmail({ userId: user.user_id, email: user.email, name: user.first_nm }, keys.recoveryCode);
     appEvents.emit('keys.changed', { userId: user.user_id, keyVersion });
     const [row] = await keysMdl.getUserKeys(user.user_id);
-    return { keys: toKeysDto(row), recovery_code_emailed: emailed };
+    return { keys: toKeysDto(row), recovery_code_emailed: true };
 };
 
 // PATCH /keys/me/password-backup: after a recovery (or any time the app holds the key)
@@ -101,8 +107,8 @@ exports.updateRecoverySrvc = async (user, recovery) => {
     log('in updateRecoverySrvc');
     const result = await keysMdl.updateRecoveryBackup(user.user_id, recovery);
     if (!result.affectedRows) resutils.createError('keysMismatch', 'Your encryption keys changed on another device. Sign in again.');
-    const emailed = await sendRecoveryCodeSrvc({ userId: user.user_id, email: user.email, name: user.first_nm }, recovery.recoveryCode);
-    return { updated: true, recovery_code_emailed: emailed };
+    queueRecoveryCodeEmail({ userId: user.user_id, email: user.email, name: user.first_nm }, recovery.recoveryCode);
+    return { updated: true, recovery_code_emailed: true };
 };
 
 // GET /keys/users?ids=: padlocks (users without keys are simply missing from the answer)
@@ -152,4 +158,5 @@ exports.createConversationKeySrvc = async (userId, { conversationId, keyVersion,
 };
 
 exports.sendRecoveryCodeSrvc = sendRecoveryCodeSrvc;
+exports.queueRecoveryCodeEmail = queueRecoveryCodeEmail;
 exports.toKeysDto = toKeysDto;

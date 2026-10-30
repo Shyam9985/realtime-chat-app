@@ -17,9 +17,12 @@ exports.sendEmail = async (mailIds = [], data) => {
 
     try {
 
+        // short timeouts: a mail server that is slow or unreachable (some hosts block outgoing mail) fails
+        // within seconds instead of holding the request for nodemailer's default two minutes
         const transporter = nodemailer.createTransport({
             host: 'smtp.gmail.com', port: 587, secure: false,
-            auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASSWORD }
+            auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASSWORD },
+            connectionTimeout: 10000, greetingTimeout: 10000, socketTimeout: 20000
         });
 
         for (const email of mailIds) {
