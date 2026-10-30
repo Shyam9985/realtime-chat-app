@@ -10,7 +10,7 @@
     "socket.io"
   ],
   "scripts": {
-    "test": "node --test --test-concurrency=1 tests/",
+    "test": "node --test --test-concurrency=1 \"tests/**/*.test.js\"",
     "start": "node server.js",
     "publish-release": "node scripts/publish-release.js"
   },

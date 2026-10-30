@@ -280,7 +280,8 @@ export async function decryptText(content, { conversationId, keyVersion, senderI
  */
 export async function openTree(value, ctx = {}) {
   if (Array.isArray(value)) return Promise.all(value.map((v) => openTree(v, ctx)));
-  if (!value || typeof value !== 'object') return value;
+  // only plain objects are walked: the http interceptor turns dates into Date objects, which must stay as they are
+  if (!value || typeof value !== 'object' || Object.getPrototypeOf(value) !== Object.prototype) return value;
   const here = {
     conversationId: value.conversation_id ?? ctx.conversationId,
     senderId: value.sender_id ?? ctx.senderId,
@@ -288,7 +289,7 @@ export async function openTree(value, ctx = {}) {
   const out = {};
   for (const [k, v] of Object.entries(value)) {
     // a reply quotes a message of the same chat by its own sender
-    out[k] = (v && typeof v === 'object') ? await openTree(v, { conversationId: here.conversationId, senderId: k === 'reply_to' ? v?.sender_id : here.senderId }) : v;
+    out[k] = (v && typeof v === 'object' && !(v instanceof Date)) ? await openTree(v, { conversationId: here.conversationId, senderId: k === 'reply_to' ? v?.sender_id : here.senderId }) : v;
   }
   if (out.enc_format === 1 && typeof out.content === 'string' && out.content) {
     const plain = await decryptText(out.content, { conversationId: here.conversationId, keyVersion: out.key_version, senderId: here.senderId });
