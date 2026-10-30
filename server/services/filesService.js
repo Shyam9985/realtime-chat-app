@@ -20,10 +20,19 @@ const validationError = (message) => {
     return error;
 };
 
+// how a profile photo is kept: it belongs to its uploader and replaces their previous one (row, the
+// user's pointer and the old rows, in one transaction). a group photo passes its own target
+const profileTarget = (meta) => ({
+    entityType: "USER_PROFILE",
+    entityId: meta.uploadedBy || null,
+    persist: (record) => filesMdl.replaceProfilePhotoMdl(record),
+});
+
 // validates an uploaded image (up to 5 MB) and streams it to a temporary file; chunks flow
 // request -> inspector -> disk, so memory never holds the whole upload. the photo actually kept is a
-// compressed JPEG of at most 1 MB, and it replaces the user's previous photo completely (row and file)
-exports.saveStreamedFileSrvc = async (readStream, meta, uploadDir = DEFAULT_UPLOAD_DIR) => {
+// compressed JPEG of at most 1 MB, and it replaces the previous photo completely (row and file).
+// target: { entityType, entityId, persist(record) -> { fileId, oldPaths, ...anything else to return } }
+exports.saveStreamedFileSrvc = async (readStream, meta, uploadDir = DEFAULT_UPLOAD_DIR, target = profileTarget(meta)) => {
     log('in saveStreamedFileSrvc');
     // meta: { originalName, mimeType, extension, uploadedBy }, the headers already checked by filesVldtr
     const { originalName, extension } = meta;
@@ -94,19 +103,19 @@ exports.saveStreamedFileSrvc = async (readStream, meta, uploadDir = DEFAULT_UPLO
             mime_type: "image/jpeg",
             size_bytes: photo.length,
             checksum_sha256: fileutils.sha256(photo),
-            entity_type: "USER_PROFILE",
-            entity_id: meta.uploadedBy || null, // a profile photo belongs to its uploader
+            entity_type: target.entityType,
+            entity_id: target.entityId,
             uploaded_by: meta.uploadedBy || null,
         };
 
-        // new row + user's pointer + the old rows removed, in one transaction; then the old files
-        const { fileId, oldPaths } = await filesMdl.replaceProfilePhotoMdl(record);
+        // new row + the owner's pointer + the old rows removed, in one transaction; then the old files
+        const { fileId, oldPaths, ...extra } = await target.persist(record);
         log(`[upload] db transaction committed — new photo ${fileId}, ${oldPaths.length} old one(s) replaced`);
         for (const oldPath of oldPaths) {
             await fs.promises.unlink(fileutils.resolveStoredPath(oldPath)).catch(() => {});   // already gone is fine
         }
 
-        return { file_id: fileId, ...record };
+        return { file_id: fileId, ...record, ...extra };
     } catch (error) {
         console.log(`[upload] FAILED (${error.message}) — removing the files of this attempt`);
         // never keep orphans: neither the upload nor a compressed copy of a failed attempt

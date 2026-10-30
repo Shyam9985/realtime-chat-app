@@ -34,7 +34,7 @@ export function ConversationRow({ conversation, myId, onPress, onAvatarPress, on
       <Pressable onPress={onAvatarPress} onLongPress={onLongPress} delayLongPress={350} disabled={!onAvatarPress} accessibilityRole="button"
         accessibilityLabel={group ? `${name} group info` : `View ${fullName(other)}'s profile`}
         style={({ pressed }) => ({ justifyContent: 'center', paddingLeft: theme.space.lg, paddingRight: theme.space.md, paddingVertical: 11, backgroundColor: pressed ? c.surfaceAlt : c.surface })}>
-        {group ? <GroupAvatar size={52} /> : <Avatar user={other} size={52} />}
+        {group ? <GroupAvatar size={52} conversationId={conversation.conversation_id} photoUrl={conversation.photo_url} /> : <Avatar user={other} size={52} />}
       </Pressable>
       <Pressable onPress={onPress} onLongPress={onLongPress} delayLongPress={350} accessibilityRole="button" accessibilityHint="Long press for pin and archive"
         accessibilityLabel={`Open ${group ? 'group' : 'chat with'} ${name}${conversation.is_pinned ? ', pinned' : ''}`} testID={`chat-row-${conversation.conversation_id}`}

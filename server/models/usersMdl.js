@@ -26,12 +26,14 @@ exports.getLastSeen = (userId) => {
 // unless either of the two has blocked the other
 exports.listPresenceWatchers = (userId) => {
     log('in listPresenceWatchers');
+    // a block in either direction is a join per direction, each on the unique (blocker_id, blocked_id)
+    // key; a watcher is kept only when neither join found a row
     const qry = `select distinct om.user_id from conversation_members_t me
         join conversations_lst_t c on c.conversation_id = me.conversation_id and c.user_pair_key is not null and c.is_active = 1
         join conversation_members_t om on om.conversation_id = me.conversation_id and om.user_id <> me.user_id and om.is_active = 1
-        where me.user_id = ? and me.is_active = 1
-          and not exists (select 1 from user_blocks_t b where b.is_active = 1
-              and ((b.blocker_id = me.user_id and b.blocked_id = om.user_id) or (b.blocker_id = om.user_id and b.blocked_id = me.user_id)))`;
+        left join user_blocks_t b1 on b1.blocker_id = me.user_id and b1.blocked_id = om.user_id and b1.is_active = 1
+        left join user_blocks_t b2 on b2.blocker_id = om.user_id and b2.blocked_id = me.user_id and b2.is_active = 1
+        where me.user_id = ? and me.is_active = 1 and b1.block_id is null and b2.block_id is null`;
     return dbutils.executeQuery(qry, [userId], 'list presence watchers');
 };
 
@@ -49,27 +51,32 @@ exports.getActiveIdsIn = (userIds) => {
 exports.searchUsers = (viewerId, query, limit) => {
     log('in searchUsers');
     const like = `%${query}%`;
-    const qry = `select ${PUBLIC_COLUMNS},
-            exists(select 1 from user_blocks_t b where b.blocker_id = ? and b.blocked_id = u.user_id and b.is_active = 1) as blocked_by_me
+    // blocks are joins on the unique (blocker_id, blocked_id) key: b = the viewer blocked them,
+    // bb = they blocked the viewer (then they are left out)
+    const qry = `select ${PUBLIC_COLUMNS}, (b.block_id is not null) as blocked_by_me
         from users_lst_t u
+        left join user_blocks_t b on b.blocker_id = ? and b.blocked_id = u.user_id and b.is_active = 1
+        left join user_blocks_t bb on bb.blocker_id = u.user_id and bb.blocked_id = ? and bb.is_active = 1
         where u.is_active = 1
           and u.user_id <> ?
           and (u.first_nm like ? or u.last_nm like ? or concat(u.first_nm, ' ', ifnull(u.last_nm, '')) like ? or u.email like ?)
-          and not exists(select 1 from user_blocks_t bb where bb.blocker_id = u.user_id and bb.blocked_id = ? and bb.is_active = 1)
+          and bb.block_id is null
         order by u.first_nm, u.last_nm, u.user_id
         limit ${Number(limit)}`;
-    return dbutils.executeQuery(qry, [viewerId, viewerId, like, like, like, like, viewerId], 'search users');
+    return dbutils.executeQuery(qry, [viewerId, viewerId, viewerId, like, like, like, like], 'search users');
 };
 
 // a member as another signed-in member sees them: public columns, when they joined, and the relationship
 // to the viewer (blocks in both directions, their one-to-one conversation if there is one)
 exports.getPublicProfile = (viewerId, userId, pairKey) => {
     log('in getPublicProfile');
+    // blocks and the pair's chat are joins on unique keys (uq_block_pair, uq_conv_user_pair): one row each at most
     const qry = `select u.user_id, u.first_nm, u.last_nm, u.email, u.profile_photo_url, u.created_at as member_since, u.last_seen_at,
-            exists(select 1 from user_blocks_t b where b.blocker_id = ? and b.blocked_id = u.user_id and b.is_active = 1) as blocked_by_me,
-            exists(select 1 from user_blocks_t b where b.blocker_id = u.user_id and b.blocked_id = ? and b.is_active = 1) as has_blocked_me,
-            (select c.conversation_id from conversations_lst_t c where c.user_pair_key = ? and c.is_active = 1) as conversation_id
+            (b.block_id is not null) as blocked_by_me, (hb.block_id is not null) as has_blocked_me, c.conversation_id
         from users_lst_t u
+        left join user_blocks_t b on b.blocker_id = ? and b.blocked_id = u.user_id and b.is_active = 1
+        left join user_blocks_t hb on hb.blocker_id = u.user_id and hb.blocked_id = ? and hb.is_active = 1
+        left join conversations_lst_t c on c.user_pair_key = ? and c.is_active = 1
         where u.user_id = ? and u.is_active = 1`;
     return dbutils.executeQuery(qry, [viewerId, viewerId, pairKey, userId], 'get public profile');
 };

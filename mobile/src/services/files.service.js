@@ -34,6 +34,38 @@ export async function getUserPhoto(userId) {
     }
 }
 
+// a group's photo as a data uri (members, and people who exited); null when it has none
+export async function getGroupPhoto(conversationId) {
+    try {
+        const blob = await download(`conversations/${conversationId}/photo`);
+        if (!(blob instanceof Blob) || !blob.size) return null;
+        return await blobToDataUri(blob);
+    } catch {
+        return null;
+    }
+}
+
+// admins: a new group photo (raw body, like the profile photo); the server compresses it and replaces the old one
+export async function uploadGroupPhoto(conversationId, file, meta = {}) {
+    try {
+        return await upload(`conversations/${conversationId}/photo`, file, {
+            "Content-Type": meta.type || file.type || "application/octet-stream",
+            "x-file-name": encodeURIComponent(meta.name || `group-${Date.now()}.jpg`),
+        });
+    } catch (error) {
+        return error;
+    }
+}
+
+// admins: the group photo removed (row and file)
+export async function removeGroupPhoto(conversationId) {
+    try {
+        return await remove(`conversations/${conversationId}/photo`);
+    } catch (error) {
+        return error;
+    }
+}
+
 // removes the logged in user's photo; the server deletes the file too. answers the api response
 export async function removeProfilePhoto() {
     try {

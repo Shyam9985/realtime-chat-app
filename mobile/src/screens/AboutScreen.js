@@ -14,8 +14,9 @@ import { APP_VERSION } from '../config';
  */
 
 const FEATURES = [
+  { icon: 'lock-closed-outline', title: 'End-to-end encrypted', text: 'Every message is locked on your phone before it is sent and unlocked only on the phones of the people in the chat. Nobody else can read it, not even YaapZone.' },
   { icon: 'chatbubbles-outline', title: 'Chat one-to-one', text: 'Tap the green button in Chats, then search by name or email to start a conversation.' },
-  { icon: 'people-outline', title: 'Chat in groups', text: 'Tap the green button, then “New group”: pick people and give the group a name. You become its admin. Admins add or remove people, make others admins, and change the name. Anyone can exit a group, and still read what they received.' },
+  { icon: 'people-outline', title: 'Chat in groups', text: 'Tap the green button, then “New group”: pick people and give the group a name. You become its admin. Admins add or remove people, make others admins, and change the name and group photo. Anyone can exit a group, and still read what they received.' },
   { icon: 'flash-outline', title: 'Messages arrive instantly', text: 'If the other person is offline, your message waits and reaches them as soon as they’re back online.' },
   { icon: 'person-circle-outline', title: 'See who you’re talking to', text: 'Tap someone’s photo in Chats, or their name at the top of a chat, to see their profile.' },
   { icon: 'trash-outline', title: 'Delete for everyone', text: `Press and hold a message you sent to see when it was delivered and read, or to delete it for both of you. You have ${DELETE_WINDOW_MINUTES} minutes after sending.` },
@@ -33,15 +34,18 @@ const TICKS = [
 ];
 
 const PRIVACY = [
+  { icon: 'lock-closed-outline', text: 'Your messages are end-to-end encrypted: the server only stores them locked, and only the phones in the chat hold the key.' },
   { icon: 'eye-off-outline', text: 'Other members can’t see your conversations.' },
   { icon: 'id-card-outline', text: 'Other members can see your name, email address, profile photo and the date you joined. Your mobile number and date of birth are never shown.' },
   { icon: 'people-circle-outline', text: 'In a group, you only see the messages sent while you were in it. After you exit, you keep what you received but get nothing new.' },
   { icon: 'hand-left-outline', text: 'People you block can’t message you, find you in search or see your profile photo.' },
-  { icon: 'cloud-done-outline', text: 'Your chats are saved to your account, so they’re still there when you sign in on a new phone.' },
+  { icon: 'cloud-done-outline', text: 'Your chats are saved to your account, so they’re still there when you sign in on a new phone: your password unlocks them.' },
+  { icon: 'trash-outline', text: 'In Profile you can delete your account. It removes your profile, photos, keys and every message you sent, for good.' },
 ];
 
 const SAFETY = [
   { icon: 'key-outline', text: 'Your password is stored in scrambled form, so nobody can read it.' },
+  { icon: 'shield-checkmark-outline', text: 'Keep the recovery code you got when you signed up (it is also in your email). If you forget your password, it is the only way to read your old messages again. Profile → New recovery code makes a new one.' },
   { icon: 'lock-closed-outline', text: 'After 5 wrong password attempts in a row, your account locks for 24 hours. To unlock it straight away, tap “Forgot Password?” on the sign-in screen and set a new password with the code we email you.' },
 ];
 
@@ -116,7 +120,7 @@ export default function AboutScreen() {
             <Image source={require('../../assets/icon.png')} style={{ width: 96, height: 96, borderRadius: 24 }} accessibilityIgnoresInvertColors />
             <Text style={{ fontSize: theme.font.xl, fontWeight: '700', color: c.text, marginTop: theme.space.md }}>YaapZone</Text>
             <Text style={{ marginTop: 2, textAlign: 'center', fontSize: theme.font.md, fontWeight: '600', color: c.accent }}>More Gossip. More Giggles.</Text>
-            <Muted style={{ marginTop: theme.space.xs, textAlign: 'center' }}>Simple one-to-one messaging with the people you know.</Muted>
+            <Muted style={{ marginTop: theme.space.xs, textAlign: 'center' }}>Simple, end-to-end encrypted messaging with the people you know.</Muted>
             <Muted style={{ marginTop: theme.space.sm, fontSize: theme.font.xs }}>Version {APP_VERSION}</Muted>
           </View>
         </Card>

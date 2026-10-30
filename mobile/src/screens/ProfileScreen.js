@@ -6,7 +6,7 @@ import { useTheme, MIN_FONT, MAX_FONT, DEFAULT_FONT } from '../theme/ThemeContex
 import { useAuth } from '../contexts/AuthContext';
 import { useChat } from '../contexts/ChatContext';
 import { useToast } from '../contexts/MessageContext';
-import { getProfile, updateProfile } from '../services/profile.service';
+import { deleteAccount, getProfile, updateProfile } from '../services/profile.service';
 import { deletePhoto, loadPhoto, savePhoto } from '../store/photoStore';
 import * as keyStore from '../crypto/keyStore';
 import { getProfilePhoto, removeProfilePhoto, uploadFile } from '../services/files.service';
@@ -91,6 +91,25 @@ export default function ProfileScreen() {
   const [confirmSignOut, setConfirmSignOut] = useState(false);
   const [confirmRemovePhoto, setConfirmRemovePhoto] = useState(false);
   const [makingCode, setMakingCode] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleting, setDeleting] = useState(false);
+
+  // the account and everything it wrote are deleted for good; the password is asked again first
+  const confirmDeleteAccount = async () => {
+    const password = deletePassword;
+    setDeletePassword('');
+    if (!password) { toast.warning('Enter your password to delete your account.'); return; }
+    setDeleting(true);
+    const result = await deleteAccount(password, user?.user_id);
+    setDeleting(false);
+    if (!result?.success) {
+      toast.error(result?.statusKey === 'INVALID_CREDENTIALS' ? 'Incorrect password. Your account was not deleted.' : result?.error || result?.message || 'Could not delete your account.');
+      return;
+    }
+    toast.success('Your account and all your data were deleted.');
+    authCtx.handleLogOut();
+  };
 
   // a new recovery code (mailed and shown once); the old one stops opening the backup
   const newRecoveryCode = async () => {
@@ -354,6 +373,9 @@ export default function ProfileScreen() {
           <View style={{ padding: theme.space.lg }}>
             <Muted style={{ marginBottom: theme.space.md }}>Signing out stops messages reaching this device until you sign in again.</Muted>
             <Button title="Sign out" variant="danger" icon="log-out-outline" onPress={() => setConfirmSignOut(true)} />
+            <Muted style={{ marginTop: theme.space.xl, marginBottom: theme.space.md }}>Deleting your account removes your profile, photos, keys and every message you sent, for everyone. It cannot be undone.</Muted>
+            <Button title={deleting ? 'Deleting your account...' : 'Delete account'} variant="danger" icon="trash-outline" loading={deleting}
+              onPress={() => { setDeletePassword(''); setDeleteOpen(true); }} testID="delete-account" />
           </View>
         </Section>
         <Muted style={{ textAlign: 'center', marginTop: theme.space.xl }}>YaapZone v{APP_VERSION}</Muted>
@@ -362,6 +384,13 @@ export default function ProfileScreen() {
       <Dialog visible={confirmSignOut} icon="log-out-outline" tone="danger" title="Sign out?" message="You will need to sign in again to continue."
         actions={[{ label: 'Cancel' }, { label: 'Sign out', style: 'destructive', onPress: confirmLogout, testID: 'confirm-sign-out' }]}
         onClose={() => setConfirmSignOut(false)} />
+
+      <Dialog visible={deleteOpen} icon="warning-outline" tone="danger" title="Delete your account?" onClose={() => setDeleteOpen(false)}
+        message="This deletes your account and everything in it, for good: your profile and photo, your encryption keys, every message you sent (also in other people's chats), your one-to-one chats and the groups only you are in. This cannot be undone."
+        actions={[{ label: 'Cancel' }, { label: 'Delete', style: 'destructive', onPress: confirmDeleteAccount, testID: 'confirm-delete-account' }]}>
+        <TextField label="Your password" icon="lock-closed-outline" value={deletePassword} onChangeText={setDeletePassword} secureTextEntry
+          placeholder="Type your password to confirm" style={{ marginTop: theme.space.lg }} testID="delete-account-password" />
+      </Dialog>
 
       <Dialog visible={confirmRemovePhoto} icon="trash-outline" tone="danger" title="Remove profile photo?" message="Your friends will see your initials instead."
         actions={[{ label: 'Cancel' }, { label: 'Remove', style: 'destructive', onPress: removePhoto, testID: 'confirm-remove-photo' }]}

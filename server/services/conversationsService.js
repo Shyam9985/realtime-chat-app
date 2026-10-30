@@ -20,6 +20,8 @@ const toSummaryDto = (row) => ({
     // else the shared group title
     title: row.custom_title || row.title || null,
     description: row.description ?? null,
+    // groups: the stored path of the group photo (it changes with every new photo, so it doubles as a cache key)
+    photo_url: row.photo_url ?? null,
     created_by: row.created_by,
     // groups: whether the caller is still in it (an exited group stays listed, read-only), their role,
     // and how many people are in it now

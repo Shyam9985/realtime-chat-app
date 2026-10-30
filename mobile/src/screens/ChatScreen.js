@@ -6,7 +6,7 @@ import { useChat } from '../contexts/ChatContext';
 import { useToast } from '../contexts/MessageContext';
 import * as chatApi from '../services/chat.service';
 import { Screen, Banner, IconButton, Button, EmptyState, Avatar, GroupAvatar, Dialog, PopupMenu, KeyboardAvoider, ChatSkeleton, TextField } from '../components/ui';
-import { MessageBubble, DaySeparator, StatusTicks, ReplyQuote, SystemNotice } from '../components/MessageBubble';
+import { MessageBubble, DaySeparator, StatusTicks, ReplyQuote, SystemNotice, EncryptionNotice } from '../components/MessageBubble';
 import ScheduleDialog from '../components/ScheduleDialog';
 import { exportChatAsPdf } from '../utils/exportChat';
 import { DELETE_WINDOW_MINUTES, MESSAGE_MAX_LENGTH, dayLabel, firstName, fullName, fullStamp, isGroup, isNotice, isSameDay, minutesSince, noticeText, presenceLabel, timeOf } from '../utils/chatFormat';
@@ -16,11 +16,11 @@ const SEARCH_PAGES = 20;          // search loads up to this many older pages (3
 
 // whatsapp-style header: avatar, name and a line underneath ("Online" / last active; in a group, who is in it).
 // tapping it opens the contact's profile or the group's info
-function HeaderTitle({ user, group, title, subtitle, color, onPress }) {
+function HeaderTitle({ user, group, conversation, title, subtitle, color, onPress }) {
   return (
     <Pressable onPress={onPress} disabled={!onPress} accessibilityRole="button" accessibilityLabel={group ? `${title}, group info` : `View ${title}'s profile`} testID="chat-header"
       style={{ flexDirection: 'row', alignItems: 'center', gap: 10, maxWidth: 230 }}>
-      {group ? <GroupAvatar size={36} /> : user ? <Avatar user={user} size={36} /> : null}
+      {group ? <GroupAvatar size={36} conversationId={conversation?.conversation_id} photoUrl={conversation?.photo_url} /> : user ? <Avatar user={user} size={36} /> : null}
       <View style={{ minWidth: 0, flexShrink: 1 }}>
         <Text numberOfLines={1} style={{ color, fontWeight: '700', fontSize: 17 }}>{title}</Text>
         {subtitle ? <Text numberOfLines={1} style={{ color, opacity: 0.8, fontSize: 12 }} testID="chat-header-subtitle">{subtitle}</Text> : null}
@@ -240,7 +240,7 @@ export default function ChatScreen({ route, navigation }) {
     } else {
       navigation.setOptions({
         headerLeft: undefined,
-        headerTitle: () => <HeaderTitle user={other} group={group} title={name} subtitle={subtitle} color={color} onPress={other || group ? openProfile : undefined} />,
+        headerTitle: () => <HeaderTitle user={other} group={group} conversation={conversation} title={name} subtitle={subtitle} color={color} onPress={other || group ? openProfile : undefined} />,
         headerRight: () => (
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             {headerIcon('search-outline', () => setSearchMode(true), 'Search this chat', color, 'chat-search-open')}
@@ -250,7 +250,7 @@ export default function ChatScreen({ route, navigation }) {
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [navigation, selected, searchMode, searchQuery, results, resultIndex, other, group, subtitle, name, c.headerText, openProfile]);
+  }, [navigation, selected, searchMode, searchQuery, results, resultIndex, other, group, conversation?.photo_url, subtitle, name, c.headerText, openProfile]);
 
   // ---- sending, editing, scheduling
   const send = useCallback(async () => {
@@ -497,7 +497,8 @@ export default function ChatScreen({ route, navigation }) {
                 listRef.current?.scrollToOffset({ offset: index * averageItemLength, animated: false });
                 setTimeout(() => listRef.current?.scrollToIndex({ index, viewPosition: 0.5, animated: true }), 120);
               }}
-              ListFooterComponent={thread?.status === 'loading' ? <ActivityIndicator size="small" color={c.accent} style={{ marginVertical: theme.space.md }} /> : null}
+              // the list is inverted: its footer is the top of the chat, where the encryption notice sits once the oldest message is loaded
+              ListFooterComponent={thread?.status === 'loading' ? <ActivityIndicator size="small" color={c.accent} style={{ marginVertical: theme.space.md }} /> : !thread?.hasMore ? <EncryptionNotice group={group} /> : null}
               contentContainerStyle={{ paddingVertical: theme.space.md }}
               testID="message-list"
             />

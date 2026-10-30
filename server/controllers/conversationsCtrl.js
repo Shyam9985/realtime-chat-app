@@ -8,6 +8,9 @@ const conversationsVldtr = require('../validators/conversationsVldtr');
 const messagesVldtr = require('../validators/messagesVldtr');
 const scheduledVldtr = require('../validators/scheduledVldtr');
 const groupsVldtr = require('../validators/groupsVldtr');
+const filesVldtr = require('../validators/filesVldtr');
+const fs = require('fs');
+const { pipeline } = require('stream/promises');
 const { sendChatError } = require('./usersCtrl');
 const { log } = require('../utils/log.utils');
 
@@ -121,3 +124,27 @@ exports.setMemberRole = handle('group set role', RESPONSE_STATUS.UPDATED, (req) 
 exports.leaveGroup = handle('group leave', RESPONSE_STATUS.SUCCESS, (req) => groupsService.leaveSrvc(req.user.user_id, groupsVldtr.conversationId(req.params.id)));
 // DELETE /conversations/:id  - an exited group leaves the caller's list
 exports.deleteGroup = handle('group delete', RESPONSE_STATUS.DELETED, (req) => groupsService.deleteSrvc(req.user.user_id, groupsVldtr.conversationId(req.params.id)));
+
+// ---- the group photo
+// POST /conversations/:id/photo  (admins) - the body is the raw image; its name and type travel in
+// headers (x-file-name, content-type) and are checked before any byte is read
+exports.setGroupPhoto = handle('group set photo', RESPONSE_STATUS.UPDATED, (req) => {
+    const conversationId = groupsVldtr.conversationId(req.params.id);
+    const meta = filesVldtr.validateUploadMeta(req.headers);
+    return groupsService.setPhotoSrvc(req.user.user_id, conversationId, req, meta);
+});
+// DELETE /conversations/:id/photo  (admins)
+exports.removeGroupPhoto = handle('group remove photo', RESPONSE_STATUS.DELETED, (req) => groupsService.removePhotoSrvc(req.user.user_id, groupsVldtr.conversationId(req.params.id)));
+// GET /conversations/:id/photo  - streamed back, like a profile photo
+exports.getGroupPhoto = async (req, res) => {
+    log('in group get photo');
+    try {
+        const photo = await groupsService.getPhotoSrvc(req.user.user_id, groupsVldtr.conversationId(req.params.id));
+        res.setHeader('Content-Type', photo.mimeType);
+        res.setHeader('Content-Length', photo.sizeBytes);
+        await pipeline(fs.createReadStream(photo.absolutePath), res);
+    } catch (error) {
+        if (res.headersSent) return undefined;
+        return sendChatError(req, res, error, 'group get photo');
+    }
+};

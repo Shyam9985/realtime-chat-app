@@ -58,6 +58,8 @@ export const noticeText = (m, myId) => {
         case "ADMIN_ASSIGNED": return aboutMe ? "You’re now an admin" : `${m.system_target_name || "Someone"} is now an admin`;
         case "NAME_CHANGED": return `${actor} changed the group name to “${m.content}”`;
         case "DESCRIPTION_CHANGED": return `${actor} changed the group description`;
+        case "PHOTO_CHANGED": return `${actor} changed the group photo`;
+        case "PHOTO_REMOVED": return `${actor} removed the group photo`;
         default: return m.content || "";
     }
 };

@@ -1,41 +1,56 @@
 const dbutils = require('../utils/db.utils');
 const { log } = require('../utils/log.utils');
 
-// one message with its aggregated receipt state. delivered_at / seen_at are set only once EVERY
-// recipient still waited for has delivered / seen (for a one-to-one chat that is the single
-// recipient; in a group, someone who left before seeing it is no longer waited for).
-// deleted messages come back with content null: the original text never leaves the server (FR-023).
-// a reply carries a preview of the message it quotes (also null when that one was deleted); a forwarded
-// copy only says that it was forwarded, never where from. names come along so a group chat can say
-// who wrote what, and a notice who it is about
-const MESSAGE_SELECT = `select m.message_id, m.conversation_id, m.sender_id, mt.type_code as message_type,
-            case when m.is_deleted = 1 then null else m.content end as content, m.key_version, m.enc_format,
-            m.client_message_id, m.is_deleted, m.deleted_at, m.created_at, m.is_edited, m.edited_at,
-            (m.forwarded_from_message_id is not null) as is_forwarded,
-            su.first_nm as sender_first_nm, su.last_nm as sender_last_nm,
-            m.system_event, m.system_target_user_id, tu.first_nm as target_first_nm, tu.last_nm as target_last_nm,
-            m.reply_to_message_id, rm.sender_id as reply_sender_id, rm.is_deleted as reply_is_deleted,
-            case when rm.is_deleted = 1 then null else rm.content end as reply_content, rm.key_version as reply_key_version, rm.enc_format as reply_enc_format,
-            ru.first_nm as reply_sender_first_nm, ru.last_nm as reply_sender_last_nm,
-            case when count(r.message_receipt_id) > 0 and sum(r.delivered_at is null) = 0 then max(r.delivered_at) end as delivered_at,
-            case when count(r.message_receipt_id) > 0 and sum(r.seen_at is null) = 0 then max(r.seen_at) end as seen_at
-        from messages_lst_t m
-        join message_type_master_t mt on mt.message_type_id = m.message_type_id
-        join users_lst_t su on su.user_id = m.sender_id
-        left join users_lst_t tu on tu.user_id = m.system_target_user_id
-        left join messages_lst_t rm on rm.message_id = m.reply_to_message_id
-        left join users_lst_t ru on ru.user_id = rm.sender_id
-        left join message_receipts_t r on r.message_id = m.message_id and r.is_active = 1 and r.excluded_at is null`;
-const MESSAGE_GROUP = `group by m.message_id, m.conversation_id, m.sender_id, mt.type_code, m.content, m.key_version, m.enc_format, m.client_message_id, m.is_deleted,
-        m.deleted_at, m.created_at, m.is_edited, m.edited_at, m.forwarded_from_message_id, su.first_nm, su.last_nm,
-        m.system_event, m.system_target_user_id, tu.first_nm, tu.last_nm,
-        m.reply_to_message_id, rm.sender_id, rm.is_deleted, rm.content, rm.key_version, rm.enc_format, ru.first_nm, ru.last_nm`;
+/*
+ * Messages are read in two steps, so the cost follows the page and never the size of the chat:
+ *  1. `page`  (a CTE): only the ids of the messages wanted, found through the indexes
+ *     (idx_msg_conv_created for a chat's history, the primary key for one message), already ordered
+ *     and limited
+ *  2. `ticks` (a CTE): the receipts of just those messages, aggregated once per message. delivered_at /
+ *     seen_at are set only once EVERY recipient still waited for has delivered / seen it (in a
+ *     one-to-one chat that is the single recipient; in a group, someone who left before seeing it is
+ *     no longer waited for)
+ * then the page is joined to its message rows, names, the quoted message and the ticks.
+ * deleted messages come back with content null: the original text never leaves the server (FR-023).
+ * a reply carries a preview of the message it quotes (also null when that one was deleted); a forwarded
+ * copy only says that it was forwarded, never where from. names come along so a group chat can say
+ * who wrote what, and a notice who it is about
+ */
+const withMessages = (pageSql) => `with page as (${pageSql}),
+    ticks as (
+        select r.message_id, count(*) as receipts, sum(r.delivered_at is null) as undelivered, sum(r.seen_at is null) as unseen,
+            max(r.delivered_at) as last_delivered, max(r.seen_at) as last_seen
+        from page p
+        join message_receipts_t r on r.message_id = p.message_id and r.is_active = 1 and r.excluded_at is null
+        group by r.message_id)
+    select m.message_id, m.conversation_id, m.sender_id, mt.type_code as message_type,
+        case when m.is_deleted = 1 then null else m.content end as content, m.key_version, m.enc_format,
+        m.client_message_id, m.is_deleted, m.deleted_at, m.created_at, m.is_edited, m.edited_at,
+        (m.forwarded_from_message_id is not null) as is_forwarded,
+        su.first_nm as sender_first_nm, su.last_nm as sender_last_nm,
+        m.system_event, m.system_target_user_id, tu.first_nm as target_first_nm, tu.last_nm as target_last_nm,
+        m.reply_to_message_id, rm.sender_id as reply_sender_id, rm.is_deleted as reply_is_deleted,
+        case when rm.is_deleted = 1 then null else rm.content end as reply_content, rm.key_version as reply_key_version, rm.enc_format as reply_enc_format,
+        ru.first_nm as reply_sender_first_nm, ru.last_nm as reply_sender_last_nm,
+        case when t.receipts > 0 and t.undelivered = 0 then t.last_delivered end as delivered_at,
+        case when t.receipts > 0 and t.unseen = 0 then t.last_seen end as seen_at
+    from page p
+    join messages_lst_t m on m.message_id = p.message_id
+    join message_type_master_t mt on mt.message_type_id = m.message_type_id
+    join users_lst_t su on su.user_id = m.sender_id
+    left join users_lst_t tu on tu.user_id = m.system_target_user_id
+    left join messages_lst_t rm on rm.message_id = m.reply_to_message_id
+    left join users_lst_t ru on ru.user_id = rm.sender_id
+    left join ticks t on t.message_id = m.message_id
+    order by m.created_at desc, m.message_id desc`;
 
 // who may see a message: its sender, and everyone it was delivered to (a receipt). receipts are
 // written for the members at the moment of sending, minus anyone who blocked the sender, so this one
-// rule covers joining a group later, leaving it, rejoining, and blocking inside a group
-const VISIBLE_TO = `and (m.sender_id = ? or exists (select 1 from message_receipts_t v
-            where v.message_id = m.message_id and v.user_id = ? and v.is_active = 1))`;
+// rule covers joining a group later, leaving it, rejoining, and blocking inside a group. the join hits
+// one row at most (uq_receipt_msg_user), so it never multiplies the messages. params: viewer, then the
+// query's own, then viewer again for VISIBLE_WHERE
+const VISIBLE_JOIN = 'left join message_receipts_t vr on vr.message_id = m.message_id and vr.user_id = ? and vr.is_active = 1';
+const VISIBLE_WHERE = 'and (m.sender_id = ? or vr.message_receipt_id is not null)';
 
 exports.getMessageTypeByCode = (code) => {
     log('in getMessageTypeByCode');
@@ -45,14 +60,14 @@ exports.getMessageTypeByCode = (code) => {
 
 exports.getById = (messageId) => {
     log('in getById (message)');
-    const qry = `${MESSAGE_SELECT} where m.message_id = ? and m.is_active = 1 ${MESSAGE_GROUP}`;
+    const qry = withMessages('select m.message_id from messages_lst_t m where m.message_id = ? and m.is_active = 1');
     return dbutils.executeQuery(qry, [messageId], 'get message by id');
 };
 
 // idempotent sends: the same client_message_id from the same sender maps to the same row
 exports.getBySenderAndClientId = (senderId, clientMessageId) => {
     log('in getBySenderAndClientId');
-    const qry = `${MESSAGE_SELECT} where m.sender_id = ? and m.client_message_id = ? and m.is_active = 1 ${MESSAGE_GROUP}`;
+    const qry = withMessages('select m.message_id from messages_lst_t m where m.sender_id = ? and m.client_message_id = ? and m.is_active = 1');
     return dbutils.executeQuery(qry, [senderId, clientMessageId], 'get message by client id');
 };
 
@@ -120,9 +135,10 @@ exports.getHistory = (conversationId, viewerId, cursor, limit) => {
     const where = cursor
         ? 'and (m.created_at < ? or (m.created_at = ? and m.message_id < ?))'
         : '';
-    const params = [conversationId, viewerId, viewerId, ...(cursor ? [cursor.createdAt, cursor.createdAt, cursor.messageId] : [])];
-    const qry = `${MESSAGE_SELECT} where m.conversation_id = ? and m.is_active = 1 ${VISIBLE_TO} ${where} ${MESSAGE_GROUP}
-        order by m.created_at desc, m.message_id desc limit ${Number(limit)}`;
+    const params = [viewerId, conversationId, viewerId, ...(cursor ? [cursor.createdAt, cursor.createdAt, cursor.messageId] : [])];
+    const qry = withMessages(`select m.message_id from messages_lst_t m ${VISIBLE_JOIN}
+        where m.conversation_id = ? and m.is_active = 1 ${VISIBLE_WHERE} ${where}
+        order by m.created_at desc, m.message_id desc limit ${Number(limit)}`);
     return dbutils.executeQuery(qry, params, 'get history');
 };
 
@@ -130,17 +146,18 @@ exports.getHistory = (conversationId, viewerId, cursor, limit) => {
 // at most `cap` (days and cap are validated by the service and inlined, like LIMIT)
 exports.getRecentHistory = (conversationId, viewerId, days, cap) => {
     log('in getRecentHistory');
-    const qry = `${MESSAGE_SELECT} where m.conversation_id = ? and m.is_active = 1 ${VISIBLE_TO}
-          and m.created_at >= now(3) - interval ${Number(days)} day ${MESSAGE_GROUP}
-        order by m.created_at desc, m.message_id desc limit ${Number(cap)}`;
-    return dbutils.executeQuery(qry, [conversationId, viewerId, viewerId], 'get recent history');
+    const qry = withMessages(`select m.message_id from messages_lst_t m ${VISIBLE_JOIN}
+        where m.conversation_id = ? and m.is_active = 1 ${VISIBLE_WHERE}
+          and m.created_at >= now(3) - interval ${Number(days)} day
+        order by m.created_at desc, m.message_id desc limit ${Number(cap)}`);
+    return dbutils.executeQuery(qry, [viewerId, conversationId, viewerId], 'get recent history');
 };
 
 // one message, only when the viewer may see it (else nothing, as if it did not exist)
 exports.getVisibleById = (messageId, viewerId) => {
     log('in getVisibleById');
-    const qry = `${MESSAGE_SELECT} where m.message_id = ? and m.is_active = 1 ${VISIBLE_TO} ${MESSAGE_GROUP}`;
-    return dbutils.executeQuery(qry, [messageId, viewerId, viewerId], 'get visible message');
+    const qry = withMessages(`select m.message_id from messages_lst_t m ${VISIBLE_JOIN} where m.message_id = ? and m.is_active = 1 ${VISIBLE_WHERE}`);
+    return dbutils.executeQuery(qry, [viewerId, messageId, viewerId], 'get visible message');
 };
 
 // everyone a message was delivered to (its receipts), for announcing it, its edits and its deletion
@@ -150,7 +167,7 @@ exports.getRecipientIds = async (messageId) => {
     return rows.map((r) => r.user_id);
 };
 
-// each message's aggregated ticks (the same rule as MESSAGE_SELECT), to tell senders when they moved
+// each message's aggregated ticks (the same rule as withMessages), to tell senders when they moved
 exports.getAggregateStatus = (messageIds) => {
     log('in getAggregateStatus');
     const marks = messageIds.map(() => '?').join(', ');

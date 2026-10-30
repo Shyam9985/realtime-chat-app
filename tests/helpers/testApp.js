@@ -3,7 +3,6 @@
  * Nothing is mocked: these are integration tests of the behaviour the SRS asks for.
  */
 process.env.SCHEDULE_RUN = 'false';           // no cron jobs in the test process
-process.env.RATE_LIMIT_BYPASS = 'true';       // the http limiter is per ip and every test call comes from one ip
 process.env.SHOW_LOG = process.env.TEST_SHOW_LOG || 'false';
 process.env.EMAIL_SEND_DISABLED = 'true';      // sign-ups mail a recovery code: never to the fake test addresses
 require('dotenv').config();
@@ -64,9 +63,43 @@ const decryptDeep = (value) => {
     return out;
 };
 
+/*
+ * The rate limits stay on in the tests. Requests without a sign-in (sign-up, login, password recovery)
+ * are limited per ip, and every test runs on one machine: like separate phones, each such request
+ * comes from its own loopback address (127.0.0.2, .3, ...; the whole 127/8 range is this machine).
+ * Signed-in requests are limited per user, so they need nothing special.
+ */
+let nextLoopback = 1;
+const loopbackAddress = () => {
+    nextLoopback = nextLoopback >= 250 * 250 ? 2 : nextLoopback + 1;
+    return `127.0.${Math.floor(nextLoopback / 250)}.${(nextLoopback % 250) + 2}`;
+};
+
+// fromAddress: a fixed source address, for tests about one network (default: the next loopback address)
+const anonymousCall = (baseUrl, method, path, body, fromAddress = loopbackAddress(), extraHeaders = {}) => new Promise((resolve, reject) => {
+    const url = new URL(`${baseUrl}/apiv1${path}`);
+    const payload = body === undefined ? null : JSON.stringify(body);
+    const req = http.request({
+        host: url.hostname, port: url.port, path: url.pathname + url.search, method, localAddress: fromAddress,
+        headers: { 'content-type': 'application/json', ...extraHeaders, ...(payload ? { 'content-length': Buffer.byteLength(payload) } : {}) },
+    }, (res) => {
+        let text = '';
+        res.setEncoding('utf8');
+        res.on('data', (chunk) => { text += chunk; });
+        res.on('end', () => {
+            let json = null;
+            try { json = JSON.parse(text); } catch (_) { /* no body */ }
+            resolve({ status: res.statusCode, body: json, headers: { get: (name) => res.headers[String(name).toLowerCase()] ?? null } });
+        });
+    });
+    req.on('error', reject);
+    if (payload) req.write(payload);
+    req.end();
+});
+
 const rawCall = async (baseUrl, token, method, path, body) => {
-    const headers = { 'content-type': 'application/json' };
-    if (token) headers['access-token'] = `Bearer ${token}`;
+    if (!token) return anonymousCall(baseUrl, method, path, body);
+    const headers = { 'content-type': 'application/json', 'access-token': `Bearer ${token}` };
     const res = await fetch(`${baseUrl}/apiv1${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
     let json = null;
     try { json = await res.json(); } catch (_) { /* no body */ }
@@ -234,4 +267,4 @@ const cleanupUsers = async (userIds) => {
     await sql(`delete from audit_logs_t where user_id is null and created_at > now() - interval 1 hour and description like '%test.local%'`);
 };
 
-module.exports = { start, stop, api, request, rawCall, createUser, connectSocket, waitFor, emitWithAck, sleep, sql, cleanupUsers, fakeKeySet, encryptText, decryptText };
+module.exports = { start, stop, api, request, rawCall, anonymousCall, createUser, connectSocket, waitFor, emitWithAck, sleep, sql, cleanupUsers, fakeKeySet, encryptText, decryptText };

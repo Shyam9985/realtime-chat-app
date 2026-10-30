@@ -4,7 +4,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { initials } from '../utils/chatFormat';
-import { getUserPhoto } from '../services/files.service';
+import { getGroupPhoto, getUserPhoto } from '../services/files.service';
 
 // ---- layout
 export function Screen({ children, style, edges = ['bottom'], background }) {
@@ -318,22 +318,32 @@ export function EmptyState({ icon = 'chatbubbles-outline', title, subtitle, acti
  */
 const photoCache = new Map();
 
-export function useUserPhoto(userId, photoVersion) {
-  const key = userId && photoVersion ? `${userId}|${photoVersion}` : null;
+// one cached photo: key names it (owner + stored path), load fetches it once
+function useCachedPhoto(key, load) {
   const [uri, setUri] = useState(() => (key ? photoCache.get(key)?.value || null : null));
   useEffect(() => {
     if (!key) { setUri(null); return undefined; }
     let alive = true;
     let entry = photoCache.get(key);
     if (!entry) {
-      entry = { value: null, promise: getUserPhoto(userId) };
+      entry = { value: null, promise: load() };
       photoCache.set(key, entry);
       entry.promise.then((value) => { if (value) entry.value = value; else photoCache.delete(key); });
     }
     entry.promise.then((value) => { if (alive) setUri(value || null); });
     return () => { alive = false; };
-  }, [key, userId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
   return uri;
+}
+
+export function useUserPhoto(userId, photoVersion) {
+  return useCachedPhoto(userId && photoVersion ? `${userId}|${photoVersion}` : null, () => getUserPhoto(userId));
+}
+
+// a group's photo: photoVersion is the group's photo_url (null: no photo, the people icon shows)
+export function useGroupPhoto(conversationId, photoVersion) {
+  return useCachedPhoto(conversationId && photoVersion ? `group:${conversationId}|${photoVersion}` : null, () => getGroupPhoto(conversationId));
 }
 
 // the member's photo when they have one, otherwise their initials on a soft disc
@@ -350,9 +360,13 @@ export function Avatar({ user, size = 44, showPhoto = true }) {
   );
 }
 
-// a group's picture: the people icon on the same soft disc (groups have no photo)
-export function GroupAvatar({ size = 44 }) {
+// a group's picture: its photo when an admin set one, otherwise the people icon on the same soft disc
+export function GroupAvatar({ size = 44, conversationId = null, photoUrl = null }) {
   const { theme } = useTheme();
+  const photo = useGroupPhoto(conversationId, photoUrl);
+  if (photo) {
+    return <Image source={{ uri: photo }} accessibilityLabel="Group photo" accessibilityIgnoresInvertColors style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: theme.colors.accentSoft }} />;
+  }
   return (
     <View accessibilityLabel="Group" style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: theme.colors.accentSoft, alignItems: 'center', justifyContent: 'center' }}>
       <Ionicons name="people" size={Math.round(size * 0.5)} color={theme.colors.accent} />

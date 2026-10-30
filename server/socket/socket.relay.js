@@ -74,6 +74,12 @@ const registerRelay = (io) => {
         for (const id of memberIds) io.to(room(id)).emit('conversation:key', { conversation_id, key_version });
     });
 
+    // the account was deleted: every phone signed in to it is disconnected (the app signs out)
+    appEvents.on('account.deleted', ({ userId }) => {
+        io.to(room(userId)).emit('account:deleted', {});
+        io.in(room(userId)).disconnectSockets(true);
+    });
+
     // an exited group deleted from this user's list (their other devices drop it too)
     appEvents.on('conversation.removed', ({ userId, conversationId }) => {
         io.to(room(userId)).emit('conversation:removed', { conversation_id: conversationId });

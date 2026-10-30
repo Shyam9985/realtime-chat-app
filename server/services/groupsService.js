@@ -1,4 +1,7 @@
+const fs = require('fs');
 const groupsMdl = require('../models/groupsMdl');
+const fileutils = require('../utils/files.utils');
+const filesService = require('./filesService');
 const conversationsMdl = require('../models/conversationsMdl');
 const usersMdl = require('../models/usersMdl');
 const blocksMdl = require('../models/blocksMdl');
@@ -106,6 +109,7 @@ exports.getGroupSrvc = async (userId, conversationId) => {
             conversation_id: group.conversation_id,
             title: group.title,
             description: group.description,
+            photo_url: group.photo_url ?? null,
             created_at: toIso(group.created_at),
             created_by: { user_id: group.created_by, name: nameOf(group.creator_first_nm, group.creator_last_nm) },
             my_role: membership.member_role,
@@ -203,6 +207,61 @@ exports.deleteSrvc = async (userId, conversationId) => {
     await groupsMdl.hideExitedGroup(conversationId, me);
     appEvents.emit('conversation.removed', { userId: me, conversationId });
     return { deleted: true };
+};
+
+/*
+ * The group photo: admins set or remove it, every member (and someone who exited, who keeps the chat)
+ * sees it. A new photo goes through the same upload as a profile photo (checked while it streams in,
+ * compressed to a JPEG of at most 1 MB) and replaces the old one completely, row and file.
+ * The admin check runs first (before any byte is read) and again inside the locked transaction.
+ */
+const refusePhoto = (result) => {
+    if (result.refused === 'noPhoto') resutils.createError('noPhoto', 'This group has no photo.');
+    refuse(result);
+};
+
+// POST /conversations/:id/photo  (raw image body; meta from filesVldtr.validateUploadMeta)
+exports.setPhotoSrvc = async (userId, conversationId, readStream, meta) => {
+    log('in group setPhotoSrvc');
+    const me = Number(userId);
+    const membership = await assertGroupMember(conversationId, me);
+    if (membership.member_role !== 'ADMIN') resutils.createError('notAdmin', 'Only group admins can change the group photo.');
+
+    const systemTypeId = await messagesService.getSystemTypeId();
+    const result = await filesService.saveStreamedFileSrvc(readStream, { ...meta, uploadedBy: me }, fileutils.GROUP_PHOTO_DIR, {
+        entityType: 'GROUP_PHOTO',
+        entityId: conversationId,
+        persist: async (record) => {
+            const saved = await groupsMdl.replaceGroupPhoto({ conversationId, actorId: me, record, systemTypeId });
+            if (saved.refused) refusePhoto(saved);     // the upload's files are removed by the caller
+            return saved;
+        },
+    });
+    await announce({ conversationId, noticeIds: result.noticeIds, notify: result.memberIds });
+    return { photo_url: result.file_path };
+};
+
+// DELETE /conversations/:id/photo
+exports.removePhotoSrvc = async (userId, conversationId) => {
+    log('in group removePhotoSrvc');
+    const me = Number(userId);
+    await assertGroupMember(conversationId, me);
+    const result = await withRetry(async () => groupsMdl.removeGroupPhoto({ conversationId, actorId: me, systemTypeId: await messagesService.getSystemTypeId() }));
+    if (result.refused) refusePhoto(result);
+    for (const oldPath of result.oldPaths) await fs.promises.unlink(fileutils.resolveStoredPath(oldPath)).catch(() => {});
+    await announce({ conversationId, noticeIds: result.noticeIds, notify: result.memberIds });
+    return { removed: true };
+};
+
+// GET /conversations/:id/photo: the file to stream back
+exports.getPhotoSrvc = async (userId, conversationId) => {
+    log('in group getPhotoSrvc');
+    await conversationsService.assertReaderSrvc(conversationId, userId);
+    const [photo] = await groupsMdl.getGroupPhoto(conversationId);
+    if (!photo) resutils.createError('noPhoto', 'This group has no photo.');
+    const absolutePath = fileutils.resolveStoredPath(photo.file_path);
+    try { await fs.promises.access(absolutePath); } catch (_) { resutils.createError('noPhoto', 'The group photo is missing on the server.'); }
+    return { absolutePath, mimeType: photo.mime_type, sizeBytes: photo.size_bytes };
 };
 
 exports.MAX_MEMBERS = MAX_MEMBERS;

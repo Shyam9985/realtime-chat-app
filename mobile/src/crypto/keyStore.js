@@ -54,6 +54,18 @@ export function forgetSession() {
   pendingPassword = null;
 }
 
+// the account was deleted: its keys and locked chat keys leave this phone too
+export async function deleteLocalKeys(userId) {
+  try { await SecureStore.deleteItemAsync(IDENTITY(userId)); } catch (_) { /* already gone */ }
+  try { await AsyncStorage.removeItem(CHAT_KEYS(userId)); } catch (_) { /* already gone */ }
+  try {
+    const last = JSON.parse((await SecureStore.getItemAsync(LAST_USER)) || 'null');
+    if (last?.user_id === Number(userId)) await SecureStore.deleteItemAsync(LAST_USER);
+  } catch (_) { /* nothing to clear */ }
+  forgetSession();
+  sendKeys.clear();
+}
+
 // the account last signed in on this phone, when it is this email (the forgotten-password screen)
 async function identityForEmail(email) {
   try {

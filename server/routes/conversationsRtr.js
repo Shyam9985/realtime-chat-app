@@ -17,6 +17,10 @@ router.patch('/:id/group', isAuthenticated, checkRateLimit(1, 10), audit('GROUP'
 router.post('/:id/members', isAuthenticated, checkRateLimit(1, 10), audit('GROUP', 'ADD_MEMBERS'), conversationsCtrl.addMembers);
 router.delete('/:id/members/:userId', isAuthenticated, checkRateLimit(1, 10), audit('GROUP', 'REMOVE_MEMBER'), conversationsCtrl.removeMember);
 router.patch('/:id/members/:userId', isAuthenticated, checkRateLimit(1, 10), audit('GROUP', 'SET_ROLE'), conversationsCtrl.setMemberRole);
+// the group photo: admins set or remove it, members (and people who exited) see it
+router.get('/:id/photo', isAuthenticated, checkRateLimit(5, 120), conversationsCtrl.getGroupPhoto);
+router.post('/:id/photo', isAuthenticated, checkRateLimit(0.2, 10), audit('GROUP', 'SET_PHOTO'), conversationsCtrl.setGroupPhoto);
+router.delete('/:id/photo', isAuthenticated, checkRateLimit(0.2, 10), audit('GROUP', 'REMOVE_PHOTO'), conversationsCtrl.removeGroupPhoto);
 router.post('/:id/leave', isAuthenticated, checkRateLimit(1, 10), audit('GROUP', 'LEAVE'), conversationsCtrl.leaveGroup);
 router.get('/:id/messages', isAuthenticated, checkRateLimit(5, 60), conversationsCtrl.history);
 router.post('/:id/seen', isAuthenticated, checkRateLimit(5, 60), conversationsCtrl.markSeen);

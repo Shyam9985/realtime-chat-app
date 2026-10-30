@@ -193,6 +193,21 @@ export function SystemNotice({ text }) {
   );
 }
 
+// the first thing in every chat: who can read it. true for every message: they are encrypted on the
+// sender's phone and only the members' phones hold the key
+export function EncryptionNotice({ group = false }) {
+  const { theme } = useTheme();
+  return (
+    <View style={{ alignItems: 'center', marginVertical: theme.space.md, paddingHorizontal: theme.space.xl }} testID="encryption-notice">
+      <View style={{ backgroundColor: theme.colors.surface, paddingHorizontal: theme.space.md, paddingVertical: theme.space.sm, borderRadius: theme.radius.md, maxWidth: 340 }}>
+        <Text style={{ color: theme.colors.textMuted, fontSize: theme.font.xs, textAlign: 'center', lineHeight: Math.round(theme.font.xs * 1.5) }}>
+          <Ionicons name="lock-closed" size={theme.font.xs} color={theme.colors.textMuted} /> Messages {group ? 'in this group ' : ''}are end-to-end encrypted. Only the people in this chat can read them, not even YaapZone.
+        </Text>
+      </View>
+    </View>
+  );
+}
+
 export function DaySeparator({ label }) {
   const { theme } = useTheme();
   return (
