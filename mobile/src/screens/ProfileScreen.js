@@ -9,7 +9,7 @@ import { useToast } from '../contexts/MessageContext';
 import { deleteAccount, getProfile, updateProfile } from '../services/profile.service';
 import { deletePhoto, loadPhoto, savePhoto } from '../store/photoStore';
 import * as keyStore from '../crypto/keyStore';
-import { getProfilePhoto, removeProfilePhoto, uploadFile } from '../services/files.service';
+import { getProfilePhoto, pickedFileSize, pickedImageType, removeProfilePhoto, uploadPickedPhoto } from '../services/files.service';
 import { handleLogout, resetPasswordMail } from '../services/auth.service';
 import { listBlocked } from '../services/chat.service';
 import { APP_VERSION } from '../config';
@@ -148,17 +148,16 @@ export default function ProfileScreen() {
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.85, allowsEditing: true, aspect: [1, 1] });
     if (result.canceled || !result.assets?.length) return;
     const asset = result.assets[0];
-    const blob = await (await fetch(asset.uri)).blob();
-    const type = (asset.mimeType || blob.type || '').toLowerCase();
+    const type = pickedImageType(asset, null);
     if (!ALLOWED_TYPES.includes(type)) { toast.warning('Please choose a JPG, PNG or WEBP image.'); return; }
-    if ((asset.fileSize || blob.size) > MAX_BYTES) { toast.warning('The photo must be 5 MB or smaller.'); return; }
+    if (pickedFileSize(asset) > MAX_BYTES) { toast.warning('The photo must be 5 MB or smaller.'); return; }
 
     // uploaded so other members see it (the server compresses it and replaces the old one), and kept on
     // this phone too, so it shows at once and offline
     setUploading(true);
     try {
       const extension = type === 'image/png' ? 'png' : type === 'image/webp' ? 'webp' : 'jpg';
-      const response = await uploadFile(blob, null, { name: `profile.${extension}`, type });
+      const response = await uploadPickedPhoto('files/upload', asset.uri, { name: `profile.${extension}`, type });
       if (!response?.success) { toast.error(response?.error || response?.message || 'Could not upload the photo.'); return; }
       setPhotoUrl(await savePhoto(user?.user_id, asset.uri));
       const photoPath = response.data?.file_path || null;

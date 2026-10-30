@@ -8,7 +8,7 @@ import { useToast } from '../contexts/MessageContext';
 import * as chatApi from '../services/chat.service';
 import { Screen, Avatar, GroupAvatar, Button, Muted, Dialog, ProfileSkeleton, Section, Divider, IconButton, TextField, useGroupPhoto } from '../components/ui';
 import ZoomableImage from '../components/ZoomableImage';
-import { removeGroupPhoto, uploadGroupPhoto } from '../services/files.service';
+import { pickedFileSize, pickedImageType, removeGroupPhoto, uploadPickedPhoto } from '../services/files.service';
 import { fullName } from '../utils/chatFormat';
 
 const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -121,14 +121,13 @@ export default function GroupInfoScreen({ route, navigation }) {
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.85, allowsEditing: true, aspect: [1, 1] });
     if (result.canceled || !result.assets?.length) return;
     const asset = result.assets[0];
-    const blob = await (await fetch(asset.uri)).blob();
-    const type = (asset.mimeType || blob.type || '').toLowerCase();
+    const type = pickedImageType(asset, null);
     if (!PHOTO_TYPES.includes(type)) { toast.warning('Please choose a JPG, PNG or WEBP image.'); return; }
-    if ((asset.fileSize || blob.size) > PHOTO_MAX_BYTES) { toast.warning('The photo must be 5 MB or smaller.'); return; }
+    if (pickedFileSize(asset) > PHOTO_MAX_BYTES) { toast.warning('The photo must be 5 MB or smaller.'); return; }
     setPhotoBusy(true);
     try {
       const extension = type === 'image/png' ? 'png' : type === 'image/webp' ? 'webp' : 'jpg';
-      const response = await uploadGroupPhoto(conversationId, blob, { name: `group.${extension}`, type });
+      const response = await uploadPickedPhoto(`conversations/${conversationId}/photo`, asset.uri, { name: `group.${extension}`, type });
       if (!response?.success) { toast.error(response?.error || response?.message || 'Could not change the group photo.'); return; }
       await load();
       chat.refreshConversation(conversationId);
