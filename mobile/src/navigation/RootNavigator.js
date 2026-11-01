@@ -6,6 +6,8 @@ import { createMaterialTopTabNavigator } from '@react-navigation/material-top-ta
 import { Header } from '@react-navigation/elements';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { isRunningInExpoGo } from 'expo';
+import { useShareIntent } from 'expo-share-intent';
 import { useTheme } from '../theme/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useChat } from '../contexts/ChatContext';
@@ -24,6 +26,7 @@ import ChatScreen from '../screens/ChatScreen';
 import ContactInfoScreen from '../screens/ContactInfoScreen';
 import ArchivedScreen from '../screens/ArchivedScreen';
 import ForwardScreen from '../screens/ForwardScreen';
+import ShareToScreen from '../screens/ShareToScreen';
 import NewGroupScreen from '../screens/NewGroupScreen';
 import NewGroupDetailsScreen from '../screens/NewGroupDetailsScreen';
 import GroupInfoScreen from '../screens/GroupInfoScreen';
@@ -124,6 +127,17 @@ export default function RootNavigator() {
   const c = theme.colors;
   const [navReady, setNavReady] = useState(false);
 
+  // something shared into YaapZone from another app (a reel link, a page, text): the "Send to" screen
+  // opens once the user is signed in and unlocked, so a share that arrives at the sign-in screen waits
+  // for them. Expo Go has no share sheet entry (native code), so the hook is off there
+  const { hasShareIntent, shareIntent, resetShareIntent } = useShareIntent({ disabled: isRunningInExpoGo(), resetOnBackground: false });
+  useEffect(() => {
+    if (!hasShareIntent || status !== 'signedIn' || !navReady) return;
+    const text = (shareIntent?.text || shareIntent?.webUrl || '').trim();
+    resetShareIntent();
+    if (text) navigationRef.navigate('ShareTo', { text });
+  }, [hasShareIntent, shareIntent, status, navReady, resetShareIntent]);
+
   // a tapped notification opens its chat, once someone is signed in and the screens exist. this also
   // catches the tap that started the app from closed, which arrived before any of this was mounted
   useEffect(() => {
@@ -150,6 +164,7 @@ export default function RootNavigator() {
             <Stack.Screen name="ContactInfo" component={ContactInfoScreen} options={{ title: 'Contact info' }} />
             <Stack.Screen name="Archived" component={ArchivedScreen} options={{ title: 'Archived' }} />
             <Stack.Screen name="Forward" component={ForwardScreen} options={{ title: 'Forward to…' }} />
+            <Stack.Screen name="ShareTo" component={ShareToScreen} options={{ title: 'Send to…' }} />
             <Stack.Screen name="NewGroup" component={NewGroupScreen} options={{ title: 'New group' }} />
             <Stack.Screen name="NewGroupDetails" component={NewGroupDetailsScreen} options={{ title: 'Name the group' }} />
             <Stack.Screen name="GroupInfo" component={GroupInfoScreen} options={{ title: 'Group info' }} />

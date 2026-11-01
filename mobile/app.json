@@ -49,6 +49,14 @@
           "icon": "./assets/android-icon-monochrome.png",
           "color": "#128C5E"
         }
+      ],
+      [
+        "expo-share-intent",
+        {
+          "androidIntentFilters": [
+            "text/*"
+          ]
+        }
       ]
     ],
     "description": "More Gossip. More Giggles."
