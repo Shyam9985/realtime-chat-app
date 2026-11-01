@@ -8,7 +8,7 @@ const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const sharp = require('sharp');
 const h = require('./helpers/testApp');
-const { resolveStoredPath } = require('../server/utils/files.utils');
+const storage = require('../server/utils/storage.utils');
 
 let app, A, B, first;
 const upload = (u, body, type = 'image/jpeg', name = 'me.jpg') => fetch(`${app.baseUrl}/apiv1/files/upload`, {
@@ -37,7 +37,7 @@ test('PH-01 a big photo is stored as a JPEG of at most 1 MB and 1080 px', async 
     assert.equal(res.status, 201, JSON.stringify(res.body));
     const [row] = await rowsOf(A);
     first = row;
-    const stored = fs.readFileSync(resolveStoredPath(row.file_path));
+    const stored = await storage.read(row.file_path);
     assert.ok(stored.length <= 1024 * 1024, `stored ${stored.length} bytes`);
     assert.equal(stored.length, row.size_bytes);
     const meta = await sharp(stored).metadata();
@@ -51,8 +51,8 @@ test('PH-02 a new photo replaces the old one completely: row and file', async ()
     const rows = await rowsOf(A);
     assert.equal(rows.length, 1, 'only the newest photo is kept');
     assert.notEqual(rows[0].file_id, first.file_id);
-    assert.equal(fs.existsSync(resolveStoredPath(first.file_path)), false, 'the old file is gone from disk');
-    assert.equal(fs.existsSync(resolveStoredPath(rows[0].file_path)), true);
+    assert.equal(await storage.exists(first.file_path), false, 'the old file is gone from storage');
+    assert.equal(await storage.exists(rows[0].file_path), true);
     const [user] = await h.sql('select profile_photo_url from users_lst_t where user_id = ?', [A.user.user_id]);
     assert.equal(user.profile_photo_url, rows[0].file_path, 'the user points at the new photo');
 });
@@ -69,7 +69,7 @@ test('PH-04 other members receive the stored photo', async () => {
     const res = await fetch(`${app.baseUrl}/apiv1/users/${A.user.user_id}/photo`, { headers: { 'access-token': `Bearer ${B.token}` } });
     assert.equal(res.status, 200);
     assert.equal(res.headers.get('content-type'), 'image/jpeg');
-    assert.deepEqual(Buffer.from(await res.arrayBuffer()), fs.readFileSync(resolveStoredPath(row.file_path)));
+    assert.deepEqual(Buffer.from(await res.arrayBuffer()), await storage.read(row.file_path));
 });
 
 test('PH-05 removing the photo deletes the row and the file; others then get "no photo"', async () => {
@@ -77,7 +77,7 @@ test('PH-05 removing the photo deletes the row and the file; others then get "no
     const remove = () => fetch(`${app.baseUrl}/apiv1/files/profile-photo`, { method: 'DELETE', headers: { 'access-token': `Bearer ${A.token}` } });
     assert.equal((await remove()).status, 200);
     assert.equal((await rowsOf(A)).length, 0, 'no photo row left');
-    assert.equal(fs.existsSync(resolveStoredPath(row.file_path)), false, 'the file is gone from disk');
+    assert.equal(await storage.exists(row.file_path), false, 'the file is gone from storage');
     const [user] = await h.sql('select profile_photo_url from users_lst_t where user_id = ?', [A.user.user_id]);
     assert.equal(user.profile_photo_url, null);
     const seen = await fetch(`${app.baseUrl}/apiv1/users/${A.user.user_id}/photo`, { headers: { 'access-token': `Bearer ${B.token}` } });

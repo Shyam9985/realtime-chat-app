@@ -21,6 +21,7 @@
     "socket.io-client": "^4.8.4"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.118.0",
     "bcrypt": "^6.0.0",
     "chalk": "^4.1.2",
     "cookie-parser": "^1.4.7",

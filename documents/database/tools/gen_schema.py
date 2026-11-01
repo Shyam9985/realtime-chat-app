@@ -311,6 +311,18 @@ T("user_devices_t", "auth", "phones that receive push notifications", [
     fks=[("fk_device_user", ["user_id"], "users_lst_t", ["user_id"], "NO ACTION", False)],
     layout=(1540, 950))
 
+T("orphaned_files_t", "auth", "files storage refused to delete; the hourly sweep retries them until they are gone", [
+    C("orphan_id", ID, False, ai=True),
+    C("file_path", "VARCHAR(255)", False, comment="the storage key (uploaded_files_lst_t.file_path) still to delete"),
+    C("reason", "VARCHAR(50)", comment="what dropped the file: USER_PROFILE replaced | GROUP_PHOTO removed | account deleted | ..."),
+    C("attempts", "INT UNSIGNED", False, "0", comment="delete attempts so far (the first two happen before the row exists)"),
+    C("last_error", "VARCHAR(255)", comment="what storage answered last time"),
+    C("deleted_at", "DATETIME(3)", comment="set once the file is really gone"),
+    *STD(3)], "orphan_id",
+    uniques=[("uq_orphan_path", ["file_path"])],
+    indexes=[("idx_orphan_pending", ["deleted_at", "orphan_id"])],
+    layout=(1840, 1550))
+
 T("app_releases_t", "auth", "published app versions; the app compares its build with the newest", [
     C("release_id", ID, False, ai=True),
     C("version", "VARCHAR(20)", False, comment="what users see, semver: 1.1.0"),

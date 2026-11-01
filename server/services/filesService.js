@@ -5,13 +5,15 @@ const { Transform } = require("stream");
 const { pipeline } = require("stream/promises");
 const resutils = require("../utils/response.utils");
 const fileutils = require("../utils/files.utils");
+const storage = require("../utils/storage.utils");
+const cleanup = require("./storageCleanupService");
 const filesMdl = require("../models/filesMdl");
 const usersMdl = require("../models/usersMdl");
 const blocksMdl = require("../models/blocksMdl");
 const { log } = require('../utils/log.utils');
 
-// used when the caller does not specify a destination
-const DEFAULT_UPLOAD_DIR = fileutils.PROFILE_PHOTO_DIR;
+// where a file goes when the caller does not say (the folder part of its storage key)
+const DEFAULT_PREFIX = fileutils.PROFILE_PHOTO_PREFIX;
 
 // builds a typed error that pipeline can carry out of the Transform stream
 const validationError = (message) => {
@@ -30,18 +32,17 @@ const profileTarget = (meta) => ({
 
 // validates an uploaded image (up to 5 MB) and streams it to a temporary file; chunks flow
 // request -> inspector -> disk, so memory never holds the whole upload. the photo actually kept is a
-// compressed JPEG of at most 1 MB, and it replaces the previous photo completely (row and file).
+// compressed JPEG of at most 1 MB, stored under prefix (storage.utils: the supabase bucket, or the local
+// disk), and it replaces the previous photo completely (row and file).
 // target: { entityType, entityId, persist(record) -> { fileId, oldPaths, ...anything else to return } }
-exports.saveStreamedFileSrvc = async (readStream, meta, uploadDir = DEFAULT_UPLOAD_DIR, target = profileTarget(meta)) => {
+exports.saveStreamedFileSrvc = async (readStream, meta, prefix = DEFAULT_PREFIX, target = profileTarget(meta)) => {
     log('in saveStreamedFileSrvc');
     // meta: { originalName, mimeType, extension, uploadedBy }, the headers already checked by filesVldtr
     const { originalName, extension } = meta;
 
-    await fs.promises.mkdir(uploadDir, { recursive: true });
-
     const storedName = fileutils.generateUniqueFileName(extension);
-    const filePath = path.join(uploadDir, storedName);
-    log(`[upload] crypto name generated, streaming to ${filePath}`);
+    const uploadPath = await storage.tempPath(`${storedName}.upload`);
+    log(`[upload] crypto name generated, streaming to ${uploadPath}`);
 
     const hash = crypto.createHash("sha256");
     let receivedBytes = 0;
@@ -76,10 +77,10 @@ exports.saveStreamedFileSrvc = async (readStream, meta, uploadDir = DEFAULT_UPLO
         },
     });
 
-    // the upload lands in a temporary file; only its compressed copy is kept
-    const uploadPath = `${filePath}.upload`;
+    // the upload lands in a temporary file; only its compressed copy is kept, in storage
     const keptName = `${path.basename(storedName, extension)}.jpg`;
-    const keptPath = path.join(uploadDir, keptName);
+    const key = `${prefix}/${keptName}`;
+    let stored = false;
     try {
         // pipeline moves the chunks and owns backpressure: when the disk lags,
         // it pauses the request and resumes it once the write buffer drains
@@ -92,13 +93,14 @@ exports.saveStreamedFileSrvc = async (readStream, meta, uploadDir = DEFAULT_UPLO
         log(`[upload] sha256 of the upload (built chunk by chunk): ${hash.digest("hex")}`);
 
         const photo = await fileutils.compressProfilePhoto(uploadPath);
-        await fs.promises.writeFile(keptPath, photo);
-        log(`[upload] compressed ${receivedBytes} -> ${photo.length} bytes (jpeg)`);
+        await storage.put(key, photo, "image/jpeg");
+        stored = true;
+        log(`[upload] compressed ${receivedBytes} -> ${photo.length} bytes (jpeg), stored as ${key}`);
 
         const record = {
             original_nm: originalName,
             stored_nm: keptName,
-            file_path: fileutils.toStoredPath(keptPath),
+            file_path: key,
             extension: "jpg",
             mime_type: "image/jpeg",
             size_bytes: photo.length,
@@ -111,15 +113,13 @@ exports.saveStreamedFileSrvc = async (readStream, meta, uploadDir = DEFAULT_UPLO
         // new row + the owner's pointer + the old rows removed, in one transaction; then the old files
         const { fileId, oldPaths, ...extra } = await target.persist(record);
         log(`[upload] db transaction committed — new photo ${fileId}, ${oldPaths.length} old one(s) replaced`);
-        for (const oldPath of oldPaths) {
-            await fs.promises.unlink(fileutils.resolveStoredPath(oldPath)).catch(() => {});   // already gone is fine
-        }
+        await cleanup.removeFilesSrvc(oldPaths, `${target.entityType} replaced`);
 
         return { file_id: fileId, ...record, ...extra };
     } catch (error) {
         console.log(`[upload] FAILED (${error.message}) — removing the files of this attempt`);
         // never keep orphans: neither the upload nor a compressed copy of a failed attempt
-        await fs.promises.unlink(keptPath).catch(() => {});
+        if (stored) await cleanup.removeFilesSrvc([key], `${target.entityType} upload failed`);
         throw error;
     } finally {
         await fs.promises.unlink(uploadPath).catch(() => {});
@@ -132,30 +132,26 @@ exports.removeProfilePhotoSrvc = async (userId) => {
     log('in removeProfilePhotoSrvc');
     const { oldPaths } = await filesMdl.removeProfilePhotoMdl(userId);
     if (!oldPaths.length) resutils.createError("noPhoto", "No profile photo found.");
-    for (const oldPath of oldPaths) {
-        await fs.promises.unlink(fileutils.resolveStoredPath(oldPath)).catch(() => {});   // already gone is fine
-    }
+    await cleanup.removeFilesSrvc(oldPaths, "USER_PROFILE removed");
     log(`[photo] user ${userId} removed their photo (${oldPaths.length} file(s) deleted)`);
     return { removed: oldPaths.length };
 };
 
-// resolves a user's current profile photo to an absolute path for streaming back
+// any stored file (an uploaded_files_lst_t row) as a stream for a controller to send. db rows can outlive
+// files (a manual delete in the bucket), so only a file that is really there is served; a missing row or
+// file answers noPhoto with the message given
+exports.openStoredFileSrvc = async (row, missing) => {
+    if (!row) resutils.createError("noPhoto", missing);
+    const file = await storage.get(row.file_path);
+    if (!file) resutils.createError("noPhoto", `${missing} (the file is missing in storage)`);
+    return { stream: file.stream, mimeType: row.mime_type, sizeBytes: file.size };
+};
+
+// a user's current profile photo as a stream, for the controller to send
 exports.getProfilePhotoSrvc = async (user_id) => {
     log('in getProfilePhotoSrvc');
     const [photo] = await filesMdl.getActiveFileByEntityMdl("USER_PROFILE", user_id);
-    if (!photo) {
-        resutils.createError("noPhoto", "No profile photo found.");
-    }
-
-    // db rows can outlive files (manual deletes, disk moves) — verify before streaming
-    const absolutePath = fileutils.resolveStoredPath(photo.file_path);
-    try {
-        await fs.promises.access(absolutePath);
-    } catch {
-        resutils.createError("noPhoto", "Profile photo file is missing on the server.");
-    }
-
-    return { absolutePath, mimeType: photo.mime_type, sizeBytes: photo.size_bytes };
+    return exports.openStoredFileSrvc(photo, "No profile photo found.");
 };
 
 // another member's photo for the viewer. an inactive account and a member who has blocked the viewer

@@ -254,7 +254,7 @@ const cleanupUsers = async (userIds) => {
     // uploaded photos: the rows reference the users, the files live under server/uploads
     const files = await sql(`select file_path from uploaded_files_lst_t where uploaded_by in (${marks})`, userIds);
     await sql(`delete from uploaded_files_lst_t where uploaded_by in (${marks})`, userIds);
-    for (const f of files) await require('fs').promises.unlink(require('../../server/utils/files.utils').resolveStoredPath(f.file_path)).catch(() => {});
+    await require('../../server/utils/storage.utils').remove(files.map((f) => f.file_path));
     await sql(`delete from user_devices_t where user_id in (${marks})`, userIds);
     await sql(`delete from conversation_keys_t where user_id in (${marks}) or created_by in (${marks})`, [...userIds, ...userIds]);
     await sql(`delete from user_keys_t where user_id in (${marks})`, userIds);

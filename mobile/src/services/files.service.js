@@ -1,5 +1,5 @@
 import { File, UploadType } from "expo-file-system";
-import { upload, download, remove } from "../store/api.service";
+import { download, remove } from "../store/api.service";
 import * as tokenStore from "../store/tokenStore";
 import { API_URL, API_PREFIX } from "../config";
 
@@ -13,11 +13,11 @@ const blobToDataUri = (blob) => new Promise((resolve, reject) => {
     reader.readAsDataURL(blob);
 });
 
-// fetches the logged in user's current profile photo as a data uri;
-// null means "no photo / fetch failed" — the caller falls back to initials
-export async function getProfilePhoto() {
+// any stored image the server serves (a photo route) as a data uri; null means "no photo", whatever
+// the reason (none set, an inactive account, a block, a failed fetch): the caller shows initials
+async function fetchImage(path) {
     try {
-        const blob = await download("files/profile-photo");
+        const blob = await download(path);
         if (!(blob instanceof Blob) || !blob.size) return null;
         return await blobToDataUri(blob);
     } catch {
@@ -25,17 +25,12 @@ export async function getProfilePhoto() {
     }
 }
 
-// another member's current photo as a data uri. the server answers "no photo" when they have none,
-// when the account is inactive and when they have blocked the viewer; all of those return null here
-export async function getUserPhoto(userId) {
-    try {
-        const blob = await download(`users/${userId}/photo`);
-        if (!(blob instanceof Blob) || !blob.size) return null;
-        return await blobToDataUri(blob);
-    } catch {
-        return null;
-    }
-}
+// the logged in user's current profile photo
+export const getProfilePhoto = () => fetchImage("files/profile-photo");
+// another member's current photo (the server answers "no photo" when they blocked the viewer)
+export const getUserPhoto = (userId) => fetchImage(`users/${userId}/photo`);
+// a group's photo (members, and people who exited)
+export const getGroupPhoto = (conversationId) => fetchImage(`conversations/${conversationId}/photo`);
 
 /*
  * A picked photo, uploaded straight from its file on the phone as the raw request body (the server
@@ -75,17 +70,6 @@ export function pickedImageType(asset, blob) {
     return EXTENSION_TYPES[extension] || (blob?.type || asset?.mimeType || "").toLowerCase();
 }
 
-// a group's photo as a data uri (members, and people who exited); null when it has none
-export async function getGroupPhoto(conversationId) {
-    try {
-        const blob = await download(`conversations/${conversationId}/photo`);
-        if (!(blob instanceof Blob) || !blob.size) return null;
-        return await blobToDataUri(blob);
-    } catch {
-        return null;
-    }
-}
-
 // admins: the group photo removed (row and file)
 export async function removeGroupPhoto(conversationId) {
     try {
@@ -99,35 +83,6 @@ export async function removeGroupPhoto(conversationId) {
 export async function removeProfilePhoto() {
     try {
         return await remove("files/profile-photo");
-    } catch (error) {
-        return error;
-    }
-}
-
-// the file itself is the raw request body (no FormData) so the server can
-// read the byte stream directly; metadata travels in headers.
-// file: a Blob; meta.name / meta.type fill in what a device Blob does not carry
-export async function uploadFile(file, onProgress, meta = {}) {
-    const name = meta.name || file.name || `profile-${Date.now()}.jpg`;
-    const type = meta.type || file.type || "application/octet-stream";
-
-    try {
-        return await upload(
-            "files/upload",
-            file,
-            {
-                "Content-Type": type,
-                "x-file-name": encodeURIComponent(name),
-            },
-            (event) => {
-                // translate axios's byte counts into a plain percentage so
-                // components never deal with transport details
-                if (event.total) {
-                    const pct = Math.round((event.loaded / event.total) * 100);
-                    onProgress?.(pct);
-                }
-            }
-        );
     } catch (error) {
         return error;
     }

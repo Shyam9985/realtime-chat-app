@@ -9,8 +9,7 @@ const messagesVldtr = require('../validators/messagesVldtr');
 const scheduledVldtr = require('../validators/scheduledVldtr');
 const groupsVldtr = require('../validators/groupsVldtr');
 const filesVldtr = require('../validators/filesVldtr');
-const fs = require('fs');
-const { pipeline } = require('stream/promises');
+const { sendStoredFile } = require('./filesCtrl');
 const { sendChatError } = require('./usersCtrl');
 const { log } = require('../utils/log.utils');
 
@@ -139,10 +138,7 @@ exports.removeGroupPhoto = handle('group remove photo', RESPONSE_STATUS.DELETED,
 exports.getGroupPhoto = async (req, res) => {
     log('in group get photo');
     try {
-        const photo = await groupsService.getPhotoSrvc(req.user.user_id, groupsVldtr.conversationId(req.params.id));
-        res.setHeader('Content-Type', photo.mimeType);
-        res.setHeader('Content-Length', photo.sizeBytes);
-        await pipeline(fs.createReadStream(photo.absolutePath), res);
+        await sendStoredFile(res, await groupsService.getPhotoSrvc(req.user.user_id, groupsVldtr.conversationId(req.params.id)));
     } catch (error) {
         if (res.headersSent) return undefined;
         return sendChatError(req, res, error, 'group get photo');

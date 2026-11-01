@@ -743,6 +743,39 @@
 <text x="1814" y="1099" font-size="9" fill="#64748b" text-anchor="end">DATETIME(3)</text>
 <text x="1546" y="1115" font-size="10" font-weight="bold" fill="#0369a1">IX</text>
 <text x="1566" y="1115" font-size="10.5" fill="#0f172a">(user_id, is_active)</text>
+<rect x="1840" y="1550" width="280" height="192" rx="6" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<rect x="1840" y="1550" width="280" height="24" rx="6" fill="#475569"/>
+<rect x="1840" y="1568" width="280" height="6" fill="#475569"/>
+<text x="1850" y="1567" font-size="13" font-weight="bold" fill="#fff">orphaned_files_t</text>
+<text x="1846" y="1587" font-size="10" font-weight="bold" fill="#b45309">PK</text>
+<text x="1866" y="1587" font-size="10.5" fill="#0f172a">orphan_id</text>
+<text x="2114" y="1587" font-size="9" fill="#64748b" text-anchor="end">BIGINT UNSIGNED</text>
+<text x="1846" y="1603" font-size="10" font-weight="bold" fill="#0369a1">UQ</text>
+<text x="1866" y="1603" font-size="10.5" fill="#0f172a">file_path</text>
+<text x="2114" y="1603" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(255)</text>
+<text x="1846" y="1619" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1866" y="1619" font-size="10.5" fill="#0f172a">reason</text>
+<text x="2114" y="1619" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(50) NULL</text>
+<text x="1846" y="1635" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1866" y="1635" font-size="10.5" fill="#0f172a">attempts</text>
+<text x="2114" y="1635" font-size="9" fill="#64748b" text-anchor="end">INT UNSIGNED =0</text>
+<text x="1846" y="1651" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1866" y="1651" font-size="10.5" fill="#0f172a">last_error</text>
+<text x="2114" y="1651" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(255) NULL</text>
+<text x="1846" y="1667" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1866" y="1667" font-size="10.5" fill="#0f172a">deleted_at</text>
+<text x="2114" y="1667" font-size="9" fill="#64748b" text-anchor="end">DATETIME(3) NULL</text>
+<text x="1846" y="1683" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1866" y="1683" font-size="10.5" fill="#0f172a">is_active</text>
+<text x="2114" y="1683" font-size="9" fill="#64748b" text-anchor="end">TINYINT(1) =1</text>
+<text x="1846" y="1699" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1866" y="1699" font-size="10.5" fill="#0f172a">created_at</text>
+<text x="2114" y="1699" font-size="9" fill="#64748b" text-anchor="end">DATETIME(3)</text>
+<text x="1846" y="1715" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="1866" y="1715" font-size="10.5" fill="#0f172a">updated_at</text>
+<text x="2114" y="1715" font-size="9" fill="#64748b" text-anchor="end">DATETIME(3)</text>
+<text x="1846" y="1731" font-size="10" font-weight="bold" fill="#0369a1">IX</text>
+<text x="1866" y="1731" font-size="10.5" fill="#0f172a">(deleted_at, orphan_id)</text>
 <rect x="1540" y="1150" width="280" height="192" rx="6" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
 <rect x="1540" y="1150" width="280" height="24" rx="6" fill="#475569"/>
 <rect x="1540" y="1168" width="280" height="6" fill="#475569"/>

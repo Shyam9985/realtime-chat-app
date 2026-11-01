@@ -260,6 +260,22 @@ CREATE TABLE IF NOT EXISTS `user_devices_t` (
   CONSTRAINT `fk_device_user` FOREIGN KEY (`user_id`) REFERENCES `users_lst_t` (`user_id`) ON DELETE NO ACTION ON UPDATE NO ACTION
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='phones that receive push notifications';
 
+-- ---------------------------------------------------------------- orphaned_files_t
+CREATE TABLE IF NOT EXISTS `orphaned_files_t` (
+  `orphan_id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `file_path` VARCHAR(255) NOT NULL COMMENT 'the storage key (uploaded_files_lst_t.file_path) still to delete',
+  `reason` VARCHAR(50) NULL COMMENT 'what dropped the file: USER_PROFILE replaced | GROUP_PHOTO removed | account deleted | ...',
+  `attempts` INT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'delete attempts so far (the first two happen before the row exists)',
+  `last_error` VARCHAR(255) NULL COMMENT 'what storage answered last time',
+  `deleted_at` DATETIME(3) NULL COMMENT 'set once the file is really gone',
+  `is_active` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '1 = active, 0 = soft deleted',
+  `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `updated_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (`orphan_id`),
+  UNIQUE KEY `uq_orphan_path` (`file_path`),
+  KEY `idx_orphan_pending` (`deleted_at`, `orphan_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='files storage refused to delete; the hourly sweep retries them until they are gone';
+
 -- ---------------------------------------------------------------- app_releases_t
 CREATE TABLE IF NOT EXISTS `app_releases_t` (
   `release_id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,

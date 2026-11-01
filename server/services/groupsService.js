@@ -1,6 +1,6 @@
-const fs = require('fs');
 const groupsMdl = require('../models/groupsMdl');
 const fileutils = require('../utils/files.utils');
+const cleanup = require('./storageCleanupService');
 const filesService = require('./filesService');
 const conversationsMdl = require('../models/conversationsMdl');
 const usersMdl = require('../models/usersMdl');
@@ -228,7 +228,7 @@ exports.setPhotoSrvc = async (userId, conversationId, readStream, meta) => {
     if (membership.member_role !== 'ADMIN') resutils.createError('notAdmin', 'Only group admins can change the group photo.');
 
     const systemTypeId = await messagesService.getSystemTypeId();
-    const result = await filesService.saveStreamedFileSrvc(readStream, { ...meta, uploadedBy: me }, fileutils.GROUP_PHOTO_DIR, {
+    const result = await filesService.saveStreamedFileSrvc(readStream, { ...meta, uploadedBy: me }, fileutils.GROUP_PHOTO_PREFIX, {
         entityType: 'GROUP_PHOTO',
         entityId: conversationId,
         persist: async (record) => {
@@ -248,7 +248,7 @@ exports.removePhotoSrvc = async (userId, conversationId) => {
     await assertGroupMember(conversationId, me);
     const result = await withRetry(async () => groupsMdl.removeGroupPhoto({ conversationId, actorId: me, systemTypeId: await messagesService.getSystemTypeId() }));
     if (result.refused) refusePhoto(result);
-    for (const oldPath of result.oldPaths) await fs.promises.unlink(fileutils.resolveStoredPath(oldPath)).catch(() => {});
+    await cleanup.removeFilesSrvc(result.oldPaths, 'GROUP_PHOTO removed');
     await announce({ conversationId, noticeIds: result.noticeIds, notify: result.memberIds });
     return { removed: true };
 };
@@ -258,10 +258,7 @@ exports.getPhotoSrvc = async (userId, conversationId) => {
     log('in group getPhotoSrvc');
     await conversationsService.assertReaderSrvc(conversationId, userId);
     const [photo] = await groupsMdl.getGroupPhoto(conversationId);
-    if (!photo) resutils.createError('noPhoto', 'This group has no photo.');
-    const absolutePath = fileutils.resolveStoredPath(photo.file_path);
-    try { await fs.promises.access(absolutePath); } catch (_) { resutils.createError('noPhoto', 'The group photo is missing on the server.'); }
-    return { absolutePath, mimeType: photo.mime_type, sizeBytes: photo.size_bytes };
+    return filesService.openStoredFileSrvc(photo, 'This group has no photo.');
 };
 
 exports.MAX_MEMBERS = MAX_MEMBERS;

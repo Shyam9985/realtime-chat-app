@@ -1,9 +1,8 @@
-const fs = require('fs');
 const bcrypt = require('bcrypt');
 const accountMdl = require('../models/accountMdl');
 const authMdl = require('../models/authMdl');
 const resutils = require('../utils/response.utils');
-const fileutils = require('../utils/files.utils');
+const cleanup = require('./storageCleanupService');
 const appEvents = require('../utils/events.utils');
 const { log } = require('../utils/log.utils');
 
@@ -22,9 +21,7 @@ exports.deleteAccountSrvc = async (user, password) => {
     const result = await accountMdl.deleteAccount(account.user_id);
     if (result.refused) resutils.createError('userNotFound', 'Account not found.');
 
-    for (const filePath of result.filePaths) {
-        await fs.promises.unlink(fileutils.resolveStoredPath(filePath)).catch(() => {});   // already gone is fine
-    }
+    await cleanup.removeFilesSrvc(result.filePaths, 'account deleted');
     for (const { conversationId, userId } of result.directPartners) appEvents.emit('conversation.removed', { userId, conversationId });
     for (const { conversationId, memberIds } of result.groups) appEvents.emit('group.updated', { conversationId, userIds: memberIds });
     appEvents.emit('account.deleted', { userId: account.user_id });
