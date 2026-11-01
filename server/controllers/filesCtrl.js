@@ -1,4 +1,3 @@
-const fs = require("fs");
 const { pipeline } = require("stream/promises");
 const resutils = require("../utils/response.utils");
 const RESPONSE_STATUS = require("../utils/standard.messages");
@@ -7,8 +6,8 @@ const filesVldtr = require("../validators/filesVldtr");
 const fileutils = require("../utils/files.utils");
 const { log } = require('../utils/log.utils');
 
-// profile photos get their own corner of the uploads area (UPLOADS_DIR, see files.utils)
-const PROFILE_PHOTO_DIR = fileutils.PROFILE_PHOTO_DIR;
+// profile photos get their own folder in storage (see storage.utils)
+const PROFILE_PHOTO_PREFIX = fileutils.PROFILE_PHOTO_PREFIX;
 
 // maps service/stream errors to http responses, mirroring settingsCtrl's pattern
 const sendFilesError = (req, res, error, location) => {
@@ -37,7 +36,7 @@ exports.uploadFiles = async (req, res) => {
     log(`[upload] request received — name: '${meta.originalName}', mime: ${meta.mimeType}, user: ${meta.uploadedBy}`);
 
     log("[upload] handing the request stream to filesService (no bytes read yet)");
-    const result = await filesService.saveStreamedFileSrvc(req, meta, PROFILE_PHOTO_DIR);
+    const result = await filesService.saveStreamedFileSrvc(req, meta, PROFILE_PHOTO_PREFIX);
     log(`[upload] done — file_id ${result.file_id}, stored at ${result.file_path}`);
 
     return resutils.sendSuccessResponse(
@@ -55,21 +54,21 @@ exports.uploadFiles = async (req, res) => {
   }
 };
 
-// streams the logged in user's current profile photo back to the browser —
-// the same pipeline mechanics as the upload, in the opposite direction
+// a stored file ({ stream, mimeType, sizeBytes }, from filesService.openStoredFileSrvc) sent as the
+// response: storage -> res is the upload pipeline in reverse; res is a writable stream
+const sendStoredFile = async (res, file) => {
+  res.setHeader("Content-Type", file.mimeType);
+  res.setHeader("Content-Length", file.sizeBytes);
+  await pipeline(file.stream, res);
+};
+exports.sendStoredFile = sendStoredFile;
+
+// streams the logged in user's current profile photo back
 exports.getProfilePhoto = async (req, res) => {
     log('in getProfilePhoto');
   try {
     log(`[download] profile photo requested by user ${req.user?.user_id}`);
-    const photo = await filesService.getProfilePhotoSrvc(req.user?.user_id);
-    log(`[download] serving ${photo.absolutePath} (${photo.sizeBytes} bytes, ${photo.mimeType})`);
-
-    res.setHeader("Content-Type", photo.mimeType);
-    res.setHeader("Content-Length", photo.sizeBytes);
-
-    // disk -> res is the upload pipeline in reverse; res is a writable stream
-    await pipeline(fs.createReadStream(photo.absolutePath), res);
-    log("[download] stream to browser complete");
+    await sendStoredFile(res, await filesService.getProfilePhotoSrvc(req.user?.user_id));
   } catch (error) {
     return sendFilesError(req, res, error, "get profile photo controller");
   }
@@ -90,10 +89,7 @@ exports.removeProfilePhoto = async (req, res) => {
 exports.getUserPhoto = async (req, res) => {
   log('in getUserPhoto');
   try {
-    const photo = await filesService.getUserPhotoSrvc(req.user?.user_id, filesVldtr.userId(req.params.id));
-    res.setHeader("Content-Type", photo.mimeType);
-    res.setHeader("Content-Length", photo.sizeBytes);
-    await pipeline(fs.createReadStream(photo.absolutePath), res);
+    await sendStoredFile(res, await filesService.getUserPhotoSrvc(req.user?.user_id, filesVldtr.userId(req.params.id)));
   } catch (error) {
     return sendFilesError(req, res, error, "get user photo controller");
   }

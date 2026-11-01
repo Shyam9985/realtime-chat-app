@@ -4,14 +4,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { Avatar, Badge, GroupAvatar } from './ui';
 import { StatusTicks } from './MessageBubble';
-import { DELETED_PLACEHOLDER, firstName, fullName, isGroup, isNotice, listStamp, noticeText } from '../utils/chatFormat';
+import { firstName, fullName, isGroup, isNotice, listStamp, noticeText, previewText } from '../utils/chatFormat';
 
 // the last message as the list shows it: a notice in words; in a group, who wrote it ("Noah: ...")
 const previewOf = (conversation, myId) => {
   const last = conversation.last_message;
   if (!last) return 'Tap to start chatting';
   if (isNotice(last)) return noticeText(last, myId);
-  const text = last.is_deleted ? DELETED_PLACEHOLDER : last.content;
+  const text = previewText(last);
   if (!isGroup(conversation)) return text;
   return `${last.sender_id === myId ? 'You' : firstName(last.sender_name)}: ${text}`;
 };

@@ -47,6 +47,17 @@ function registerJobs() {
     logUpcomingJobTime('Scheduled messages', scheduledJob);
     setTimeout(runScheduled, 5000);
 
+    // files the bucket refused to delete (storageCleanupService): retried every hour
+    const storageCleanupService = require('../services/storageCleanupService');
+    const orphansJob = scheduler.scheduleJob('0 30 * * * *', async () => {
+        try {
+            await storageCleanupService.sweepOrphansSrvc();
+        } catch (error) {
+            console.error('Orphaned files job failed:', error.message);
+        }
+    });
+    logUpcomingJobTime('Orphaned files', orphansJob);
+
     // register further jobs (e.g. purging expired OTPs) in the same shape
 
     log('\n', '=============== end of schedules registry ===============', '\n');

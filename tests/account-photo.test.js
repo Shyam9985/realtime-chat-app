@@ -9,7 +9,7 @@ const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const sharp = require('sharp');
 const h = require('./helpers/testApp');
-const { resolveStoredPath } = require('../server/utils/files.utils');
+const storage = require('../server/utils/storage.utils');
 
 let app, A, B, C, D, group;
 const as = (u) => h.api(app.baseUrl, u.token);
@@ -37,14 +37,14 @@ test('GP-01 only admins set the group photo; it is compressed, replaces the old 
     const first = await uploadGroupPhoto(A, group, await png());
     assert.equal(first.status, 200, JSON.stringify(first.body));
     const [row1] = await photoRows(group);
-    assert.ok(fs.existsSync(resolveStoredPath(row1.file_path)));
-    assert.equal((await sharp(fs.readFileSync(resolveStoredPath(row1.file_path))).metadata()).format, 'jpeg');
+    assert.ok(await storage.exists(row1.file_path));
+    assert.equal((await sharp(await storage.read(row1.file_path)).metadata()).format, 'jpeg');
 
     const second = await uploadGroupPhoto(A, group, await png());
     assert.equal(second.status, 200);
     const rows = await photoRows(group);
     assert.equal(rows.length, 1, 'only the newest photo is kept');
-    assert.equal(fs.existsSync(resolveStoredPath(row1.file_path)), false, 'the old file is gone from disk');
+    assert.equal(await storage.exists(row1.file_path), false, 'the old file is gone from storage');
 
     const summary = (await as(B).get('/conversations')).body.data.conversations.find((c) => c.conversation_id === group);
     assert.equal(summary.photo_url, rows[0].file_path);
@@ -63,7 +63,7 @@ test('GP-02 removing the group photo deletes the row and the file; members then 
     assert.equal((await as(B).del(`/conversations/${group}/photo`)).status, 403);
     assert.equal((await as(A).del(`/conversations/${group}/photo`)).status, 200);
     assert.equal((await photoRows(group)).length, 0);
-    assert.equal(fs.existsSync(resolveStoredPath(row.file_path)), false);
+    assert.equal(await storage.exists(row.file_path), false);
     const seen = await fetch(`${app.baseUrl}/apiv1/conversations/${group}/photo`, { headers: { 'access-token': `Bearer ${B.token}` } });
     assert.equal(seen.status, 404);
     assert.equal((await as(A).del(`/conversations/${group}/photo`)).status, 404, 'nothing left to remove');
@@ -98,7 +98,7 @@ test('DA-01 deleting an account needs the password and removes everything the us
         assert.equal(await count(`select count(*) n from ${table} where ${column} = ?`, [ann]), 0, `${table}.${column}`);
     }
     assert.equal(await count('select count(*) n from conversations_lst_t where conversation_id = ?', [ad]), 0, 'the one-to-one chat is gone');
-    assert.equal(fs.existsSync(resolveStoredPath(profilePhoto.file_path)), false, 'the profile photo file is gone');
+    assert.equal(await storage.exists(profilePhoto.file_path), false, 'the profile photo file is gone');
 
     // the group goes on: Ben is its admin and owner now, keeps his own message, the photo stays, a new key is due
     const [g] = await h.sql('select created_by, needs_new_key, last_message_id from conversations_lst_t where conversation_id = ?', [group]);

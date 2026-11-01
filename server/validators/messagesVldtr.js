@@ -27,6 +27,15 @@ const validateContent = (content) => {
     return content;
 };
 
+// what the message is: text, or a sticker (its id travels as the encrypted content, so the server
+// never learns which sticker). notices are the server's own; anything else is refused
+const MESSAGE_TYPES = ['TEXT', 'STICKER'];
+const validateMessageType = (value) => {
+    if (value === undefined || value === null || value === '') return 'TEXT';
+    if (!MESSAGE_TYPES.includes(value)) resutils.createError('validationFailed', `message_type must be one of: ${MESSAGE_TYPES.join(', ')}.`);
+    return value;
+};
+
 // which chat key version encrypted the content (the service checks it is the current one)
 const validateKeyVersion = (value) => {
     const n = Number(value);
@@ -66,13 +75,14 @@ const decodeCursor = (value) => {
 exports.messageId = (value) => parseId(value, 'Message id');
 exports.conversationId = (value) => parseId(value, 'Conversation id');
 
-// POST /messages and message:send  { conversation_id, content, key_version, client_message_id?, reply_to_message_id? }
+// POST /messages and message:send  { conversation_id, content, key_version, message_type?, client_message_id?, reply_to_message_id? }
 exports.validateSend = (body = {}) => {
     log('in validateSend');
     return {
         conversationId: parseId(body.conversation_id, 'Conversation id'),
         content: validateContent(body.content),
         keyVersion: validateKeyVersion(body.key_version),
+        messageType: validateMessageType(body.message_type),
         clientMessageId: validateClientMessageId(body.client_message_id),
         replyToMessageId: validateReplyToId(body.reply_to_message_id)
     };

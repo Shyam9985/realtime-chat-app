@@ -20,6 +20,8 @@ const FEATURES = [
   { icon: 'flash-outline', title: 'Messages arrive instantly', text: 'If the other person is offline, your message waits and reaches them as soon as they’re back online.' },
   { icon: 'person-circle-outline', title: 'See who you’re talking to', text: 'Tap someone’s photo in Chats, or their name at the top of a chat, to see their profile.' },
   { icon: 'trash-outline', title: 'Delete for everyone', text: `Press and hold a message you sent to see when it was delivered and read, or to delete it for both of you. You have ${DELETE_WINDOW_MINUTES} minutes after sending.` },
+  { icon: 'happy-outline', title: 'Send stickers', text: 'Tap the smiley in a chat to open your stickers. Add more packs from the sticker store, and hold any sticker, yours or one you received, to keep it in your favourites.' },
+  { icon: 'share-social-outline', title: 'Share links from other apps', text: 'In Instagram, YouTube, your browser or any app, tap Share and choose YaapZone to send a link to a chat or group.' },
   { icon: 'ban-outline', title: 'Block someone', text: 'Tap the three dots at the top right of a chat and choose “Block user”. They can’t message you any more, and you can unblock them at any time.' },
   { icon: 'color-palette-outline', title: 'Make it yours', text: 'In Profile, add a photo, choose light, dark or your phone’s theme, and make the text bigger or smaller.' },
 ];

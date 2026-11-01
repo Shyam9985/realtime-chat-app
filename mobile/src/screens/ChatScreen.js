@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, BackHandler, FlatList, Keyboard, Pressable, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { useChat } from '../contexts/ChatContext';
@@ -8,8 +8,10 @@ import * as chatApi from '../services/chat.service';
 import { Screen, Banner, IconButton, Button, EmptyState, Avatar, GroupAvatar, Dialog, PopupMenu, KeyboardAvoider, ChatSkeleton, TextField } from '../components/ui';
 import { MessageBubble, DaySeparator, StatusTicks, ReplyQuote, SystemNotice, EncryptionNotice } from '../components/MessageBubble';
 import ScheduleDialog from '../components/ScheduleDialog';
+import { StickerPanel } from '../components/StickerPanel';
+import * as stickerApi from '../services/stickers.service';
 import { exportChatAsPdf } from '../utils/exportChat';
-import { DELETE_WINDOW_MINUTES, MESSAGE_MAX_LENGTH, dayLabel, firstName, fullName, fullStamp, isGroup, isNotice, isSameDay, minutesSince, noticeText, presenceLabel, timeOf } from '../utils/chatFormat';
+import { DELETE_WINDOW_MINUTES, MESSAGE_MAX_LENGTH, dayLabel, firstName, fullName, fullStamp, isGroup, isNotice, isSameDay, isSticker, minutesSince, noticeText, presenceLabel, previewText, timeOf } from '../utils/chatFormat';
 
 const EDIT_WINDOW_MINUTES = 15;
 const SEARCH_PAGES = 20;          // search loads up to this many older pages (30 messages each) to look through
@@ -100,6 +102,7 @@ export default function ChatScreen({ route, navigation }) {
   messagesRef.current = messages;
 
   const [draft, setDraft] = useState('');
+  const [stickersOpen, setStickersOpen] = useState(false);   // the sticker drawer instead of the keyboard
   const [sendError, setSendError] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirm, setConfirm] = useState(null);       // { kind: 'block' | 'delete' | 'failed' | 'info', message }
@@ -138,7 +141,7 @@ export default function ChatScreen({ route, navigation }) {
 
   useEffect(() => {
     chat.openConversation(conversationId);
-    setDraft(''); setSendError(null); setReplyTo(null); setEditing(null); setSelected(null);
+    setDraft(''); setSendError(null); setReplyTo(null); setEditing(null); setSelected(null); setStickersOpen(false);
     return () => chat.closeConversation(conversationId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId]);
@@ -158,7 +161,7 @@ export default function ChatScreen({ route, navigation }) {
   // who wrote a message: you, the other person, or in a group the name the server sent with it
   const authorName = useCallback((senderId, senderName) => (senderId === chat.myId ? 'You' : group ? senderName || 'Someone' : fullName(other)), [chat.myId, other, group]);
   const isMine = (m) => m.sender_id === chat.myId;
-  const canEdit = (m) => isMember && isMine(m) && !m.is_deleted && !m.local && m.status !== 'FAILED' && minutesSince(m.created_at) < EDIT_WINDOW_MINUTES;
+  const canEdit = (m) => isMember && isMine(m) && !m.is_deleted && !isSticker(m) && !m.local && m.status !== 'FAILED' && minutesSince(m.created_at) < EDIT_WINDOW_MINUTES;
 
   // ---- jump to a message (search result, reply quote): load older pages if needed, then scroll
   const jumpTo = useCallback(async (messageId) => {
@@ -184,7 +187,7 @@ export default function ChatScreen({ route, navigation }) {
     if (!q) { setResults(null); return undefined; }
     const timer = setTimeout(() => {
       // newest match first; deleted messages, group notices and unreadable ones are never matched
-      const found = messagesRef.current.filter((m) => m.message_id && !m.is_deleted && !m.unreadable && m.message_type !== 'SYSTEM'
+      const found = messagesRef.current.filter((m) => m.message_id && !m.is_deleted && !m.unreadable && m.message_type !== 'SYSTEM' && !isSticker(m)
         && typeof m.content === 'string' && m.content.toLowerCase().includes(q));
       setResults(found);
       setResultIndex(0);
@@ -214,6 +217,7 @@ export default function ChatScreen({ route, navigation }) {
           <View style={{ flexDirection: 'row', alignItems: 'center' }} testID="selection-actions">
             {!m.is_deleted && isMember ? headerIcon('arrow-undo-outline', () => { setReplyTo(m); setEditing(null); setSelected(null); }, 'Reply', color, 'action-reply') : null}
             {!m.is_deleted ? headerIcon('arrow-redo-outline', () => { setSelected(null); navigation.navigate('Forward', { message: m }); }, 'Forward', color, 'action-forward') : null}
+            {isSticker(m) && !m.is_deleted ? headerIcon('star-outline', () => { starSticker(m); setSelected(null); }, 'Add to favourites', color, 'action-favourite') : null}
             {canEdit(m) ? headerIcon('create-outline', () => { setEditing({ kind: 'message', message: m }); setReplyTo(null); setDraft(m.content); setSelected(null); }, 'Edit', color, 'action-edit') : null}
             {isMine(m) ? headerIcon('information-circle-outline', () => { setConfirm({ kind: 'info', message: m }); setSelected(null); }, 'Message info', color, 'action-info') : null}
             {isMine(m) && !m.is_deleted && isMember ? headerIcon('trash-outline', () => { setConfirm({ kind: 'delete', message: m, allowed: minutesSince(m.created_at) < DELETE_WINDOW_MINUTES }); setSelected(null); }, 'Delete', color, 'action-delete') : null}
@@ -251,6 +255,30 @@ export default function ChatScreen({ route, navigation }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigation, selected, searchMode, searchQuery, results, resultIndex, other, group, conversation?.photo_url, subtitle, name, c.headerText, openProfile]);
+
+  // the hardware back button closes the sticker drawer before it leaves the chat
+  useEffect(() => {
+    if (!stickersOpen) return undefined;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => { setStickersOpen(false); return true; });
+    return () => sub.remove();
+  }, [stickersOpen]);
+  const toggleStickers = () => { if (stickersOpen) setStickersOpen(false); else { Keyboard.dismiss(); setStickersOpen(true); } };
+
+  // a sticker goes as its own message at once (as a reply to the quoted message, if any)
+  const sendSticker = useCallback(async (sticker) => {
+    const quoted = replyTo;
+    setReplyTo(null); setSendError(null);
+    try {
+      await chat.sendMessage(conversationId, String(sticker.sticker_id), quoted, { messageType: 'STICKER' });
+    } catch (error) {
+      setSendError(error?.statusKey === 'BLOCKED' ? "You can't send messages to this user." : error?.message || error?.error || 'Sticker not sent.');
+    }
+  }, [replyTo, chat, conversationId]);
+  // a sticker in the chat (own or received) starred into the Favourites tab of the drawer
+  const starSticker = async (m) => {
+    try { await stickerApi.addFavourite(Number(m.content)); toast.success('Added to favourites.'); }
+    catch (e) { toast.error(e?.message || e?.error || 'Could not add it to favourites.'); }
+  };
 
   // ---- sending, editing, scheduling
   const send = useCallback(async () => {
@@ -394,7 +422,7 @@ export default function ChatScreen({ route, navigation }) {
         visible: true, icon: 'information-circle-outline', title: 'Message info',
         children: (
           <View style={{ marginTop: theme.space.md }} testID="message-info">
-            <Text numberOfLines={3} style={{ color: c.textMuted, fontSize: theme.font.sm, textAlign: 'center', marginBottom: theme.space.md }}>{m.content}</Text>
+            <Text numberOfLines={3} style={{ color: c.textMuted, fontSize: theme.font.sm, textAlign: 'center', marginBottom: theme.space.md }}>{previewText(m)}</Text>
             <InfoLine status="SENT" label="Sent" at={fullStamp(m.created_at)} theme={theme} />
             <InfoLine status="DELIVERED" label={group ? 'Delivered to everyone' : 'Delivered'} at={fullStamp(m.delivered_at)} theme={theme} />
             <InfoLine status="SEEN" label={group ? 'Read by everyone' : 'Read'} at={fullStamp(m.seen_at)} theme={theme} />
@@ -543,7 +571,7 @@ export default function ChatScreen({ route, navigation }) {
             ) : (
               <View style={{ flex: 1, borderLeftWidth: 4, borderLeftColor: c.accent, paddingLeft: 8 }}>
                 <Text style={{ color: c.accent, fontWeight: '700', fontSize: theme.font.sm }}>{editing.kind === 'message' ? 'Editing message' : 'Editing scheduled message'}</Text>
-                <Text numberOfLines={1} style={{ color: c.textMuted, fontSize: theme.font.sm }}>{editing.kind === 'message' ? editing.message.content : editing.item.content}</Text>
+                <Text numberOfLines={1} style={{ color: c.textMuted, fontSize: theme.font.sm }}>{editing.kind === 'message' ? previewText(editing.message) : editing.item.content}</Text>
               </View>
             )}
             <IconButton name="close" size={18} color={c.textMuted} accessibilityLabel={replyTo ? 'Cancel reply' : 'Cancel editing'} testID="composer-context-close"
@@ -558,9 +586,13 @@ export default function ChatScreen({ route, navigation }) {
           </View>
         ) : (
         <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: theme.space.sm, paddingHorizontal: theme.space.sm, paddingVertical: theme.space.sm }}>
-          <View style={{ flex: 1, flexDirection: 'row', alignItems: 'flex-end', backgroundColor: c.surface, borderRadius: 24, paddingLeft: theme.space.md, paddingRight: theme.space.sm, paddingVertical: 4, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 1, shadowOffset: { width: 0, height: 1 }, elevation: 1 }}>
+          <View style={{ flex: 1, flexDirection: 'row', alignItems: 'flex-end', backgroundColor: c.surface, borderRadius: 24, paddingLeft: 4, paddingRight: theme.space.sm, paddingVertical: 4, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 1, shadowOffset: { width: 0, height: 1 }, elevation: 1 }}>
+            {/* the smiley opens the sticker drawer in place of the keyboard; a keyboard icon brings the keyboard back */}
+            <IconButton name={stickersOpen ? 'keypad-outline' : 'happy-outline'} size={24} color={c.textMuted} onPress={toggleStickers}
+              accessibilityLabel={stickersOpen ? 'Show keyboard' : 'Stickers'} testID="sticker-toggle" style={{ marginBottom: 2 }} />
             <TextInput
               value={draft}
+              onFocus={() => setStickersOpen(false)}
               onChangeText={(t) => setDraft(t.slice(0, MESSAGE_MAX_LENGTH))}
               placeholder={editing ? 'Edit message' : 'Message'}
               placeholderTextColor={c.placeholder}
@@ -580,6 +612,7 @@ export default function ChatScreen({ route, navigation }) {
           </Pressable>
         </View>
         )}
+        {stickersOpen && isMember ? <StickerPanel onSend={sendSticker} onOpenStore={() => { setStickersOpen(false); navigation.navigate('StickerStore'); }} /> : null}
       </KeyboardAvoider>
 
       <PopupMenu visible={menuOpen} items={menuItems} onClose={() => setMenuOpen(false)} />

@@ -2,7 +2,8 @@ import React, { useMemo, useRef } from 'react';
 import { Animated, Linking, PanResponder, Pressable, Text, Vibration, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
-import { timeOf, DELETED_PLACEHOLDER } from '../utils/chatFormat';
+import { timeOf, DELETED_PLACEHOLDER, previewText, isSticker } from '../utils/chatFormat';
+import { StickerImage } from './StickerImage';
 
 // SRS: sent = one tick, delivered = two, seen = two in colour. sending shows a clock, failed a warning
 export function StatusTicks({ status, color, seenColor }) {
@@ -72,11 +73,12 @@ export function ReplyQuote({ reply, authorName, onPress, compact, style }) {
   const { theme } = useTheme();
   const c = theme.colors;
   const deleted = reply.is_deleted || reply.content == null;
+  const text = deleted ? DELETED_PLACEHOLDER : previewText(reply);
   return (
-    <Pressable onPress={onPress} disabled={!onPress} accessibilityRole="button" accessibilityLabel={`Reply to ${authorName}: ${deleted ? DELETED_PLACEHOLDER : reply.content}`} testID="reply-quote"
+    <Pressable onPress={onPress} disabled={!onPress} accessibilityRole="button" accessibilityLabel={`Reply to ${authorName}: ${text}`} testID="reply-quote"
       style={[{ borderLeftWidth: 4, borderLeftColor: c.accent, backgroundColor: c.overlaySoft || 'rgba(0,0,0,0.06)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 5 }, style]}>
       <Text numberOfLines={1} style={{ color: c.accent, fontWeight: '700', fontSize: theme.font.sm }}>{authorName}</Text>
-      <Text numberOfLines={compact ? 1 : 2} style={{ color: c.textMuted, fontSize: theme.font.sm, fontStyle: deleted ? 'italic' : 'normal' }}>{deleted ? DELETED_PLACEHOLDER : reply.content}</Text>
+      <Text numberOfLines={compact ? 1 : 2} style={{ color: c.textMuted, fontSize: theme.font.sm, fontStyle: deleted ? 'italic' : 'normal' }}>{text}</Text>
     </Pressable>
   );
 }
@@ -93,9 +95,10 @@ export function MessageBubble({ message, mine, senderName, onLongPress, onPress,
   const c = theme.colors;
   const deleted = message.is_deleted;
   const failed = message.status === 'FAILED';
-  const bg = mine ? c.bubbleMine : c.bubbleTheirs;
+  const sticker = isSticker(message) && !deleted;      // the image alone, no bubble: the time sits in a small pill under it
+  const bg = sticker ? 'transparent' : mine ? c.bubbleMine : c.bubbleTheirs;
   const fg = mine ? c.bubbleMineText : c.bubbleTheirsText;
-  const meta = mine ? c.bubbleMineMeta : c.textMuted;
+  const meta = sticker || !mine ? c.textMuted : c.bubbleMineMeta;
   const canReply = !!onReply && !deleted && !failed && !message.local;
 
   const dx = useRef(new Animated.Value(0)).current;
@@ -130,7 +133,7 @@ export function MessageBubble({ message, mine, senderName, onLongPress, onPress,
           onLongPress={onLongPress}
           onPress={onPress}
           delayLongPress={300}
-          accessibilityLabel={deleted ? DELETED_PLACEHOLDER : message.content}
+          accessibilityLabel={previewText(message)}
           accessibilityHint={canReply ? 'Long press for options, swipe right to reply' : undefined}
           accessibilityState={{ selected: !!selected }}
           testID={`bubble-${message.message_id || message.client_message_id}`}
@@ -140,12 +143,12 @@ export function MessageBubble({ message, mine, senderName, onLongPress, onPress,
             borderRadius: 10,
             borderTopRightRadius: mine ? 2 : 10,
             borderTopLeftRadius: mine ? 10 : 2,
-            paddingHorizontal: 10,
-            paddingTop: 6,
-            paddingBottom: 5,
+            paddingHorizontal: sticker ? 0 : 10,
+            paddingTop: sticker ? 0 : 6,
+            paddingBottom: sticker ? 0 : 5,
             borderWidth: focused ? 2 : 0,
             borderColor: c.accent,
-            shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 1, shadowOffset: { width: 0, height: 1 }, elevation: 1,
+            shadowColor: '#000', shadowOpacity: sticker ? 0 : 0.08, shadowRadius: 1, shadowOffset: { width: 0, height: 1 }, elevation: sticker ? 0 : 1,
             opacity: pressed ? 0.85 : failed ? 0.8 : 1,
           })}
         >
@@ -165,11 +168,15 @@ export function MessageBubble({ message, mine, senderName, onLongPress, onPress,
               <Ionicons name="ban-outline" size={14} color={meta} />
               <Text style={{ color: meta, fontStyle: 'italic', fontSize: theme.font.md }}>{DELETED_PLACEHOLDER}</Text>
             </View>
+          ) : sticker ? (
+            <StickerImage stickerId={Number(message.content)} size={150} testID="sticker-message" />
           ) : (
             <MessageText text={message.content} highlight={highlight} markColor={c.highlight || 'rgba(255,214,10,0.55)'} onLongPress={onLongPress}
               linkColor={mine ? fg : c.accent} style={{ color: fg, fontSize: theme.font.md, lineHeight: Math.round(theme.font.md * 1.4) }} />
           )}
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4, marginTop: 2 }}>
+          <View style={sticker
+            ? { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4, marginTop: 2, alignSelf: 'flex-end', backgroundColor: c.surface, borderRadius: 10, paddingHorizontal: 6, paddingVertical: 1 }
+            : { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4, marginTop: 2 }}>
             {failed ? <Text style={{ color: '#F15C6D', fontSize: theme.font.xs }}>{message.error || 'Not sent'} · tap to retry</Text> : null}
             {message.is_edited && !deleted ? <Text style={{ color: meta, fontSize: theme.font.xs, fontStyle: 'italic' }} testID="edited-label">Edited</Text> : null}
             <Text style={{ color: meta, fontSize: theme.font.xs }}>{timeOf(message.created_at)}</Text>

@@ -170,19 +170,21 @@ export function ChatProvider({ children }) {
 
     const closeConversation = useCallback((conversationId) => { if (active.current === conversationId) active.current = null; }, []);
 
-    // replyTo: the message being quoted ({ message_id, sender_id, content }), or null
-    const sendMessage = useCallback(async (conversationId, text, replyTo = null) => {
+    // replyTo: the message being quoted ({ message_id, sender_id, content }), or null.
+    // messageType: 'TEXT' (default) or 'STICKER' (then text is the sticker's id)
+    const sendMessage = useCallback(async (conversationId, text, replyTo = null, { messageType = "TEXT" } = {}) => {
         const content = text.trim();
         if (!content) return;
         const clientMessageId = uuid();
-        const replyPreview = replyTo ? { message_id: replyTo.message_id, sender_id: replyTo.sender_id, content: replyTo.content, is_deleted: false } : null;
-        dispatch({ type: "MESSAGE_MERGE", message: { message_id: null, client_message_id: clientMessageId, conversation_id: conversationId, sender_id: myId, content, is_deleted: false, created_at: new Date().toISOString(), status: "SENDING", local: true, reply_to: replyPreview } });
+        const replyPreview = replyTo ? { message_id: replyTo.message_id, sender_id: replyTo.sender_id, content: replyTo.content, message_type: replyTo.message_type, is_deleted: false } : null;
+        dispatch({ type: "MESSAGE_MERGE", message: { message_id: null, client_message_id: clientMessageId, conversation_id: conversationId, sender_id: myId, content, message_type: messageType, is_deleted: false, created_at: new Date().toISOString(), status: "SENDING", local: true, reply_to: replyPreview } });
         try {
             const replyToId = replyTo?.message_id ?? null;
             // encrypted on this phone with the chat's current key; re-encrypted if the key changed meanwhile
+            const typed = messageType === "TEXT" ? {} : { message_type: messageType };
             const result = await keyStore.sendEncrypted(conversationId, content, async (encrypted) => (socket.isConnected()
-                ? keyStore.openTree(await socket.emitWithAck("message:send", { conversation_id: conversationId, ...encrypted, client_message_id: clientMessageId, ...(replyToId ? { reply_to_message_id: replyToId } : {}) }))
-                : chatApi.sendMessage(conversationId, encrypted, clientMessageId, replyToId)));
+                ? keyStore.openTree(await socket.emitWithAck("message:send", { conversation_id: conversationId, ...encrypted, ...typed, client_message_id: clientMessageId, ...(replyToId ? { reply_to_message_id: replyToId } : {}) }))
+                : chatApi.sendMessage(conversationId, encrypted, clientMessageId, replyToId, messageType)));
             dispatch({ type: "MESSAGE_MERGE", message: result.message });
             dispatch({ type: "CONVERSATION_PREVIEW", message: result.message, incrementUnread: false });
             return result.message;
@@ -194,7 +196,7 @@ export function ChatProvider({ children }) {
 
     const retryMessage = useCallback(async (message) => {
         dispatch({ type: "MESSAGE_REMOVE", conversationId: message.conversation_id, predicate: (m) => m.client_message_id === message.client_message_id });
-        return sendMessage(message.conversation_id, message.content, message.reply_to?.message_id ? message.reply_to : null);
+        return sendMessage(message.conversation_id, message.content, message.reply_to?.message_id ? message.reply_to : null, { messageType: message.message_type || "TEXT" });
     }, [sendMessage]);
 
     const discardMessage = useCallback((message) => dispatch({ type: "MESSAGE_REMOVE", conversationId: message.conversation_id, predicate: (m) => m.client_message_id === message.client_message_id }), []);
