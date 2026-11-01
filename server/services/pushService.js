@@ -80,6 +80,7 @@ const onMessageCreated = async ({ message, recipientIds }) => {
         message_id: String(message.message_id),
         conversation_id: String(message.conversation_id),
         sender_id: String(message.sender_id),
+        message_type: String(message.message_type || 'TEXT'),
         sender_name: sender,
         chat_title: chatTitle || sender,
         is_group: group ? '1' : '0',

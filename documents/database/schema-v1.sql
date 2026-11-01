@@ -444,5 +444,6 @@ INSERT INTO `message_type_master_t` (`message_type_id`, `type_code`, `type_name`
   (4, 'VIDEO', 'Video'),
   (5, 'AUDIO', 'Audio'),
   (6, 'FILE', 'File'),
-  (7, 'SYSTEM', 'System notice')
+  (7, 'SYSTEM', 'System notice'),
+  (8, 'STICKER', 'Sticker')
 ON DUPLICATE KEY UPDATE `type_name` = VALUES(`type_name`);

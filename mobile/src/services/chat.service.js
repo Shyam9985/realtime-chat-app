@@ -28,8 +28,8 @@ export const getHistory = (conversationId, cursor = null, limit = 30, days = nul
 export const markSeen = (conversationId) => data(post(`conversations/${conversationId}/seen`, {}));
 export const markDelivered = (messageId) => data(post(`messages/${messageId}/delivered`, {}));
 // encrypted: { content, key_version } from keyStore.sendEncrypted
-export const sendMessage = (conversationId, encrypted, clientMessageId, replyToMessageId = null) =>
-    data(post("messages", { conversation_id: conversationId, ...encrypted, client_message_id: clientMessageId, ...(replyToMessageId ? { reply_to_message_id: replyToMessageId } : {}) }))
+export const sendMessage = (conversationId, encrypted, clientMessageId, replyToMessageId = null, messageType = "TEXT") =>
+    data(post("messages", { conversation_id: conversationId, ...encrypted, ...(messageType === "TEXT" ? {} : { message_type: messageType }), client_message_id: clientMessageId, ...(replyToMessageId ? { reply_to_message_id: replyToMessageId } : {}) }))
         .then((d) => keyStore.openTree(d));
 export const deleteMessage = (messageId) => data(remove(`messages/${messageId}`)).then((d) => keyStore.openTree(d));
 

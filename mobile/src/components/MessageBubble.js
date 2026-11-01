@@ -2,7 +2,7 @@ import React, { useMemo, useRef } from 'react';
 import { Animated, Linking, PanResponder, Pressable, Text, Vibration, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
-import { timeOf, DELETED_PLACEHOLDER } from '../utils/chatFormat';
+import { timeOf, DELETED_PLACEHOLDER, previewText } from '../utils/chatFormat';
 
 // SRS: sent = one tick, delivered = two, seen = two in colour. sending shows a clock, failed a warning
 export function StatusTicks({ status, color, seenColor }) {
@@ -72,11 +72,12 @@ export function ReplyQuote({ reply, authorName, onPress, compact, style }) {
   const { theme } = useTheme();
   const c = theme.colors;
   const deleted = reply.is_deleted || reply.content == null;
+  const text = deleted ? DELETED_PLACEHOLDER : previewText(reply);
   return (
-    <Pressable onPress={onPress} disabled={!onPress} accessibilityRole="button" accessibilityLabel={`Reply to ${authorName}: ${deleted ? DELETED_PLACEHOLDER : reply.content}`} testID="reply-quote"
+    <Pressable onPress={onPress} disabled={!onPress} accessibilityRole="button" accessibilityLabel={`Reply to ${authorName}: ${text}`} testID="reply-quote"
       style={[{ borderLeftWidth: 4, borderLeftColor: c.accent, backgroundColor: c.overlaySoft || 'rgba(0,0,0,0.06)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 5 }, style]}>
       <Text numberOfLines={1} style={{ color: c.accent, fontWeight: '700', fontSize: theme.font.sm }}>{authorName}</Text>
-      <Text numberOfLines={compact ? 1 : 2} style={{ color: c.textMuted, fontSize: theme.font.sm, fontStyle: deleted ? 'italic' : 'normal' }}>{deleted ? DELETED_PLACEHOLDER : reply.content}</Text>
+      <Text numberOfLines={compact ? 1 : 2} style={{ color: c.textMuted, fontSize: theme.font.sm, fontStyle: deleted ? 'italic' : 'normal' }}>{text}</Text>
     </Pressable>
   );
 }

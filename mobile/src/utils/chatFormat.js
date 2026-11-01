@@ -40,6 +40,9 @@ export const GROUP_MAX_MEMBERS = 100;
 // ---- groups
 export const isGroup = (conversation) => conversation?.conversation_type === "GROUP";
 export const isNotice = (message) => message?.message_type === "SYSTEM";
+export const isSticker = (message) => message?.message_type === "STICKER";
+// what a message is, in words, where its text cannot be shown (previews, quotes, notifications)
+export const previewText = (message) => (!message ? "" : message.is_deleted ? DELETED_PLACEHOLDER : isSticker(message) ? "🙂 Sticker" : message.content);
 export const firstName = (name) => (name || "").split(" ")[0] || name || "";
 
 // a group notice in words, for the person reading it: "You added Noah", "Maya added you", "You left"

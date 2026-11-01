@@ -9,7 +9,7 @@ import { Screen, Banner, IconButton, Button, EmptyState, Avatar, GroupAvatar, Di
 import { MessageBubble, DaySeparator, StatusTicks, ReplyQuote, SystemNotice, EncryptionNotice } from '../components/MessageBubble';
 import ScheduleDialog from '../components/ScheduleDialog';
 import { exportChatAsPdf } from '../utils/exportChat';
-import { DELETE_WINDOW_MINUTES, MESSAGE_MAX_LENGTH, dayLabel, firstName, fullName, fullStamp, isGroup, isNotice, isSameDay, minutesSince, noticeText, presenceLabel, timeOf } from '../utils/chatFormat';
+import { DELETE_WINDOW_MINUTES, MESSAGE_MAX_LENGTH, dayLabel, firstName, fullName, fullStamp, isGroup, isNotice, isSameDay, isSticker, minutesSince, noticeText, presenceLabel, previewText, timeOf } from '../utils/chatFormat';
 
 const EDIT_WINDOW_MINUTES = 15;
 const SEARCH_PAGES = 20;          // search loads up to this many older pages (30 messages each) to look through
@@ -158,7 +158,7 @@ export default function ChatScreen({ route, navigation }) {
   // who wrote a message: you, the other person, or in a group the name the server sent with it
   const authorName = useCallback((senderId, senderName) => (senderId === chat.myId ? 'You' : group ? senderName || 'Someone' : fullName(other)), [chat.myId, other, group]);
   const isMine = (m) => m.sender_id === chat.myId;
-  const canEdit = (m) => isMember && isMine(m) && !m.is_deleted && !m.local && m.status !== 'FAILED' && minutesSince(m.created_at) < EDIT_WINDOW_MINUTES;
+  const canEdit = (m) => isMember && isMine(m) && !m.is_deleted && !isSticker(m) && !m.local && m.status !== 'FAILED' && minutesSince(m.created_at) < EDIT_WINDOW_MINUTES;
 
   // ---- jump to a message (search result, reply quote): load older pages if needed, then scroll
   const jumpTo = useCallback(async (messageId) => {
@@ -184,7 +184,7 @@ export default function ChatScreen({ route, navigation }) {
     if (!q) { setResults(null); return undefined; }
     const timer = setTimeout(() => {
       // newest match first; deleted messages, group notices and unreadable ones are never matched
-      const found = messagesRef.current.filter((m) => m.message_id && !m.is_deleted && !m.unreadable && m.message_type !== 'SYSTEM'
+      const found = messagesRef.current.filter((m) => m.message_id && !m.is_deleted && !m.unreadable && m.message_type !== 'SYSTEM' && !isSticker(m)
         && typeof m.content === 'string' && m.content.toLowerCase().includes(q));
       setResults(found);
       setResultIndex(0);
@@ -543,7 +543,7 @@ export default function ChatScreen({ route, navigation }) {
             ) : (
               <View style={{ flex: 1, borderLeftWidth: 4, borderLeftColor: c.accent, paddingLeft: 8 }}>
                 <Text style={{ color: c.accent, fontWeight: '700', fontSize: theme.font.sm }}>{editing.kind === 'message' ? 'Editing message' : 'Editing scheduled message'}</Text>
-                <Text numberOfLines={1} style={{ color: c.textMuted, fontSize: theme.font.sm }}>{editing.kind === 'message' ? editing.message.content : editing.item.content}</Text>
+                <Text numberOfLines={1} style={{ color: c.textMuted, fontSize: theme.font.sm }}>{editing.kind === 'message' ? previewText(editing.message) : editing.item.content}</Text>
               </View>
             )}
             <IconButton name="close" size={18} color={c.textMuted} accessibilityLabel={replyTo ? 'Cancel reply' : 'Cancel editing'} testID="composer-context-close"

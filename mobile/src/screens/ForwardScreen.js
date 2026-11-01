@@ -5,7 +5,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { useChat } from '../contexts/ChatContext';
 import { useToast } from '../contexts/MessageContext';
 import { Screen, Avatar, GroupAvatar, Divider, EmptyState, Button, KeyboardAvoider } from '../components/ui';
-import { fullName, isGroup } from '../utils/chatFormat';
+import { fullName, isGroup, previewText } from '../utils/chatFormat';
 
 const MAX_TARGETS = 10;
 const titleOf = (c) => c.title || fullName(c.other_user);
@@ -58,7 +58,7 @@ export default function ForwardScreen({ route, navigation }) {
       <View style={{ padding: theme.space.md, gap: theme.space.sm, backgroundColor: c.surface }}>
         <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', padding: theme.space.sm, borderRadius: theme.radius.md, backgroundColor: c.inputBackground }}>
           <Ionicons name="arrow-redo-outline" size={18} color={c.textMuted} />
-          <Text numberOfLines={2} style={{ flex: 1, color: c.textMuted, fontSize: theme.font.sm }} testID="forward-preview">{message.content}</Text>
+          <Text numberOfLines={2} style={{ flex: 1, color: c.textMuted, fontSize: theme.font.sm }} testID="forward-preview">{previewText(message)}</Text>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.space.sm, backgroundColor: c.inputBackground, borderRadius: theme.radius.pill, paddingHorizontal: theme.space.md }}>
           <Ionicons name="search" size={18} color={c.textMuted} />

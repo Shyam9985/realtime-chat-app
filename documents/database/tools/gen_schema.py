@@ -73,7 +73,7 @@ T("message_type_master_t", "master", "TEXT | EMOJI | IMAGE | VIDEO | AUDIO | FIL
     uniques=[("uq_msg_type_code", ["type_code"])],
     seeds=[("message_type_id", "type_code", "type_name"),
            (1, "TEXT", "Text"), (2, "EMOJI", "Emoji"), (3, "IMAGE", "Image"), (4, "VIDEO", "Video"),
-           (5, "AUDIO", "Audio"), (6, "FILE", "File"), (7, "SYSTEM", "System notice")],
+           (5, "AUDIO", "Audio"), (6, "FILE", "File"), (7, "SYSTEM", "System notice"), (8, "STICKER", "Sticker")],
     layout=(1480, 400))
 
 T("conversations_lst_t", "chat", "one row per chat; user_pair_key makes a one-to-one chat unique per pair", [

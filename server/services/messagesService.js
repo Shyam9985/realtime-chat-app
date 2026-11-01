@@ -150,7 +150,7 @@ const validateReplyTarget = async (conversationId, replyToId, senderId) => {
  * content is encrypted with chat key keyVersion, which must be the chat's current one (checkKey).
  * A scheduled message was encrypted when it was scheduled and goes out as it is (checkKey false).
  */
-const createMessage = async (senderId, { conversationId, content, keyVersion, checkKey = true, clientMessageId = null, replyToMessageId = null, forwardedFromMessageId = null }) => {
+const createMessage = async (senderId, { conversationId, content, keyVersion, messageType = 'TEXT', checkKey = true, clientMessageId = null, replyToMessageId = null, forwardedFromMessageId = null }) => {
     const membership = await conversationsService.assertMemberSrvc(conversationId, senderId);
 
     if (clientMessageId) {
@@ -172,7 +172,7 @@ const createMessage = async (senderId, { conversationId, content, keyVersion, ch
     let messageId;
     try {
         const inserted = await insertWithRetry({
-            conversationId, senderId, messageTypeId: await getTextTypeId(), content, keyVersion, encFormat: 1, checkKey,
+            conversationId, senderId, messageTypeId: await getTypeId(messageType), content, keyVersion, encFormat: 1, checkKey,
             clientMessageId, recipientIds, replyToMessageId, forwardedFromMessageId
         });
         if (inserted.keyOutdated) refuseOutdatedKey();
@@ -191,12 +191,12 @@ const createMessage = async (senderId, { conversationId, content, keyVersion, ch
     return { message, duplicate: false };
 };
 
-// { conversationId, content, keyVersion, clientMessageId, replyToMessageId }, as messagesVldtr.validateSend returns it
-exports.sendSrvc = async (senderId, { conversationId, content, keyVersion, clientMessageId = null, replyToMessageId = null }) => {
+// { conversationId, content, keyVersion, messageType, clientMessageId, replyToMessageId }, as messagesVldtr.validateSend returns it
+exports.sendSrvc = async (senderId, { conversationId, content, keyVersion, messageType = 'TEXT', clientMessageId = null, replyToMessageId = null }) => {
     log('in sendSrvc');
     await conversationsService.assertMemberSrvc(conversationId, senderId);
     const replyTo = await validateReplyTarget(conversationId, replyToMessageId, senderId);
-    return createMessage(senderId, { conversationId, content, keyVersion, clientMessageId, replyToMessageId: replyTo });
+    return createMessage(senderId, { conversationId, content, keyVersion, messageType, clientMessageId, replyToMessageId: replyTo });
 };
 
 // cursor = base64url('<created_at iso>|<message_id>') of the oldest message the client has
@@ -301,6 +301,7 @@ exports.editSrvc = async (userId, messageId, content, keyVersion) => {
     if (!row) resutils.createError('messageNotFound', 'Message not found.');
     if (row.sender_id !== Number(userId)) resutils.createError('notOwner', 'You can only edit your own messages.');
     refuseNotice(row, 'edited');
+    if (row.message_type === 'STICKER') resutils.createError('notEditable', 'A sticker cannot be edited.');
     if (row.is_deleted) resutils.createError('notEditable', 'A deleted message cannot be edited.');
     await conversationsService.assertMemberSrvc(row.conversation_id, userId);
     if (row.content === content) return { message: toMessageDto(row), changed: false };
@@ -362,7 +363,8 @@ exports.forwardSrvc = async (userId, messageId, targets) => {
     const results = [];
     for (const { conversationId, content, keyVersion } of targets) {
         try {
-            const { message } = await createMessage(userId, { conversationId, content, keyVersion, forwardedFromMessageId: messageId });
+            // a forwarded sticker stays a sticker
+            const { message } = await createMessage(userId, { conversationId, content, keyVersion, messageType: source.message_type, forwardedFromMessageId: messageId });
             results.push({ conversation_id: conversationId, ok: true, message });
         } catch (error) {
             const status = statusForError(error);
