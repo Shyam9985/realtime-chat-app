@@ -3,7 +3,7 @@
     "name": "YaapZone",
     "slug": "yaapzone",
     "scheme": "yaapzone",
-    "version": "1.4.0",
+    "version": "1.5.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -29,7 +29,7 @@
       "permissions": [
         "android.permission.REQUEST_INSTALL_PACKAGES"
       ],
-      "versionCode": 10400
+      "versionCode": 10500
     },
     "plugins": [
       [
