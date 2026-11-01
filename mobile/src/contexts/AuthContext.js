@@ -3,6 +3,7 @@ import { registerLogoutHandler } from '../store/interceptor';
 import * as tokenStore from '../store/tokenStore';
 import * as socket from '../services/socket.service';
 import * as keyStore from '../crypto/keyStore';
+import * as stickers from '../services/stickers.service';
 
 /*
  * Ported from the web client's contexts/AuthContext.jsx: handleLogin(user) after a successful login
@@ -48,7 +49,7 @@ export function AuthProvider({ children }) {
 
   const handleLogOut = useCallback(async () => {
     socket.disconnect();
-    keyStore.forgetSession();
+    keyStore.forgetSession(); stickers.forgetDrawer();
     await Promise.all([tokenStore.clearToken(), tokenStore.setUser(null)]);
     setUser(null);
     setLockReason(null);

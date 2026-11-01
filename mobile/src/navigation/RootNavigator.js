@@ -27,6 +27,7 @@ import ContactInfoScreen from '../screens/ContactInfoScreen';
 import ArchivedScreen from '../screens/ArchivedScreen';
 import ForwardScreen from '../screens/ForwardScreen';
 import ShareToScreen from '../screens/ShareToScreen';
+import StickerStoreScreen from '../screens/StickerStoreScreen';
 import NewGroupScreen from '../screens/NewGroupScreen';
 import NewGroupDetailsScreen from '../screens/NewGroupDetailsScreen';
 import GroupInfoScreen from '../screens/GroupInfoScreen';
@@ -165,6 +166,7 @@ export default function RootNavigator() {
             <Stack.Screen name="Archived" component={ArchivedScreen} options={{ title: 'Archived' }} />
             <Stack.Screen name="Forward" component={ForwardScreen} options={{ title: 'Forward to…' }} />
             <Stack.Screen name="ShareTo" component={ShareToScreen} options={{ title: 'Send to…' }} />
+            <Stack.Screen name="StickerStore" component={StickerStoreScreen} options={{ title: 'Sticker store' }} />
             <Stack.Screen name="NewGroup" component={NewGroupScreen} options={{ title: 'New group' }} />
             <Stack.Screen name="NewGroupDetails" component={NewGroupDetailsScreen} options={{ title: 'Name the group' }} />
             <Stack.Screen name="GroupInfo" component={GroupInfoScreen} options={{ title: 'Group info' }} />

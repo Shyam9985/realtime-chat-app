@@ -332,6 +332,76 @@ CREATE TABLE IF NOT EXISTS `conversation_keys_t` (
   CONSTRAINT `fk_ckey_created_by` FOREIGN KEY (`created_by`) REFERENCES `users_lst_t` (`user_id`) ON DELETE NO ACTION ON UPDATE NO ACTION
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='end-to-end encryption: each member''s locked copy of each chat key version';
 
+-- ---------------------------------------------------------------- sticker_packs_t
+CREATE TABLE IF NOT EXISTS `sticker_packs_t` (
+  `pack_id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `pack_key` VARCHAR(100) NOT NULL COMMENT 'where it came from, unique: signal:<pack id>',
+  `title` VARCHAR(100) NOT NULL,
+  `author` VARCHAR(100) NULL,
+  `source` VARCHAR(20) NOT NULL COMMENT 'SIGNAL',
+  `source_url` VARCHAR(500) NULL COMMENT 'the link it was imported from',
+  `is_animated` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '1 = at least one sticker moves',
+  `sticker_count` INT UNSIGNED NOT NULL DEFAULT 0,
+  `cover_sticker_id` BIGINT UNSIGNED NULL COMMENT 'the sticker shown as the pack''s icon (stickers_t)',
+  `is_default` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '1 = in every new user''s drawer from the start',
+  `is_published` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '0 = hidden from the store (people who added it keep it)',
+  `is_active` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '1 = active, 0 = soft deleted',
+  `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `updated_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (`pack_id`),
+  UNIQUE KEY `uq_pack_key` (`pack_key`),
+  KEY `idx_pack_store` (`is_published`, `is_active`, `pack_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='the sticker store: packs imported by the developer (a Signal sticker pack by link); users add them to their drawer';
+
+-- ---------------------------------------------------------------- stickers_t
+CREATE TABLE IF NOT EXISTS `stickers_t` (
+  `sticker_id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `pack_id` BIGINT UNSIGNED NOT NULL,
+  `position` INT UNSIGNED NOT NULL COMMENT 'order inside the pack, from 0',
+  `file_path` VARCHAR(255) NOT NULL COMMENT 'the storage key',
+  `mime_type` VARCHAR(50) NOT NULL COMMENT 'image/webp | image/png',
+  `size_bytes` INT UNSIGNED NOT NULL,
+  `is_animated` TINYINT(1) NOT NULL DEFAULT 0,
+  `emoji` VARCHAR(32) NULL COMMENT 'the emoji the pack''s author tagged it with (for search)',
+  `is_active` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '1 = active, 0 = soft deleted',
+  `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `updated_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (`sticker_id`),
+  UNIQUE KEY `uq_sticker_pack_position` (`pack_id`, `position`),
+  CONSTRAINT `fk_sticker_pack` FOREIGN KEY (`pack_id`) REFERENCES `sticker_packs_t` (`pack_id`) ON DELETE NO ACTION ON UPDATE NO ACTION
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='one row per sticker image of a pack; the file lives in storage under stickers/<pack id>/<position>.webp';
+
+-- ---------------------------------------------------------------- user_sticker_packs_t
+CREATE TABLE IF NOT EXISTS `user_sticker_packs_t` (
+  `user_pack_id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `user_id` BIGINT UNSIGNED NOT NULL,
+  `pack_id` BIGINT UNSIGNED NOT NULL,
+  `position` INT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'order of the tabs in the drawer',
+  `is_active` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '1 = active, 0 = soft deleted',
+  `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `updated_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (`user_pack_id`),
+  UNIQUE KEY `uq_usp_user_pack` (`user_id`, `pack_id`),
+  KEY `idx_usp_pack` (`pack_id`),
+  CONSTRAINT `fk_usp_user` FOREIGN KEY (`user_id`) REFERENCES `users_lst_t` (`user_id`) ON DELETE NO ACTION ON UPDATE NO ACTION,
+  CONSTRAINT `fk_usp_pack` FOREIGN KEY (`pack_id`) REFERENCES `sticker_packs_t` (`pack_id`) ON DELETE NO ACTION ON UPDATE NO ACTION
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='the packs in a user''s sticker drawer, in their order';
+
+-- ---------------------------------------------------------------- user_favourite_stickers_t
+CREATE TABLE IF NOT EXISTS `user_favourite_stickers_t` (
+  `favourite_id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `user_id` BIGINT UNSIGNED NOT NULL,
+  `sticker_id` BIGINT UNSIGNED NOT NULL,
+  `is_active` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '1 = active, 0 = soft deleted',
+  `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `updated_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (`favourite_id`),
+  UNIQUE KEY `uq_ufs_user_sticker` (`user_id`, `sticker_id`),
+  KEY `idx_ufs_sticker` (`sticker_id`),
+  CONSTRAINT `fk_ufs_user` FOREIGN KEY (`user_id`) REFERENCES `users_lst_t` (`user_id`) ON DELETE NO ACTION ON UPDATE NO ACTION,
+  CONSTRAINT `fk_ufs_sticker` FOREIGN KEY (`sticker_id`) REFERENCES `stickers_t` (`sticker_id`) ON DELETE NO ACTION ON UPDATE NO ACTION
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='stickers a user starred (their own or ones they received); the Favourites tab of the drawer';
+
 -- ---------------------------------------------------------------- messages_lst_t
 CREATE TABLE IF NOT EXISTS `messages_lst_t` (
   `message_id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,

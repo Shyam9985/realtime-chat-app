@@ -365,6 +365,60 @@ T("conversation_keys_t", "chat", "end-to-end encryption: each member's locked co
          ("fk_ckey_created_by", ["created_by"], "users_lst_t", ["user_id"], "NO ACTION", False)],
     layout=(1840, 1250))
 
+T("sticker_packs_t", "chat", "the sticker store: packs imported by the developer (a Signal sticker pack by link); users add them to their drawer", [
+    C("pack_id", ID, False, ai=True),
+    C("pack_key", "VARCHAR(100)", False, comment="where it came from, unique: signal:<pack id>"),
+    C("title", "VARCHAR(100)", False),
+    C("author", "VARCHAR(100)"),
+    C("source", "VARCHAR(20)", False, comment="SIGNAL"),
+    C("source_url", "VARCHAR(500)", comment="the link it was imported from"),
+    C("is_animated", "TINYINT(1)", False, "0", comment="1 = at least one sticker moves"),
+    C("sticker_count", "INT UNSIGNED", False, "0"),
+    C("cover_sticker_id", ID, comment="the sticker shown as the pack's icon (stickers_t)"),
+    C("is_default", "TINYINT(1)", False, "0", comment="1 = in every new user's drawer from the start"),
+    C("is_published", "TINYINT(1)", False, "1", comment="0 = hidden from the store (people who added it keep it)"),
+    *STD(3)], "pack_id",
+    uniques=[("uq_pack_key", ["pack_key"])],
+    indexes=[("idx_pack_store", ["is_published", "is_active", "pack_id"])],
+    layout=(2200, 60))
+
+T("stickers_t", "chat", "one row per sticker image of a pack; the file lives in storage under stickers/<pack id>/<position>.webp", [
+    C("sticker_id", ID, False, ai=True),
+    C("pack_id", ID, False),
+    C("position", "INT UNSIGNED", False, comment="order inside the pack, from 0"),
+    C("file_path", "VARCHAR(255)", False, comment="the storage key"),
+    C("mime_type", "VARCHAR(50)", False, comment="image/webp | image/png"),
+    C("size_bytes", "INT UNSIGNED", False),
+    C("is_animated", "TINYINT(1)", False, "0"),
+    C("emoji", "VARCHAR(32)", comment="the emoji the pack's author tagged it with (for search)"),
+    *STD(3)], "sticker_id",
+    uniques=[("uq_sticker_pack_position", ["pack_id", "position"])],
+    fks=[("fk_sticker_pack", ["pack_id"], "sticker_packs_t", ["pack_id"], "NO ACTION", False)],
+    layout=(2200, 420))
+
+T("user_sticker_packs_t", "chat", "the packs in a user's sticker drawer, in their order", [
+    C("user_pack_id", ID, False, ai=True),
+    C("user_id", ID, False),
+    C("pack_id", ID, False),
+    C("position", "INT UNSIGNED", False, "0", comment="order of the tabs in the drawer"),
+    *STD(3)], "user_pack_id",
+    uniques=[("uq_usp_user_pack", ["user_id", "pack_id"])],
+    indexes=[("idx_usp_pack", ["pack_id"])],
+    fks=[("fk_usp_user", ["user_id"], "users_lst_t", ["user_id"], "NO ACTION", False),
+         ("fk_usp_pack", ["pack_id"], "sticker_packs_t", ["pack_id"], "NO ACTION", False)],
+    layout=(2200, 720))
+
+T("user_favourite_stickers_t", "chat", "stickers a user starred (their own or ones they received); the Favourites tab of the drawer", [
+    C("favourite_id", ID, False, ai=True),
+    C("user_id", ID, False),
+    C("sticker_id", ID, False),
+    *STD(3)], "favourite_id",
+    uniques=[("uq_ufs_user_sticker", ["user_id", "sticker_id"])],
+    indexes=[("idx_ufs_sticker", ["sticker_id"])],
+    fks=[("fk_ufs_user", ["user_id"], "users_lst_t", ["user_id"], "NO ACTION", False),
+         ("fk_ufs_sticker", ["sticker_id"], "stickers_t", ["sticker_id"], "NO ACTION", False)],
+    layout=(2200, 950))
+
 BY = {t["name"]: t for t in TABLES}
 def col(t, name):
     for c in t["cols"]:

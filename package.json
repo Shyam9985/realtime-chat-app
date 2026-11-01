@@ -12,7 +12,8 @@
   "scripts": {
     "test": "node --test --test-concurrency=1 \"tests/**/*.test.js\"",
     "start": "node server.js",
-    "publish-release": "node scripts/publish-release.js"
+    "publish-release": "node scripts/publish-release.js",
+    "import-stickers": "node scripts/import-stickers.js"
   },
   "author": "shyam",
   "license": "ISC",

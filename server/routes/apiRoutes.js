@@ -12,6 +12,7 @@ const scheduledRtr = require('./scheduledRtr');
 const devicesRtr = require('./devicesRtr');
 const appRtr = require('./appRtr');
 const keysRtr = require('./keysRtr');
+const stickersRtr = require('./stickersRtr');
 
 router.use('/health', healthRtr);
 router.use('/auth', authRtr);
@@ -28,5 +29,7 @@ router.use('/devices', devicesRtr);
 router.use('/app', appRtr);
 // end-to-end encryption: padlocks, locked key backups and locked chat keys
 router.use('/keys', keysRtr);
+// stickers: the store, each user's drawer and favourites, the images
+router.use('/stickers', stickersRtr);
 
 module.exports = router;

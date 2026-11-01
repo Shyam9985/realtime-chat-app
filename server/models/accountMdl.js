@@ -134,6 +134,8 @@ exports.deleteAccount = (userId) => {
         const [files] = await c.execute('select file_id, file_path from uploaded_files_lst_t where uploaded_by = ?', [userId]);
         if (files.length) await c.execute(`delete from uploaded_files_lst_t where file_id in (${marks(files)})`, files.map((f) => f.file_id));
         await c.execute('delete from user_blocks_t where blocker_id = ? or blocked_id = ?', [userId, userId]);
+        await c.execute('delete from user_favourite_stickers_t where user_id = ?', [userId]);
+        await c.execute('delete from user_sticker_packs_t where user_id = ?', [userId]);
         await c.execute('delete from user_devices_t where user_id = ?', [userId]);
         await c.execute('delete from user_keys_t where user_id = ?', [userId]);
         await c.execute('delete s from sessions s join user_sessions_t us on us.session_id = s.session_id where us.user_id = ?', [userId]);

@@ -184,6 +184,7 @@ const api = (baseUrl, token) => {
         get: (path) => call('GET', path),
         post: (path, body = {}) => call('POST', path, body),
         patch: (path, body = {}) => call('PATCH', path, body),
+        put: (path, body = {}) => call('PUT', path, body),
         del: (path) => call('DELETE', path)
     };
 };
@@ -255,6 +256,8 @@ const cleanupUsers = async (userIds) => {
     const files = await sql(`select file_path from uploaded_files_lst_t where uploaded_by in (${marks})`, userIds);
     await sql(`delete from uploaded_files_lst_t where uploaded_by in (${marks})`, userIds);
     await require('../../server/utils/storage.utils').remove(files.map((f) => f.file_path));
+    await sql(`delete from user_favourite_stickers_t where user_id in (${marks})`, userIds);
+    await sql(`delete from user_sticker_packs_t where user_id in (${marks})`, userIds);
     await sql(`delete from user_devices_t where user_id in (${marks})`, userIds);
     await sql(`delete from conversation_keys_t where user_id in (${marks}) or created_by in (${marks})`, [...userIds, ...userIds]);
     await sql(`delete from user_keys_t where user_id in (${marks})`, userIds);

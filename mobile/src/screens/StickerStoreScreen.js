@@ -1,0 +1,99 @@
+import React, { useCallback, useEffect, useState } from 'react';
+import { FlatList, Pressable, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../theme/ThemeContext';
+import { useToast } from '../contexts/MessageContext';
+import { Screen, Button, EmptyState, Spinner, Banner } from '../components/ui';
+import { StickerImage } from '../components/StickerImage';
+import * as stickers from '../services/stickers.service';
+
+/*
+ * The sticker store: every pack, with its cover, author and size, and an Add / Remove button that puts
+ * it in (or takes it out of) the user's drawer. Tapping a pack opens its stickers right there.
+ */
+export default function StickerStoreScreen() {
+  const { theme } = useTheme();
+  const c = theme.colors;
+  const toast = useToast();
+  const [packs, setPacks] = useState(null);
+  const [error, setError] = useState(null);
+  const [open, setOpen] = useState(null);         // pack_id whose stickers are shown
+  const [details, setDetails] = useState({});     // pack_id -> stickers
+  const [busy, setBusy] = useState(null);         // pack_id being added or removed
+
+  const load = useCallback(async () => {
+    setError(null);
+    try { setPacks(await stickers.getStore()); } catch (e) { setError(e?.message || e?.error || 'Could not load the store.'); setPacks([]); }
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const toggleOpen = async (pack) => {
+    const next = open === pack.pack_id ? null : pack.pack_id;
+    setOpen(next);
+    if (next && !details[next]) {
+      try { const full = await stickers.getPack(next); setDetails((d) => ({ ...d, [next]: full.stickers })); }
+      catch { setDetails((d) => ({ ...d, [next]: [] })); }
+    }
+  };
+
+  const toggleAdded = async (pack) => {
+    setBusy(pack.pack_id);
+    try {
+      if (pack.added) { await stickers.removePack(pack.pack_id); toast.info(`“${pack.title}” removed from your stickers.`); }
+      else { await stickers.addPack(pack.pack_id); toast.success(`“${pack.title}” added to your stickers.`); }
+      setPacks((list) => list.map((p) => (p.pack_id === pack.pack_id ? { ...p, added: !pack.added } : p)));
+    } catch (e) {
+      toast.error(e?.message || e?.error || 'Could not change your stickers.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const renderPack = ({ item }) => {
+    const expanded = open === item.pack_id;
+    const grid = details[item.pack_id];
+    return (
+      <View style={{ backgroundColor: c.surface, borderRadius: theme.radius.md, marginHorizontal: theme.space.md, marginTop: theme.space.sm, overflow: 'hidden' }} testID={`store-pack-${item.pack_id}`}>
+        <Pressable onPress={() => toggleOpen(item)} accessibilityRole="button" accessibilityState={{ expanded }} accessibilityLabel={`${item.title}, ${item.sticker_count} stickers`}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: theme.space.md, padding: theme.space.md }}>
+          <StickerImage stickerId={item.cover_sticker_id} size={52} />
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text numberOfLines={1} style={{ color: c.text, fontWeight: '700', fontSize: theme.font.md }}>{item.title}</Text>
+            {item.author ? <Text numberOfLines={1} style={{ color: c.textMuted, fontSize: theme.font.sm }}>{item.author}</Text> : null}
+            <Text style={{ color: c.textMuted, fontSize: theme.font.xs, marginTop: 2 }}>{item.sticker_count} stickers{item.is_animated ? ' · animated' : ''}</Text>
+          </View>
+          <Button title={item.added ? 'Remove' : 'Add'} variant={item.added ? 'ghost' : 'primary'} loading={busy === item.pack_id} onPress={() => toggleAdded(item)}
+            icon={item.added ? undefined : 'add'} style={{ paddingVertical: 8, paddingHorizontal: 14 }} testID={`store-toggle-${item.pack_id}`} accessibilityLabel={item.added ? `Remove ${item.title}` : `Add ${item.title}`} />
+        </Pressable>
+        {expanded ? (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: theme.space.sm, paddingBottom: theme.space.sm, borderTopWidth: 1, borderTopColor: c.border }}>
+            {!grid ? <Spinner size="small" style={{ width: '100%', paddingVertical: theme.space.md }} /> : grid.map((s) => (
+              <View key={s.sticker_id} style={{ width: '25%', alignItems: 'center', paddingVertical: 6 }}>
+                <StickerImage stickerId={s.sticker_id} size={70} accessibilityLabel={`Sticker${s.emoji ? ` ${s.emoji}` : ''}`} />
+              </View>
+            ))}
+          </View>
+        ) : null}
+      </View>
+    );
+  };
+
+  return (
+    <Screen>
+      {error ? <Banner kind="danger" text={error} action={<Button title="Retry" variant="ghost" onPress={load} style={{ paddingVertical: 6, paddingHorizontal: 10 }} />} /> : null}
+      {packs == null ? <Spinner /> : !packs.length ? (
+        <EmptyState icon="images-outline" title="No sticker packs yet" subtitle="Packs appear here as soon as they are added to the store." />
+      ) : (
+        <FlatList data={packs} keyExtractor={(p) => String(p.pack_id)} renderItem={renderPack} extraData={[open, details, busy]}
+          contentContainerStyle={{ paddingBottom: theme.space.xl }}
+          ListHeaderComponent={(
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: theme.space.md, paddingTop: theme.space.md }}>
+              <Ionicons name="information-circle-outline" size={16} color={c.textMuted} />
+              <Text style={{ flex: 1, color: c.textMuted, fontSize: theme.font.sm }}>Add a pack to see it in your sticker drawer. Hold any sticker in a chat to star it.</Text>
+            </View>
+          )}
+          testID="sticker-store" />
+      )}
+    </Screen>
+  );
+}

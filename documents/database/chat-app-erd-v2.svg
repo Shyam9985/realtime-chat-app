@@ -39,6 +39,11 @@
 <path d="M1840 1300.0 H1824 V887 H1302 V72.0 H1280" fill="none" stroke="#334155" stroke-width="1.4" stroke-dasharray="5 3" marker-start="url(#many)" marker-end="url(#one)"/>
 <path d="M1840 1332.0 H1824 V887 H342 V72.0 H320" fill="none" stroke="#334155" stroke-width="1.4" stroke-dasharray="5 3" marker-start="url(#many)" marker-end="url(#one)"/>
 <path d="M1840 1380.0 H1824 V887 H342 V72.0 H320" fill="none" stroke="#334155" stroke-width="1.4" stroke-dasharray="5 3" marker-start="url(#many)" marker-end="url(#one)"/>
+<path d="M2480 470.0 H2506 V72.0 H2480" fill="none" stroke="#334155" stroke-width="1.4" stroke-dasharray="5 3" marker-start="url(#many)" marker-end="url(#one)"/>
+<path d="M2200 770.0 H1260.0 V72.0 H320" fill="none" stroke="#334155" stroke-width="1.4" stroke-dasharray="5 3" marker-start="url(#many)" marker-end="url(#one)"/>
+<path d="M2480 786.0 H2506 V72.0 H2480" fill="none" stroke="#334155" stroke-width="1.4" stroke-dasharray="5 3" marker-start="url(#many)" marker-end="url(#one)"/>
+<path d="M2200 1000.0 H2184 V887 H342 V72.0 H320" fill="none" stroke="#334155" stroke-width="1.4" stroke-dasharray="5 3" marker-start="url(#many)" marker-end="url(#one)"/>
+<path d="M2480 1016.0 H2506 V432.0 H2480" fill="none" stroke="#334155" stroke-width="1.4" stroke-dasharray="5 3" marker-start="url(#many)" marker-end="url(#one)"/>
 <rect x="40" y="60" width="280" height="336" rx="6" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
 <rect x="40" y="60" width="280" height="24" rx="6" fill="#1d4ed8"/>
 <rect x="40" y="78" width="280" height="6" fill="#1d4ed8"/>
@@ -888,4 +893,142 @@
 <text x="1866" y="1447" font-size="10.5" fill="#0f172a">(conversation_id, key_version, user_id)</text>
 <text x="1846" y="1463" font-size="10" font-weight="bold" fill="#0369a1">IX</text>
 <text x="1866" y="1463" font-size="10.5" fill="#0f172a">(user_id, conversation_id)</text>
+<rect x="2200" y="60" width="280" height="272" rx="6" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<rect x="2200" y="60" width="280" height="24" rx="6" fill="#0f766e"/>
+<rect x="2200" y="78" width="280" height="6" fill="#0f766e"/>
+<text x="2210" y="77" font-size="13" font-weight="bold" fill="#fff">sticker_packs_t</text>
+<text x="2206" y="97" font-size="10" font-weight="bold" fill="#b45309">PK</text>
+<text x="2226" y="97" font-size="10.5" fill="#0f172a">pack_id</text>
+<text x="2474" y="97" font-size="9" fill="#64748b" text-anchor="end">BIGINT UNSIGNED</text>
+<text x="2206" y="113" font-size="10" font-weight="bold" fill="#0369a1">UQ</text>
+<text x="2226" y="113" font-size="10.5" fill="#0f172a">pack_key</text>
+<text x="2474" y="113" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(100)</text>
+<text x="2206" y="129" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="2226" y="129" font-size="10.5" fill="#0f172a">title</text>
+<text x="2474" y="129" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(100)</text>
+<text x="2206" y="145" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="2226" y="145" font-size="10.5" fill="#0f172a">author</text>
+<text x="2474" y="145" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(100) NULL</text>
+<text x="2206" y="161" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="2226" y="161" font-size="10.5" fill="#0f172a">source</text>
+<text x="2474" y="161" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(20)</text>
+<text x="2206" y="177" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="2226" y="177" font-size="10.5" fill="#0f172a">source_url</text>
+<text x="2474" y="177" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(500) NULL</text>
+<text x="2206" y="193" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="2226" y="193" font-size="10.5" fill="#0f172a">is_animated</text>
+<text x="2474" y="193" font-size="9" fill="#64748b" text-anchor="end">TINYINT(1) =0</text>
+<text x="2206" y="209" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="2226" y="209" font-size="10.5" fill="#0f172a">sticker_count</text>
+<text x="2474" y="209" font-size="9" fill="#64748b" text-anchor="end">INT UNSIGNED =0</text>
+<text x="2206" y="225" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="2226" y="225" font-size="10.5" fill="#0f172a">cover_sticker_id</text>
+<text x="2474" y="225" font-size="9" fill="#64748b" text-anchor="end">BIGINT UNSIGNED NULL</text>
+<text x="2206" y="241" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="2226" y="241" font-size="10.5" fill="#0f172a">is_default</text>
+<text x="2474" y="241" font-size="9" fill="#64748b" text-anchor="end">TINYINT(1) =0</text>
+<text x="2206" y="257" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="2226" y="257" font-size="10.5" fill="#0f172a">is_published</text>
+<text x="2474" y="257" font-size="9" fill="#64748b" text-anchor="end">TINYINT(1) =1</text>
+<text x="2206" y="273" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="2226" y="273" font-size="10.5" fill="#0f172a">is_active</text>
+<text x="2474" y="273" font-size="9" fill="#64748b" text-anchor="end">TINYINT(1) =1</text>
+<text x="2206" y="289" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="2226" y="289" font-size="10.5" fill="#0f172a">created_at</text>
+<text x="2474" y="289" font-size="9" fill="#64748b" text-anchor="end">DATETIME(3)</text>
+<text x="2206" y="305" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="2226" y="305" font-size="10.5" fill="#0f172a">updated_at</text>
+<text x="2474" y="305" font-size="9" fill="#64748b" text-anchor="end">DATETIME(3)</text>
+<text x="2206" y="321" font-size="10" font-weight="bold" fill="#0369a1">IX</text>
+<text x="2226" y="321" font-size="10.5" fill="#0f172a">(is_published, is_active, pack_id)</text>
+<rect x="2200" y="420" width="280" height="224" rx="6" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<rect x="2200" y="420" width="280" height="24" rx="6" fill="#0f766e"/>
+<rect x="2200" y="438" width="280" height="6" fill="#0f766e"/>
+<text x="2210" y="437" font-size="13" font-weight="bold" fill="#fff">stickers_t</text>
+<text x="2206" y="457" font-size="10" font-weight="bold" fill="#b45309">PK</text>
+<text x="2226" y="457" font-size="10.5" fill="#0f172a">sticker_id</text>
+<text x="2474" y="457" font-size="9" fill="#64748b" text-anchor="end">BIGINT UNSIGNED</text>
+<text x="2206" y="473" font-size="10" font-weight="bold" fill="#be123c">FK</text>
+<text x="2226" y="473" font-size="10.5" fill="#0f172a">pack_id</text>
+<text x="2474" y="473" font-size="9" fill="#64748b" text-anchor="end">BIGINT UNSIGNED</text>
+<text x="2206" y="489" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="2226" y="489" font-size="10.5" fill="#0f172a">position</text>
+<text x="2474" y="489" font-size="9" fill="#64748b" text-anchor="end">INT UNSIGNED</text>
+<text x="2206" y="505" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="2226" y="505" font-size="10.5" fill="#0f172a">file_path</text>
+<text x="2474" y="505" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(255)</text>
+<text x="2206" y="521" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="2226" y="521" font-size="10.5" fill="#0f172a">mime_type</text>
+<text x="2474" y="521" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(50)</text>
+<text x="2206" y="537" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="2226" y="537" font-size="10.5" fill="#0f172a">size_bytes</text>
+<text x="2474" y="537" font-size="9" fill="#64748b" text-anchor="end">INT UNSIGNED</text>
+<text x="2206" y="553" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="2226" y="553" font-size="10.5" fill="#0f172a">is_animated</text>
+<text x="2474" y="553" font-size="9" fill="#64748b" text-anchor="end">TINYINT(1) =0</text>
+<text x="2206" y="569" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="2226" y="569" font-size="10.5" fill="#0f172a">emoji</text>
+<text x="2474" y="569" font-size="9" fill="#64748b" text-anchor="end">VARCHAR(32) NULL</text>
+<text x="2206" y="585" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="2226" y="585" font-size="10.5" fill="#0f172a">is_active</text>
+<text x="2474" y="585" font-size="9" fill="#64748b" text-anchor="end">TINYINT(1) =1</text>
+<text x="2206" y="601" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="2226" y="601" font-size="10.5" fill="#0f172a">created_at</text>
+<text x="2474" y="601" font-size="9" fill="#64748b" text-anchor="end">DATETIME(3)</text>
+<text x="2206" y="617" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="2226" y="617" font-size="10.5" fill="#0f172a">updated_at</text>
+<text x="2474" y="617" font-size="9" fill="#64748b" text-anchor="end">DATETIME(3)</text>
+<text x="2206" y="633" font-size="10" font-weight="bold" fill="#0369a1">UQ</text>
+<text x="2226" y="633" font-size="10.5" fill="#0f172a">(pack_id, position)</text>
+<rect x="2200" y="720" width="280" height="160" rx="6" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<rect x="2200" y="720" width="280" height="24" rx="6" fill="#0f766e"/>
+<rect x="2200" y="738" width="280" height="6" fill="#0f766e"/>
+<text x="2210" y="737" font-size="13" font-weight="bold" fill="#fff">user_sticker_packs_t</text>
+<text x="2206" y="757" font-size="10" font-weight="bold" fill="#b45309">PK</text>
+<text x="2226" y="757" font-size="10.5" fill="#0f172a">user_pack_id</text>
+<text x="2474" y="757" font-size="9" fill="#64748b" text-anchor="end">BIGINT UNSIGNED</text>
+<text x="2206" y="773" font-size="10" font-weight="bold" fill="#be123c">FK</text>
+<text x="2226" y="773" font-size="10.5" fill="#0f172a">user_id</text>
+<text x="2474" y="773" font-size="9" fill="#64748b" text-anchor="end">BIGINT UNSIGNED</text>
+<text x="2206" y="789" font-size="10" font-weight="bold" fill="#be123c">FK</text>
+<text x="2226" y="789" font-size="10.5" fill="#0f172a">pack_id</text>
+<text x="2474" y="789" font-size="9" fill="#64748b" text-anchor="end">BIGINT UNSIGNED</text>
+<text x="2206" y="805" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="2226" y="805" font-size="10.5" fill="#0f172a">position</text>
+<text x="2474" y="805" font-size="9" fill="#64748b" text-anchor="end">INT UNSIGNED =0</text>
+<text x="2206" y="821" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="2226" y="821" font-size="10.5" fill="#0f172a">is_active</text>
+<text x="2474" y="821" font-size="9" fill="#64748b" text-anchor="end">TINYINT(1) =1</text>
+<text x="2206" y="837" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="2226" y="837" font-size="10.5" fill="#0f172a">created_at</text>
+<text x="2474" y="837" font-size="9" fill="#64748b" text-anchor="end">DATETIME(3)</text>
+<text x="2206" y="853" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="2226" y="853" font-size="10.5" fill="#0f172a">updated_at</text>
+<text x="2474" y="853" font-size="9" fill="#64748b" text-anchor="end">DATETIME(3)</text>
+<text x="2206" y="869" font-size="10" font-weight="bold" fill="#0369a1">UQ</text>
+<text x="2226" y="869" font-size="10.5" fill="#0f172a">(user_id, pack_id)</text>
+<rect x="2200" y="950" width="280" height="144" rx="6" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<rect x="2200" y="950" width="280" height="24" rx="6" fill="#0f766e"/>
+<rect x="2200" y="968" width="280" height="6" fill="#0f766e"/>
+<text x="2210" y="967" font-size="13" font-weight="bold" fill="#fff">user_favourite_stickers_t</text>
+<text x="2206" y="987" font-size="10" font-weight="bold" fill="#b45309">PK</text>
+<text x="2226" y="987" font-size="10.5" fill="#0f172a">favourite_id</text>
+<text x="2474" y="987" font-size="9" fill="#64748b" text-anchor="end">BIGINT UNSIGNED</text>
+<text x="2206" y="1003" font-size="10" font-weight="bold" fill="#be123c">FK</text>
+<text x="2226" y="1003" font-size="10.5" fill="#0f172a">user_id</text>
+<text x="2474" y="1003" font-size="9" fill="#64748b" text-anchor="end">BIGINT UNSIGNED</text>
+<text x="2206" y="1019" font-size="10" font-weight="bold" fill="#be123c">FK</text>
+<text x="2226" y="1019" font-size="10.5" fill="#0f172a">sticker_id</text>
+<text x="2474" y="1019" font-size="9" fill="#64748b" text-anchor="end">BIGINT UNSIGNED</text>
+<text x="2206" y="1035" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="2226" y="1035" font-size="10.5" fill="#0f172a">is_active</text>
+<text x="2474" y="1035" font-size="9" fill="#64748b" text-anchor="end">TINYINT(1) =1</text>
+<text x="2206" y="1051" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="2226" y="1051" font-size="10.5" fill="#0f172a">created_at</text>
+<text x="2474" y="1051" font-size="9" fill="#64748b" text-anchor="end">DATETIME(3)</text>
+<text x="2206" y="1067" font-size="10" font-weight="bold" fill="#94a3b8">·</text>
+<text x="2226" y="1067" font-size="10.5" fill="#0f172a">updated_at</text>
+<text x="2474" y="1067" font-size="9" fill="#64748b" text-anchor="end">DATETIME(3)</text>
+<text x="2206" y="1083" font-size="10" font-weight="bold" fill="#0369a1">UQ</text>
+<text x="2226" y="1083" font-size="10.5" fill="#0f172a">(user_id, sticker_id)</text>
 </svg>

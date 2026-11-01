@@ -1,7 +1,7 @@
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as chatApi from '../services/chat.service';
-import { DELETED_PLACEHOLDER, dayLabel, timeOf, isSameDay, isNotice, noticeText } from './chatFormat';
+import { DELETED_PLACEHOLDER, dayLabel, timeOf, isSameDay, isNotice, noticeText, previewText} from './chatFormat';
 
 const PAGE = 100;
 const MAX_MESSAGES = 10000;
@@ -32,8 +32,8 @@ function buildHtml({ title, messages, myId, nameOf }) {
     const mine = m.sender_id === myId;
     const labels = [m.is_forwarded && !m.is_deleted ? '<div class="label">Forwarded</div>' : ''];
     const quote = m.reply_to && !m.is_deleted
-      ? `<div class="quote"><b>${escapeHtml(nameOf(m.reply_to.sender_id, m.reply_to.sender_name))}</b><br>${m.reply_to.content == null ? `<i>${escapeHtml(DELETED_PLACEHOLDER)}</i>` : escapeHtml(m.reply_to.content)}</div>` : '';
-    const text = m.is_deleted ? `<i>${escapeHtml(DELETED_PLACEHOLDER)}</i>` : escapeHtml(m.content).replace(/\n/g, '<br>');
+      ? `<div class="quote"><b>${escapeHtml(nameOf(m.reply_to.sender_id, m.reply_to.sender_name))}</b><br>${m.reply_to.content == null ? `<i>${escapeHtml(DELETED_PLACEHOLDER)}</i>` : escapeHtml(previewText(m.reply_to))}</div>` : '';
+    const text = m.is_deleted ? `<i>${escapeHtml(DELETED_PLACEHOLDER)}</i>` : escapeHtml(previewText(m)).replace(/\n/g, '<br>');
     rows.push(`<div class="row ${mine ? 'mine' : 'theirs'}"><div class="bubble">
       <div class="sender">${escapeHtml(mine ? 'You' : nameOf(m.sender_id, m.sender_name))}</div>${labels.join('')}${quote}<div class="text">${text}</div>
       <div class="meta">${m.is_edited && !m.is_deleted ? 'Edited · ' : ''}${escapeHtml(timeOf(m.created_at))}</div></div></div>`);
