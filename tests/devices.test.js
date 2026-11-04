@@ -60,6 +60,44 @@ test('PN-05 a new message is pushed through firebase; a token firebase rejects i
     assert.equal(row.is_active, 0, 'firebase rejected the made-up token and the server stopped using it');
 });
 
+// the push's data: firebase refuses the whole push over one reserved key ("message_type" sank 1.5.0's
+// notifications) and over any non-string value, so the shape is pinned here
+test('PN-06 a message push carries only string values under keys firebase accepts; a sticker travels without its id', () => {
+    const pushService = require('../server/services/pushService');
+    const heading = { chatTitle: 'Goa Trip', sender: 'Noah', group: true };
+    const data = pushService.messageDataOf({ message_id: 7, conversation_id: 3, sender_id: 9, message_type: 'TEXT', content: 'ZW5jOmhp', key_version: 2, enc_format: 1 }, heading);
+    for (const [key, value] of Object.entries(data)) {
+        assert.equal(typeof value, 'string', `${key} must be a string`);
+        assert.doesNotMatch(key, pushService.RESERVED_KEY, `${key} is reserved by firebase`);
+    }
+    assert.equal(data.msg_type, 'TEXT');
+    assert.equal(data.content, 'ZW5jOmhp');
+    assert.equal(data.is_group, '1');
+    assert.equal(data.chat_title, 'Goa Trip');
+    assert.equal(data.key_version, '2');
+
+    const sticker = pushService.messageDataOf({ message_id: 8, conversation_id: 3, sender_id: 9, message_type: 'STICKER', content: 'ZW5jOjEy', key_version: 2, enc_format: 1 }, heading);
+    assert.equal(sticker.msg_type, 'STICKER');
+    assert.equal(sticker.content, '', 'a sticker id is not worth a preview; the phone says "Sticker"');
+    assert.equal(pushService.messageDataOf({ message_id: 9, conversation_id: 3, sender_id: 9, content: 'x'.repeat(3001) }, heading).content, '', 'too long for a push');
+});
+
+// the real firebase backend checks the payload before it looks at the token: a push it accepts answers
+// "not registered" for a made-up token, a payload it refuses answers "invalid-argument" for every token
+test('PN-07 firebase accepts the message push payload itself (a made-up token is reported dead, not the payload)', { skip: !process.env.FIREBASE_SERVICE_ACCOUNT_FILE && 'FIREBASE_SERVICE_ACCOUNT_FILE is not set' }, async () => {
+    const pushService = require('../server/services/pushService');
+    // shaped like a real token (firebase checks the shape first, then whether a phone has it)
+    const fake = `d${Date.now()}${'x'.repeat(120)}:APA91b${'y'.repeat(130)}`;
+    await as(A).post('/devices', { push_token: fake });
+    const direct = (await as(B).post('/conversations', { user_id: A.user.user_id })).body.data.conversation.conversation_id;
+    const message = { message_id: 1, conversation_id: direct, sender_id: B.user.user_id, sender_name: 'Bob', message_type: 'STICKER', content: 'ZW5jOjEy', key_version: 1, enc_format: 1 };
+    const result = await pushService.onMessageCreated({ message, recipientIds: [A.user.user_id] });
+    assert.ok(result.errors.includes('messaging/registration-token-not-registered'), JSON.stringify(result));
+    assert.ok(!result.errors.includes('messaging/invalid-argument'), `the payload was refused: ${JSON.stringify(result)}`);
+    assert.equal((await rowsFor(fake))[0].is_active, 0, 'the made-up token is switched off');
+    await assert.rejects(pushService.sendToUsers([A.user.user_id], { type: 'message', message_type: 'TEXT' }), /reserves: message_type/);
+});
+
 test('PN-04 bad input and no sign-in are refused', async () => {
     assert.equal((await as(A).post('/devices', {})).status, 400);
     assert.equal((await as(A).post('/devices', { push_token: 'short' })).status, 400);

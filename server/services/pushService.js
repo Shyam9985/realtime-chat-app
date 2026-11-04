@@ -26,8 +26,15 @@ const BATCH = 500;               // firebase's limit per multicast call
 // "New message" (the text is in the chat when it is opened)
 const PUSH_CONTENT_MAX = 3000;
 
-// firebase's answers for a token that no longer reaches a phone (uninstalled, data cleared, malformed)
-const DEAD_TOKEN = new Set(['messaging/registration-token-not-registered', 'messaging/invalid-registration-token', 'messaging/invalid-argument']);
+// firebase's answers for a token that no longer reaches a phone (uninstalled, data cleared, malformed).
+// invalid-argument counts only when firebase says it is about the token: the same code also means
+// "I refuse this payload" (every token at once, nothing wrong with the phones), and treating that as
+// dead switched every phone off in 1.5.0
+const DEAD_TOKEN = new Set(['messaging/registration-token-not-registered', 'messaging/invalid-registration-token']);
+const isDeadToken = (error) => DEAD_TOKEN.has(error?.code)
+    || (error?.code === 'messaging/invalid-argument' && /registration token/i.test(error.message || ''));
+// data keys firebase reserves; a push carrying one is refused with "Invalid data payload key"
+const RESERVED_KEY = /^(from|notification|message_type|gcm|google)/;
 
 // who the notification is from: one-to-one "Noah"; group "Goa Trip" (the phone adds "Noah: " to the text)
 const headingOf = async (message) => {
@@ -37,20 +44,29 @@ const headingOf = async (message) => {
     return { chatTitle: group ? conversation.title : sender, sender, group };
 };
 
-// sends one data message to these phones; switches off tokens firebase rejects
+// sends one data message to these phones; switches off tokens firebase says are dead. answers how it
+// went, with every refusal's code (a payload refused by firebase shows here, not as "dead phones")
 const sendToTokens = async (messaging, tokens, data) => {
+    const reserved = Object.keys(data).filter((k) => RESERVED_KEY.test(k));
+    if (reserved.length) throw new Error(`push data uses a key firebase reserves: ${reserved.join(', ')}`);
     let sent = 0;
     const dead = [];
+    const errors = [];
     for (let i = 0; i < tokens.length; i += BATCH) {
         const batch = tokens.slice(i, i + BATCH);
         // high priority wakes the phone at once, so the message can be marked delivered without delay
         const result = await messaging.sendEachForMulticast({ tokens: batch, data, android: { priority: 'high' } });
         sent += result.successCount;
-        result.responses.forEach((r, j) => { if (!r.success && DEAD_TOKEN.has(r.error?.code)) dead.push(batch[j]); });
+        result.responses.forEach((r, j) => {
+            if (r.success) return;
+            errors.push(r.error?.code || 'unknown');
+            if (isDeadToken(r.error)) dead.push(batch[j]);
+        });
     }
     if (dead.length) await devicesMdl.deactivateTokens(dead);
+    if (errors.length) console.error(`[push] firebase refused ${errors.length} of ${tokens.length}: ${[...new Set(errors)].join(', ')}`);
     log(`[push] ${sent} sent, ${tokens.length - sent} failed, ${dead.length} dead tokens switched off`);
-    return { sent, failed: tokens.length - sent };
+    return { sent, failed: tokens.length - sent, dead: dead.length, errors };
 };
 
 // every active phone of these users
@@ -67,27 +83,33 @@ const sendToAllDevices = async (data) => {
     return sendToTokens(messaging, (await devicesMdl.listAllActiveTokens()).map((r) => r.push_token), data);
 };
 
-// a new message (sends, forwards, scheduled sends): every recipient's phones hear about it.
-// group notices ("Maya added Noah") are not pushed
-const onMessageCreated = async ({ message, recipientIds }) => {
-    if (message.message_type === 'SYSTEM' || !recipientIds.length) return;
-    const { chatTitle, sender, group } = await headingOf(message);
-    const content = message.content && message.content.length <= PUSH_CONTENT_MAX ? message.content : '';
-    // firebase data values must be strings. no title / message fields: the phone decrypts the text and
-    // shows the notification itself (see the comment at the top)
-    await sendToUsers(recipientIds, {
+// the data a message push carries. firebase data values must be strings and keys must not be ones it
+// reserves ("message_type" is: hence msg_type). no title / message fields: the phone decrypts the text
+// and shows the notification itself (see the comment at the top). a sticker's content (its id) is left
+// out: the phone says "Sticker" from msg_type, and an app that does not know msg_type says "New message"
+const messageDataOf = (message, { chatTitle, sender, group }) => {
+    const kind = String(message.message_type || 'TEXT');
+    const content = kind !== 'STICKER' && message.content && message.content.length <= PUSH_CONTENT_MAX ? message.content : '';
+    return {
         type: 'message',
         message_id: String(message.message_id),
         conversation_id: String(message.conversation_id),
         sender_id: String(message.sender_id),
-        message_type: String(message.message_type || 'TEXT'),
+        msg_type: kind,
         sender_name: sender,
         chat_title: chatTitle || sender,
         is_group: group ? '1' : '0',
         content,
         key_version: String(message.key_version ?? ''),
         enc_format: String(message.enc_format ?? 1),
-    });
+    };
+};
+
+// a new message (sends, forwards, scheduled sends): every recipient's phones hear about it.
+// group notices ("Maya added Noah") are not pushed
+const onMessageCreated = async ({ message, recipientIds }) => {
+    if (message.message_type === 'SYSTEM' || !recipientIds.length) return { sent: 0, failed: 0 };
+    return sendToUsers(recipientIds, messageDataOf(message, await headingOf(message)));
 };
 
 // "YaapZone x.y.z is available" to every registered phone; a tap opens the update dialog
@@ -110,4 +132,4 @@ const registerPushRelay = () => {
     });
 };
 
-module.exports = { registerPushRelay, sendToUsers, sendToAllDevices, announceRelease };
+module.exports = { registerPushRelay, sendToUsers, sendToAllDevices, announceRelease, messageDataOf, onMessageCreated, RESERVED_KEY };

@@ -31,7 +31,8 @@ const readPush = (payload) => {
 // the message text, decrypted here; "New message" when this phone cannot (no key yet, or too long for a push)
 async function textOf(push) {
     const user = await tokenStore.getUser();
-    if (push.message_type === 'STICKER') return '🙂 Sticker';
+    // msg_type, not message_type: firebase reserves that key and refuses the whole push
+    if (push.msg_type === 'STICKER') return '🙂 Sticker';
     if (!user || !push.content || push.enc_format !== '1') return 'New message';
     if (!(await keyStore.loadIdentity(user.user_id))) return 'New message';
     const text = await keyStore.decryptText(push.content, {
