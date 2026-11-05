@@ -15,7 +15,7 @@ const id = (value, label) => {
 exports.packId = (value) => id(value, 'pack id');
 exports.stickerId = (value) => id(value, 'sticker id');
 
-// POST /stickers/import  { link, is_default? }
+// POST /stickers/import and /stickers/packs  { link, is_default? }  (a Signal or Sticker.ly share link)
 exports.validateImport = (body = {}) => {
     const link = typeof body.link === 'string' ? body.link.trim() : '';
     if (!link || link.length > MAX_LINK_LENGTH) resutils.createError('validationFailed', 'link is missing or too long.');

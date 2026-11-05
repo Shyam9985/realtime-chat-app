@@ -1,9 +1,10 @@
 /*
- * Adds a public Signal sticker pack to the YaapZone sticker store:
+ * Adds a public sticker pack to the YaapZone sticker store:
  *   npm run import-stickers -- <link> [--default] [--server http://localhost:4200]
  *
- *   <link>     a share link from signalstickers.com or signal.art
+ *   <link>     a share link from signalstickers.com / signal.art
  *              (…/pack/<id>?key=<key>  or  …/addstickers/#pack_id=<id>&pack_key=<key>)
+ *              or from the Sticker.ly app (https://sticker.ly/s/<code>)
  *   --default  every new user gets this pack in their drawer from the start
  *   --server   which server (default: the one in mobile/.env.production, i.e. Render; or PUBLISH_API_URL)
  *

@@ -37,7 +37,7 @@ export default function StickerStoreScreen({ route }) {
     try {
       const { pack, already } = await stickers.importPack(text);
       setLink('');
-      toast.success(already ? `“${pack.title}” was already in the store; it is in your stickers now.` : `“${pack.title}” added to the store and to your stickers.`);
+      toast.success(already ? `“${pack.title}” is in your stickers now.` : `“${pack.title}” added to your stickers.`);
       await load();
     } catch (e) {
       toast.error(e?.message || e?.error || 'Could not add that pack.');
@@ -77,7 +77,10 @@ export default function StickerStoreScreen({ route }) {
           style={{ flexDirection: 'row', alignItems: 'center', gap: theme.space.md, padding: theme.space.md }}>
           <StickerImage stickerId={item.cover_sticker_id} size={52} />
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text numberOfLines={1} style={{ color: c.text, fontWeight: '700', fontSize: theme.font.md }}>{item.title}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text numberOfLines={1} style={{ flexShrink: 1, color: c.text, fontWeight: '700', fontSize: theme.font.md }}>{item.title}</Text>
+              {item.is_mine ? <Text style={{ color: c.accent, fontSize: theme.font.xs, fontWeight: '700', backgroundColor: c.accentSoft, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 8 }} testID="pack-mine">Only you</Text> : null}
+            </View>
             {item.author ? <Text numberOfLines={1} style={{ color: c.textMuted, fontSize: theme.font.sm }}>{item.author}</Text> : null}
             <Text style={{ color: c.textMuted, fontSize: theme.font.xs, marginTop: 2 }}>{item.sticker_count} stickers{item.is_animated ? ' · animated' : ''}</Text>
           </View>
@@ -110,9 +113,9 @@ export default function StickerStoreScreen({ route }) {
               <View style={{ backgroundColor: c.surface, borderRadius: theme.radius.md, marginHorizontal: theme.space.md, marginTop: theme.space.md, padding: theme.space.md }} testID="store-import">
                 <Text style={{ color: c.text, fontWeight: '700', fontSize: theme.font.md }}>Bring a pack</Text>
                 <Text style={{ color: c.textMuted, fontSize: theme.font.sm, marginTop: 2, marginBottom: theme.space.sm }}>
-                  Thousands of free packs (movies, memes, animated) are on signalstickers.com. Open one, copy its link, paste it here: it joins the store for everyone and your stickers.
+                  Paste a pack's share link from the Sticker.ly app (sticker.ly/s/…) or from signalstickers.com, and it is yours: only you see it here and in your drawer. In Sticker.ly: open a pack → Share → copy link.
                 </Text>
-                <TextField value={link} onChangeText={setLink} placeholder="https://signalstickers.com/pack/…" autoCapitalize="none" autoCorrect={false} keyboardType="url"
+                <TextField value={link} onChangeText={setLink} placeholder="https://sticker.ly/s/… or signalstickers.com/pack/…" autoCapitalize="none" autoCorrect={false} keyboardType="url"
                   style={{ marginBottom: theme.space.sm }} testID="store-import-link" accessibilityLabel="Sticker pack link" />
                 <View style={{ flexDirection: 'row', gap: theme.space.sm }}>
                   <Button title="Add pack" icon="download-outline" loading={importing} onPress={importLink} style={{ flex: 1 }} testID="store-import-add" />

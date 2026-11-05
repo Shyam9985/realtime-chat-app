@@ -9,6 +9,7 @@ import { Screen, Banner, IconButton, Button, EmptyState, Avatar, GroupAvatar, Di
 import { MessageBubble, DaySeparator, StatusTicks, ReplyQuote, SystemNotice, EncryptionNotice } from '../components/MessageBubble';
 import ScheduleDialog from '../components/ScheduleDialog';
 import { StickerPanel } from '../components/StickerPanel';
+import { StickerImage } from '../components/StickerImage';
 import * as stickerApi from '../services/stickers.service';
 import { exportChatAsPdf } from '../utils/exportChat';
 import { DELETE_WINDOW_MINUTES, MESSAGE_MAX_LENGTH, dayLabel, firstName, fullName, fullStamp, isGroup, isNotice, isSameDay, isSticker, minutesSince, noticeText, presenceLabel, previewText, timeOf } from '../utils/chatFormat';
@@ -103,6 +104,7 @@ export default function ChatScreen({ route, navigation }) {
 
   const [draft, setDraft] = useState('');
   const [stickersOpen, setStickersOpen] = useState(false);   // the sticker drawer instead of the keyboard
+  const [stickerTap, setStickerTap] = useState(null);         // a tapped sticker message: "add it to my stickers?"
   const [sendError, setSendError] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirm, setConfirm] = useState(null);       // { kind: 'block' | 'delete' | 'failed' | 'info', message }
@@ -217,7 +219,6 @@ export default function ChatScreen({ route, navigation }) {
           <View style={{ flexDirection: 'row', alignItems: 'center' }} testID="selection-actions">
             {!m.is_deleted && isMember ? headerIcon('arrow-undo-outline', () => { setReplyTo(m); setEditing(null); setSelected(null); }, 'Reply', color, 'action-reply') : null}
             {!m.is_deleted ? headerIcon('arrow-redo-outline', () => { setSelected(null); navigation.navigate('Forward', { message: m }); }, 'Forward', color, 'action-forward') : null}
-            {isSticker(m) && !m.is_deleted ? headerIcon('star-outline', () => { starSticker(m); setSelected(null); }, 'Add to favourites', color, 'action-favourite') : null}
             {canEdit(m) ? headerIcon('create-outline', () => { setEditing({ kind: 'message', message: m }); setReplyTo(null); setDraft(m.content); setSelected(null); }, 'Edit', color, 'action-edit') : null}
             {isMine(m) ? headerIcon('information-circle-outline', () => { setConfirm({ kind: 'info', message: m }); setSelected(null); }, 'Message info', color, 'action-info') : null}
             {isMine(m) && !m.is_deleted && isMember ? headerIcon('trash-outline', () => { setConfirm({ kind: 'delete', message: m, allowed: minutesSince(m.created_at) < DELETE_WINDOW_MINUTES }); setSelected(null); }, 'Delete', color, 'action-delete') : null}
@@ -274,11 +275,12 @@ export default function ChatScreen({ route, navigation }) {
       setSendError(error?.statusKey === 'BLOCKED' ? "You can't send messages to this user." : error?.message || error?.error || 'Sticker not sent.');
     }
   }, [replyTo, chat, conversationId]);
-  // a sticker in the chat (own or received) starred into the Favourites tab of the drawer
+  // a tapped sticker (own or received) kept in the ★ tab of the drawer, once the user confirms
   const starSticker = async (m) => {
-    try { await stickerApi.addFavourite(Number(m.content)); toast.success('Added to favourites.'); }
-    catch (e) { toast.error(e?.message || e?.error || 'Could not add it to favourites.'); }
+    try { await stickerApi.addFavourite(Number(m.content)); toast.success('Added to your stickers.'); }
+    catch (e) { toast.error(e?.message || e?.error || 'Could not add it to your stickers.'); }
   };
+  const stickerAlreadyMine = !!stickerTap && stickerApi.isFavourite(Number(stickerTap.content));
 
   // ---- sending, editing, scheduling
   const send = useCallback(async () => {
@@ -481,7 +483,11 @@ export default function ChatScreen({ route, navigation }) {
           senderName={group && !isMine(item) && startsRun ? authorName(item.sender_id, item.sender_name) : null}
           selected={selected && ((selected.message_id && selected.message_id === item.message_id) || (selected.client_message_id && selected.client_message_id === item.client_message_id))}
           onLongPress={() => { if (!item.local && item.status !== 'FAILED') setSelected(item); }}
-          onPress={() => { if (selected) setSelected(null); else if (item.status === 'FAILED') setConfirm({ kind: 'failed', message: item }); }}
+          onPress={() => {
+            if (selected) setSelected(null);
+            else if (item.status === 'FAILED') setConfirm({ kind: 'failed', message: item });
+            else if (isSticker(item) && !item.is_deleted && !item.local) setStickerTap(item);     // a tap on a sticker offers to keep it
+          }}
           onReply={isMember ? (m) => { setReplyTo(m); setEditing(null); } : undefined}
           onQuotePress={jumpTo} quoteAuthor={authorName} />
       </View>
@@ -617,6 +623,14 @@ export default function ChatScreen({ route, navigation }) {
 
       <PopupMenu visible={menuOpen} items={menuItems} onClose={() => setMenuOpen(false)} />
       <Dialog {...dialog} onClose={() => setConfirm(null)} />
+
+      {/* a tapped sticker: the sticker itself and "add it to my stickers?", confirmed with one button */}
+      <Dialog visible={!!stickerTap} onClose={() => setStickerTap(null)}
+        title={stickerAlreadyMine ? 'Already in your stickers' : 'Add to your stickers?'}
+        message={stickerAlreadyMine ? 'You will find it under ★ in your sticker drawer.' : 'It goes under ★ in your sticker drawer, ready to send in any chat.'}
+        actions={stickerAlreadyMine ? [{ label: 'Close', style: 'primary' }] : [{ label: 'Cancel' }, { label: 'Add sticker', style: 'primary', testID: 'sticker-add-confirm', onPress: () => starSticker(stickerTap) }]}>
+        {stickerTap ? <StickerImage stickerId={Number(stickerTap.content)} size={140} style={{ alignSelf: 'center', marginTop: theme.space.md }} testID="sticker-tap-preview" /> : null}
+      </Dialog>
 
       <Dialog visible={renameOpen} icon="pencil-outline" title="Rename chat" message="Only you see this name. Leave it empty to use their name again."
         onClose={() => setRenameOpen(false)} actions={[{ label: 'Cancel' }, { label: 'Save', style: 'primary', onPress: rename, testID: 'rename-save' }]}>

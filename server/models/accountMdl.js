@@ -136,6 +136,7 @@ exports.deleteAccount = (userId) => {
         await c.execute('delete from user_blocks_t where blocker_id = ? or blocked_id = ?', [userId, userId]);
         await c.execute('delete from user_favourite_stickers_t where user_id = ?', [userId]);
         await c.execute('delete from user_sticker_packs_t where user_id = ?', [userId]);
+        await c.execute('update sticker_packs_t set owner_user_id = null, is_published = 0 where owner_user_id = ?', [userId]);
         await c.execute('delete from user_devices_t where user_id = ?', [userId]);
         await c.execute('delete from user_keys_t where user_id = ?', [userId]);
         await c.execute('delete s from sessions s join user_sessions_t us on us.session_id = s.session_id where us.user_id = ?', [userId]);

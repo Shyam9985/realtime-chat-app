@@ -258,6 +258,7 @@ const cleanupUsers = async (userIds) => {
     await require('../../server/utils/storage.utils').remove(files.map((f) => f.file_path));
     await sql(`delete from user_favourite_stickers_t where user_id in (${marks})`, userIds);
     await sql(`delete from user_sticker_packs_t where user_id in (${marks})`, userIds);
+    await sql(`update sticker_packs_t set owner_user_id = null, is_published = 0 where owner_user_id in (${marks})`, userIds);
     await sql(`delete from user_devices_t where user_id in (${marks})`, userIds);
     await sql(`delete from conversation_keys_t where user_id in (${marks}) or created_by in (${marks})`, [...userIds, ...userIds]);
     await sql(`delete from user_keys_t where user_id in (${marks})`, userIds);
