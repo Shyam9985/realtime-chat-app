@@ -18,7 +18,9 @@ const storage = require('../server/utils/storage.utils');
 
 let app, A, B, ab, ac, C, pack;
 const as = (u) => h.api(app.baseUrl, u.token);
-const PACK_KEY = `test:${Date.now()}`;
+// keyed like a signal pack, so a user "bringing" it by link finds it already in the store (no network)
+const SIGNAL_ID = crypto.randomBytes(16).toString('hex');
+const PACK_KEY = `signal:${SIGNAL_ID}`;
 const image = (r, g, b, width = 300, height = 200) => sharp({ create: { width, height, channels: 4, background: { r, g, b, alpha: 1 } } }).png().toBuffer();
 
 before(async () => {
@@ -202,6 +204,33 @@ test('ST-09 the import endpoint needs the release key and a real pack link; a pa
     await assert.rejects(stickersService.createPackSrvc({ packKey: PACK_KEY, title: 'Again', source: 'TEST', stickers: [{ bytes: await image(1, 2, 3) }] }), (e) => e.name === 'packExists');
     await assert.rejects(stickersService.createPackSrvc({ packKey: `${PACK_KEY}-bad`, title: 'Bad', source: 'TEST', stickers: [{ bytes: Buffer.from('not an image') }] }), (e) => e.name === 'importFailed');
     assert.equal((await h.sql('select count(*) n from sticker_packs_t where pack_key = ?', [`${PACK_KEY}-bad`]))[0].n, 0, 'nothing is left of a refused pack');
+});
+
+test('ST-11 a user brings a pack by link: the link is checked; a pack already in the store just joins their drawer', async () => {
+    // three tries an hour each, refused links included: Ben spends his on the checks, Cal brings the pack
+    assert.equal((await as(B).post('/stickers/packs', {})).status, 400, 'no link');
+    assert.equal((await as(B).post('/stickers/packs', { link: 'https://example.com/nothing' })).status, 400, 'not a pack link');
+    assert.equal((await as(B).post('/stickers/packs', { link: 'x'.repeat(601) })).status, 400, 'too long');
+    assert.equal((await as(B).post('/stickers/packs', { link: 'x'.repeat(601) })).status, 429, 'the fourth try in an hour waits');
+
+    // the store pack, by its signal link (the key is not checked for a pack the server already has)
+    const link = `https://signalstickers.com/pack/${SIGNAL_ID}?key=${'ab'.repeat(32)}`;
+    const res = await as(C).post('/stickers/packs', { link });
+    assert.equal(res.status, 201, JSON.stringify(res.body));
+    assert.equal(res.body.data.already, true);
+    assert.equal(res.body.data.pack.pack_id, pack.pack_id);
+    assert.equal(res.body.data.pack.added, true);
+    assert.equal((await as(C).get('/stickers/mine')).body.data.packs.some((p) => p.pack_id === pack.pack_id), true, 'in the drawer');
+    assert.equal((await as(C).get('/stickers/store')).body.data.packs.find((p) => p.pack_id === pack.pack_id).added, true);
+
+    // a pack signal does not have: refused with a reason and nothing is created (needs the signal cdn)
+    if (process.env.TEST_SIGNAL_IMPORT) {
+        const unknown = 'https://signalstickers.com/pack/0123456789abcdef0123456789abcdef?key=' + 'ab'.repeat(32);
+        const refused = await as(A).post('/stickers/packs', { link: unknown });
+        assert.equal(refused.status, 400, JSON.stringify(refused.body));
+        assert.equal((await h.sql('select count(*) n from sticker_packs_t where pack_key = ?', ['signal:0123456789abcdef0123456789abcdef']))[0].n, 0);
+    }
+    assert.equal((await h.api(app.baseUrl).post('/stickers/packs', { link })).status, 401, 'sign-in needed');
 });
 
 test('ST-10 the Signal pack format: links are read, files are decrypted and checked, the manifest is parsed', async () => {

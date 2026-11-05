@@ -10,6 +10,8 @@ const { checkRateLimit } = require('../middleware/rateLimitmdlwre');
 router.get('/store', isAuthenticated, checkRateLimit(2, 30), stickersCtrl.store);
 router.get('/mine', isAuthenticated, checkRateLimit(2, 30), stickersCtrl.drawer);
 router.get('/packs/:id', isAuthenticated, checkRateLimit(2, 30), stickersCtrl.pack);
+// a pack brought by a user (downloaded and made uniform by the server: a few per hour is plenty)
+router.post('/packs', isAuthenticated, checkRateLimit(3 / 3600, 3), audit('STICKERS', 'IMPORT_PACK'), stickersCtrl.importByUser);
 router.post('/packs/:id/mine', isAuthenticated, checkRateLimit(1, 20), audit('STICKERS', 'ADD_PACK'), stickersCtrl.addPack);
 router.delete('/packs/:id/mine', isAuthenticated, checkRateLimit(1, 20), audit('STICKERS', 'REMOVE_PACK'), stickersCtrl.removePack);
 router.put('/favourites/:id', isAuthenticated, checkRateLimit(1, 30), stickersCtrl.addFavourite);

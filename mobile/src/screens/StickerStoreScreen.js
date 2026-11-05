@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { FlatList, Pressable, Text, View } from 'react-native';
+import { FlatList, Linking, Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { useToast } from '../contexts/MessageContext';
-import { Screen, Button, EmptyState, Spinner, Banner } from '../components/ui';
+import { Screen, Button, EmptyState, Spinner, Banner, TextField } from '../components/ui';
 import { StickerImage } from '../components/StickerImage';
 import * as stickers from '../services/stickers.service';
 
@@ -11,10 +11,12 @@ import * as stickers from '../services/stickers.service';
  * The sticker store: every pack, with its cover, author and size, and an Add / Remove button that puts
  * it in (or takes it out of) the user's drawer. Tapping a pack opens its stickers right there.
  */
-export default function StickerStoreScreen() {
+export default function StickerStoreScreen({ route }) {
   const { theme } = useTheme();
   const c = theme.colors;
   const toast = useToast();
+  const [link, setLink] = useState(route?.params?.link || '');     // a Signal pack link to bring in
+  const [importing, setImporting] = useState(false);
   const [packs, setPacks] = useState(null);
   const [error, setError] = useState(null);
   const [open, setOpen] = useState(null);         // pack_id whose stickers are shown
@@ -26,6 +28,23 @@ export default function StickerStoreScreen() {
     try { setPacks(await stickers.getStore()); } catch (e) { setError(e?.message || e?.error || 'Could not load the store.'); setPacks([]); }
   }, []);
   useEffect(() => { load(); }, [load]);
+
+  // a public Signal pack by its link: the server fetches it into the store (for everyone) and this drawer
+  const importLink = async () => {
+    const text = link.trim();
+    if (!text) { toast.info('Paste a sticker pack link from signalstickers.com first.'); return; }
+    setImporting(true);
+    try {
+      const { pack, already } = await stickers.importPack(text);
+      setLink('');
+      toast.success(already ? `“${pack.title}” was already in the store; it is in your stickers now.` : `“${pack.title}” added to the store and to your stickers.`);
+      await load();
+    } catch (e) {
+      toast.error(e?.message || e?.error || 'Could not add that pack.');
+    } finally {
+      setImporting(false);
+    }
+  };
 
   const toggleOpen = async (pack) => {
     const next = open === pack.pack_id ? null : pack.pack_id;
@@ -87,9 +106,23 @@ export default function StickerStoreScreen() {
         <FlatList data={packs} keyExtractor={(p) => String(p.pack_id)} renderItem={renderPack} extraData={[open, details, busy]}
           contentContainerStyle={{ paddingBottom: theme.space.xl }}
           ListHeaderComponent={(
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: theme.space.md, paddingTop: theme.space.md }}>
-              <Ionicons name="information-circle-outline" size={16} color={c.textMuted} />
-              <Text style={{ flex: 1, color: c.textMuted, fontSize: theme.font.sm }}>Add a pack to see it in your sticker drawer. Hold any sticker in a chat to star it.</Text>
+            <View>
+              <View style={{ backgroundColor: c.surface, borderRadius: theme.radius.md, marginHorizontal: theme.space.md, marginTop: theme.space.md, padding: theme.space.md }} testID="store-import">
+                <Text style={{ color: c.text, fontWeight: '700', fontSize: theme.font.md }}>Bring a pack</Text>
+                <Text style={{ color: c.textMuted, fontSize: theme.font.sm, marginTop: 2, marginBottom: theme.space.sm }}>
+                  Thousands of free packs (movies, memes, animated) are on signalstickers.com. Open one, copy its link, paste it here: it joins the store for everyone and your stickers.
+                </Text>
+                <TextField value={link} onChangeText={setLink} placeholder="https://signalstickers.com/pack/…" autoCapitalize="none" autoCorrect={false} keyboardType="url"
+                  style={{ marginBottom: theme.space.sm }} testID="store-import-link" accessibilityLabel="Sticker pack link" />
+                <View style={{ flexDirection: 'row', gap: theme.space.sm }}>
+                  <Button title="Add pack" icon="download-outline" loading={importing} onPress={importLink} style={{ flex: 1 }} testID="store-import-add" />
+                  <Button title="Browse packs" variant="ghost" icon="open-outline" onPress={() => Linking.openURL('https://signalstickers.com').catch(() => {})} style={{ flex: 1 }} />
+                </View>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: theme.space.md, paddingTop: theme.space.md }}>
+                <Ionicons name="information-circle-outline" size={16} color={c.textMuted} />
+                <Text style={{ flex: 1, color: c.textMuted, fontSize: theme.font.sm }}>Add a pack to see it in your sticker drawer. Hold any sticker in a chat to star it.</Text>
+              </View>
             </View>
           )}
           testID="sticker-store" />

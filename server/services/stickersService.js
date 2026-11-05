@@ -122,11 +122,23 @@ exports.importPackSrvc = async ({ link, isDefault }) => {
     if (!ids) resutils.createError('validationFailed', 'The link holds no Signal sticker pack id and key.');
     const packKey = `signal:${ids.packId}`;
     const existing = await stickersMdl.getPackByKey(packKey);
-    if (existing && asBool(existing.is_active)) return { pack: shapePack(existing), already: true };
+    if (existing && asBool(existing.is_active)) {
+        // someone else's import of the same pack is still running
+        if (!asBool(existing.is_published)) resutils.createError('importFailed', 'This pack is being added right now. Try again in a minute.');
+        return { pack: shapePack(existing), already: true };
+    }
     const fetched = await signal.fetchPack(ids);
     const coverIndex = Math.max(0, fetched.stickers.findIndex((s) => fetched.cover && s.id === fetched.cover.id));
     const pack = await exports.createPackSrvc({ packKey, title: fetched.title, author: fetched.author, source: 'SIGNAL', sourceUrl: link, isDefault, coverIndex, stickers: fetched.stickers });
     return { pack, already: false };
+};
+
+// a user brings a pack: it goes into the shared store (everyone can add it) and into their own drawer
+exports.importForUserSrvc = async (userId, link) => {
+    log('in importForUserSrvc');
+    const { pack, already } = await exports.importPackSrvc({ link, isDefault: false });
+    await stickersMdl.addPack(userId, pack.pack_id);
+    return { pack: { ...pack, added: true }, already };
 };
 
 // ---- what users see
