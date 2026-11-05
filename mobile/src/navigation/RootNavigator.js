@@ -28,6 +28,7 @@ import ArchivedScreen from '../screens/ArchivedScreen';
 import ForwardScreen from '../screens/ForwardScreen';
 import ShareToScreen from '../screens/ShareToScreen';
 import StickerStoreScreen from '../screens/StickerStoreScreen';
+import * as stickers from '../services/stickers.service';
 import NewGroupScreen from '../screens/NewGroupScreen';
 import NewGroupDetailsScreen from '../screens/NewGroupDetailsScreen';
 import GroupInfoScreen from '../screens/GroupInfoScreen';
@@ -136,7 +137,8 @@ export default function RootNavigator() {
     if (!hasShareIntent || status !== 'signedIn' || !navReady) return;
     const text = (shareIntent?.text || shareIntent?.webUrl || '').trim();
     resetShareIntent();
-    if (text) navigationRef.navigate('ShareTo', { text });
+    // a sticker pack link shared from signalstickers.com goes to the store, anything else to a chat
+    if (text) navigationRef.navigate(stickers.isPackLink(text) ? 'StickerStore' : 'ShareTo', stickers.isPackLink(text) ? { link: text } : { text });
   }, [hasShareIntent, shareIntent, status, navReady, resetShareIntent]);
 
   // a tapped notification opens its chat, once someone is signed in and the screens exist. this also

@@ -38,6 +38,10 @@ exports.addFavourite = handle('stickers add favourite', RESPONSE_STATUS.CREATED,
 // DELETE /stickers/favourites/:id
 exports.removeFavourite = handle('stickers remove favourite', RESPONSE_STATUS.DELETED, (req) => stickersService.removeFavouriteSrvc(req.user.user_id, stickersVldtr.stickerId(req.params.id)));
 
+// POST /stickers/packs  { link }  - a signed-in user adds a public Signal pack by its share link: into
+// the store for everyone, and into their own drawer
+exports.importByUser = handle('stickers user import', RESPONSE_STATUS.CREATED, (req) => stickersService.importForUserSrvc(req.user.user_id, stickersVldtr.validateImport(req.body || {}).link));
+
 // GET /stickers/:id/image  - the sticker's image, streamed from storage. a sticker never changes, so the
 // phone may keep it for good
 exports.image = async (req, res) => {

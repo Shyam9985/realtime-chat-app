@@ -19,6 +19,10 @@ export const getPack = (packId) => data(get(`stickers/packs/${packId}`)).then((d
 export const addFavourite = (stickerId) => data(put(`stickers/favourites/${stickerId}`, {})).then(refreshDrawer);
 export const removeFavourite = (stickerId) => data(remove(`stickers/favourites/${stickerId}`)).then(refreshDrawer);
 export const addPack = (packId) => data(post(`stickers/packs/${packId}/mine`, {})).then(refreshDrawer);
+// a public Signal pack by its share link: the server imports it into the store and this user's drawer
+export const importPack = (link) => data(post("stickers/packs", { link })).then(refreshDrawer);
+// is this text a Signal sticker pack link (signal.art/addstickers/... or signalstickers.com/pack/...)
+export const isPackLink = (text) => /signal\.art\/addstickers|signalstickers\.(com|org)\/pack\//i.test(text || "");
 export const removePack = (packId) => data(remove(`stickers/packs/${packId}/mine`)).then(refreshDrawer);
 
 // ---- the drawer: fetched once, shared by every screen, refreshed after each change
