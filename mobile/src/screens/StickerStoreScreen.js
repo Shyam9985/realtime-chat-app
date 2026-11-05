@@ -113,9 +113,9 @@ export default function StickerStoreScreen({ route }) {
               <View style={{ backgroundColor: c.surface, borderRadius: theme.radius.md, marginHorizontal: theme.space.md, marginTop: theme.space.md, padding: theme.space.md }} testID="store-import">
                 <Text style={{ color: c.text, fontWeight: '700', fontSize: theme.font.md }}>Bring a pack</Text>
                 <Text style={{ color: c.textMuted, fontSize: theme.font.sm, marginTop: 2, marginBottom: theme.space.sm }}>
-                  Thousands of free packs (movies, memes, animated) are on signalstickers.com. Open one, copy its link, paste it here. The pack is yours alone: only you see it here and in your drawer.
+                  Paste a pack's share link from the Sticker.ly app (sticker.ly/s/…) or from signalstickers.com, and it is yours: only you see it here and in your drawer. In Sticker.ly: open a pack → Share → copy link.
                 </Text>
-                <TextField value={link} onChangeText={setLink} placeholder="https://signalstickers.com/pack/…" autoCapitalize="none" autoCorrect={false} keyboardType="url"
+                <TextField value={link} onChangeText={setLink} placeholder="https://sticker.ly/s/… or signalstickers.com/pack/…" autoCapitalize="none" autoCorrect={false} keyboardType="url"
                   style={{ marginBottom: theme.space.sm }} testID="store-import-link" accessibilityLabel="Sticker pack link" />
                 <View style={{ flexDirection: 'row', gap: theme.space.sm }}>
                   <Button title="Add pack" icon="download-outline" loading={importing} onPress={importLink} style={{ flex: 1 }} testID="store-import-add" />

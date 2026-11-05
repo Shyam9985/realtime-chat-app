@@ -2,6 +2,7 @@ const sharp = require('sharp');
 const resutils = require('../utils/response.utils');
 const storage = require('../utils/storage.utils');
 const signal = require('../utils/signal.stickers.utils');
+const stickerly = require('../utils/stickerly.utils');
 const stickersMdl = require('../models/stickersMdl');
 const filesService = require('./filesService');
 const cleanup = require('./storageCleanupService');
@@ -121,22 +122,30 @@ exports.createPackSrvc = async ({ packKey, title, author, source, sourceUrl = nu
     return shapePack(await stickersMdl.getPack(packId));
 };
 
-// a public Signal sticker pack by its share link; a pack already there is answered as it is.
+// where a share link points: a public Signal pack (id + key in the link) or a Sticker.ly pack (a code)
+const sourceOf = (link) => {
+    const ids = signal.parseLink(link);
+    if (ids) return { source: 'SIGNAL', key: `signal:${ids.packId}`, fetch: () => signal.fetchPack(ids) };
+    const code = stickerly.parseLink(link);
+    if (code) return { source: 'STICKERLY', key: `stickerly:${code}`, fetch: () => stickerly.fetchPack(code) };
+    return resutils.createError('validationFailed', 'That is not a Signal or Sticker.ly sticker pack link.');
+};
+
+// a public sticker pack by its share link; a pack already there is answered as it is.
 // ownerUserId: the pack is that user's own (its key carries the user, so two users may bring the same pack)
 exports.importPackSrvc = async ({ link, isDefault, ownerUserId = null }) => {
     log('in importPackSrvc');
-    const ids = signal.parseLink(link);
-    if (!ids) resutils.createError('validationFailed', 'The link holds no Signal sticker pack id and key.');
-    const packKey = ownerUserId ? `signal:${ids.packId}:u${ownerUserId}` : `signal:${ids.packId}`;
+    const from = sourceOf(link);
+    const packKey = ownerUserId ? `${from.key}:u${ownerUserId}` : from.key;
     const existing = await stickersMdl.getPackByKey(packKey);
     if (existing && asBool(existing.is_active)) {
         // someone else's import of the same pack is still running
         if (!asBool(existing.is_published)) resutils.createError('importFailed', 'This pack is being added right now. Try again in a minute.');
         return { pack: shapePack(existing), already: true };
     }
-    const fetched = await signal.fetchPack(ids);
+    const fetched = await from.fetch();
     const coverIndex = Math.max(0, fetched.stickers.findIndex((s) => fetched.cover && s.id === fetched.cover.id));
-    const pack = await exports.createPackSrvc({ packKey, title: fetched.title, author: fetched.author, source: 'SIGNAL', sourceUrl: link, isDefault, ownerUserId, coverIndex, stickers: fetched.stickers });
+    const pack = await exports.createPackSrvc({ packKey, title: fetched.title, author: fetched.author, source: from.source, sourceUrl: link, isDefault, ownerUserId, coverIndex, stickers: fetched.stickers });
     return { pack, already: false };
 };
 
@@ -144,9 +153,7 @@ exports.importPackSrvc = async ({ link, isDefault, ownerUserId = null }) => {
 // imported as their own pack (nobody else sees it) and put in their drawer
 exports.importForUserSrvc = async (userId, link) => {
     log('in importForUserSrvc');
-    const ids = signal.parseLink(link);
-    if (!ids) resutils.createError('validationFailed', 'The link holds no Signal sticker pack id and key.');
-    const shared = await stickersMdl.getPackByKey(`signal:${ids.packId}`);
+    const shared = await stickersMdl.getPackByKey(sourceOf(link).key);
     if (shared && asBool(shared.is_active) && asBool(shared.is_published)) {
         await stickersMdl.addPack(userId, shared.pack_id);
         return { pack: { ...shapePack(shared, userId), added: true }, already: true };

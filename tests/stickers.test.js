@@ -279,6 +279,46 @@ test('ST-12 a pack a user brought is theirs alone: in their store and drawer onl
     }
 });
 
+test('ST-13 a Sticker.ly share link: the code is read, the page is parsed for this pack\'s stickers only', async () => {
+    const stickerly = require('../server/utils/stickerly.utils');
+    assert.equal(stickerly.parseLink('https://sticker.ly/s/01R6P7'), '01R6P7');
+    assert.equal(stickerly.parseLink('check this https://sticker.ly/s/abc123 pack'), 'ABC123');
+    assert.equal(stickerly.parseLink('https://sticker.ly/'), null);
+    assert.equal(stickerly.parseLink('https://signalstickers.com/pack/x'), null);
+    const html = `<html><head><title>popular meme</title></head><body>
+        <div class="sticker_name">popular &amp; meme</div><span class="sticker_author">ianomegalodon</span>
+        <img src="https://stickerly.pstatic.net/sticker_pack/aaa/01R6P7/33/one.webp" class="sticker_img">
+        <img src="https://stickerly.pstatic.net/sticker_pack/aaa/01R6P7/33/two.webp" class="sticker_img">
+        <img src="https://stickerly.pstatic.net/sticker_pack/aaa/01R6P7/33/one.webp" class="sticker_img">
+        <img src="https://stickerly.pstatic.net/sticker_pack/bbb/GI1C7D/37/other.webp" class="sticker_img">
+        </body></html>`;
+    assert.deepEqual(stickerly.parsePage(html, '01R6P7'), {
+        name: 'popular & meme', author: 'ianomegalodon',
+        urls: ['https://stickerly.pstatic.net/sticker_pack/aaa/01R6P7/33/one.webp', 'https://stickerly.pstatic.net/sticker_pack/aaa/01R6P7/33/two.webp']
+    });
+    assert.equal((await as(A).post('/stickers/packs', { link: 'https://example.com/sticker.ly/' })).status, 400);
+
+    // the real page and CDN (needs the network)
+    if (process.env.TEST_SIGNAL_IMPORT) {
+        const res = await as(A).post('/stickers/packs', { link: 'https://sticker.ly/s/01R6P7' });
+        assert.equal(res.status, 201, JSON.stringify(res.body));
+        const imported = res.body.data.pack;
+        try {
+            assert.equal(imported.is_mine, true);
+            assert.ok(imported.sticker_count >= 5, `stickers: ${imported.sticker_count}`);
+            assert.equal(imported.is_animated, true, 'popular meme is an animated pack');
+            const [row] = await h.sql('select source, pack_key, owner_user_id from sticker_packs_t where pack_id = ?', [imported.pack_id]);
+            assert.deepEqual(row, { source: 'STICKERLY', pack_key: `stickerly:01R6P7:u${A.user.user_id}`, owner_user_id: A.user.user_id });
+        } finally {
+            const paths = await h.sql('select file_path from stickers_t where pack_id = ?', [imported.pack_id]);
+            await h.sql('delete from user_sticker_packs_t where pack_id = ?', [imported.pack_id]);
+            await h.sql('delete from stickers_t where pack_id = ?', [imported.pack_id]);
+            await h.sql('delete from sticker_packs_t where pack_id = ?', [imported.pack_id]);
+            await storage.remove(paths.map((p) => p.file_path)).catch(() => {});
+        }
+    }
+});
+
 test('ST-10 the Signal pack format: links are read, files are decrypted and checked, the manifest is parsed', async () => {
     const packId = crypto.randomBytes(16).toString('hex');
     const packKey = crypto.randomBytes(32).toString('hex');
