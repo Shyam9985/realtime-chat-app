@@ -345,13 +345,16 @@ CREATE TABLE IF NOT EXISTS `sticker_packs_t` (
   `cover_sticker_id` BIGINT UNSIGNED NULL COMMENT 'the sticker shown as the pack''s icon (stickers_t)',
   `is_default` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '1 = in every new user''s drawer from the start',
   `is_published` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '0 = hidden from the store (people who added it keep it)',
+  `owner_user_id` BIGINT UNSIGNED NULL COMMENT 'a pack a user brought by link: only they see it in the store; null = the shared store (developer imports)',
   `is_active` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '1 = active, 0 = soft deleted',
   `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   `updated_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
   PRIMARY KEY (`pack_id`),
   UNIQUE KEY `uq_pack_key` (`pack_key`),
-  KEY `idx_pack_store` (`is_published`, `is_active`, `pack_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='the sticker store: packs imported by the developer (a Signal sticker pack by link); users add them to their drawer';
+  KEY `idx_pack_store` (`is_published`, `is_active`, `pack_id`),
+  KEY `idx_pack_owner` (`owner_user_id`),
+  CONSTRAINT `fk_pack_owner` FOREIGN KEY (`owner_user_id`) REFERENCES `users_lst_t` (`user_id`) ON DELETE NO ACTION ON UPDATE NO ACTION
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='sticker packs: the shared store (developer imports) and packs users brought by link (theirs alone)';
 
 -- ---------------------------------------------------------------- stickers_t
 CREATE TABLE IF NOT EXISTS `stickers_t` (

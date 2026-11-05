@@ -6,7 +6,7 @@ const { log } = require('../utils/log.utils');
  * drawer (user_sticker_packs_t) and the stickers they starred (user_favourite_stickers_t). The images
  * themselves live in storage under stickers_t.file_path.
  */
-const PACK_COLUMNS = 'p.pack_id, p.pack_key, p.title, p.author, p.source, p.is_animated, p.sticker_count, p.cover_sticker_id, p.is_default, p.is_published';
+const PACK_COLUMNS = 'p.pack_id, p.pack_key, p.title, p.author, p.source, p.is_animated, p.sticker_count, p.cover_sticker_id, p.is_default, p.is_published, p.owner_user_id';
 const STICKER_COLUMNS = 's.sticker_id, s.pack_id, s.position, s.is_animated, s.emoji';
 
 // ---- packs (the store)
@@ -20,12 +20,12 @@ exports.getPack = (packId) => {
     return dbutils.executeQuery(`select ${PACK_COLUMNS} from sticker_packs_t p where p.pack_id = ? and p.is_active = 1`, [packId], 'get pack').then((rows) => rows[0] || null);
 };
 
-// a new pack, hidden from the store until its stickers are all in (publishPack)
-exports.insertPack = ({ packKey, title, author, source, sourceUrl, isDefault }) => {
+// a new pack, hidden until its stickers are all in (publishPack). ownerUserId: a user's own pack
+exports.insertPack = ({ packKey, title, author, source, sourceUrl, isDefault, ownerUserId = null }) => {
     log('in insertPack');
-    const qry = `insert into sticker_packs_t (pack_key, title, author, source, source_url, is_default, is_published)
-        values (?, ?, ?, ?, ?, ?, 0)`;
-    return dbutils.executeQuery(qry, [packKey, title, author, source, sourceUrl, isDefault ? 1 : 0], 'insert pack').then((result) => result.insertId);
+    const qry = `insert into sticker_packs_t (pack_key, title, author, source, source_url, is_default, is_published, owner_user_id)
+        values (?, ?, ?, ?, ?, ?, 0, ?)`;
+    return dbutils.executeQuery(qry, [packKey, title, author, source, sourceUrl, isDefault ? 1 : 0, ownerUserId], 'insert pack').then((result) => result.insertId);
 };
 
 // a pack imported again after a failed attempt (or after being switched off): the row is reused, its
@@ -68,16 +68,17 @@ exports.listStickerPaths = (packId) => {
     return dbutils.executeQuery('select file_path from stickers_t where pack_id = ?', [packId], 'list sticker paths');
 };
 
-// every published pack, newest first after the defaults, with whether this user has it in their drawer
+// what this user can see in the store: the shared packs, plus the ones they brought themselves (first);
+// with whether each is in their drawer
 exports.listStore = (userId) => {
     log('in listStore');
     const qry = `with mine as (select pack_id from user_sticker_packs_t where user_id = ?)
         select ${PACK_COLUMNS}, case when m.pack_id is null then 0 else 1 end as added
         from sticker_packs_t p
         left join mine m on m.pack_id = p.pack_id
-        where p.is_published = 1 and p.is_active = 1
-        order by p.is_default desc, p.pack_id desc`;
-    return dbutils.executeQuery(qry, [userId], 'list store');
+        where p.is_published = 1 and p.is_active = 1 and (p.owner_user_id is null or p.owner_user_id = ?)
+        order by (p.owner_user_id is not null) desc, p.is_default desc, p.pack_id desc`;
+    return dbutils.executeQuery(qry, [userId, userId], 'list store');
 };
 
 exports.listStickers = (packId) => {

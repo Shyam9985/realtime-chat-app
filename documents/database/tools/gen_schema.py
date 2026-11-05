@@ -365,7 +365,7 @@ T("conversation_keys_t", "chat", "end-to-end encryption: each member's locked co
          ("fk_ckey_created_by", ["created_by"], "users_lst_t", ["user_id"], "NO ACTION", False)],
     layout=(1840, 1250))
 
-T("sticker_packs_t", "chat", "the sticker store: packs imported by the developer (a Signal sticker pack by link); users add them to their drawer", [
+T("sticker_packs_t", "chat", "sticker packs: the shared store (developer imports) and packs users brought by link (theirs alone)", [
     C("pack_id", ID, False, ai=True),
     C("pack_key", "VARCHAR(100)", False, comment="where it came from, unique: signal:<pack id>"),
     C("title", "VARCHAR(100)", False),
@@ -377,9 +377,11 @@ T("sticker_packs_t", "chat", "the sticker store: packs imported by the developer
     C("cover_sticker_id", ID, comment="the sticker shown as the pack's icon (stickers_t)"),
     C("is_default", "TINYINT(1)", False, "0", comment="1 = in every new user's drawer from the start"),
     C("is_published", "TINYINT(1)", False, "1", comment="0 = hidden from the store (people who added it keep it)"),
+    C("owner_user_id", ID, comment="a pack a user brought by link: only they see it in the store; null = the shared store (developer imports)"),
     *STD(3)], "pack_id",
     uniques=[("uq_pack_key", ["pack_key"])],
-    indexes=[("idx_pack_store", ["is_published", "is_active", "pack_id"])],
+    indexes=[("idx_pack_store", ["is_published", "is_active", "pack_id"]), ("idx_pack_owner", ["owner_user_id"])],
+    fks=[("fk_pack_owner", ["owner_user_id"], "users_lst_t", ["user_id"], "NO ACTION", False)],
     layout=(2200, 60))
 
 T("stickers_t", "chat", "one row per sticker image of a pack; the file lives in storage under stickers/<pack id>/<position>.webp", [

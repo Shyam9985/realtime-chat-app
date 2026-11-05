@@ -233,6 +233,52 @@ test('ST-11 a user brings a pack by link: the link is checked; a pack already in
     assert.equal((await h.api(app.baseUrl).post('/stickers/packs', { link })).status, 401, 'sign-in needed');
 });
 
+test('ST-12 a pack a user brought is theirs alone: in their store and drawer only, while its stickers still reach whoever receives them', async () => {
+    const E = await h.createUser(app.baseUrl, 'Eve');
+    let own;
+    try {
+        own = await stickersService.createPackSrvc({
+            packKey: `signal:${crypto.randomBytes(16).toString('hex')}:u${E.user.user_id}`, title: 'Eve only', source: 'TEST', ownerUserId: E.user.user_id,
+            stickers: [{ bytes: await image(9, 9, 9), emoji: '🙂' }, { bytes: await image(90, 90, 90) }]
+        });
+        const mineInStore = (await as(E).get('/stickers/store')).body.data.packs.find((p) => p.pack_id === own.pack_id);
+        assert.ok(mineInStore, 'the owner sees it in the store');
+        assert.equal(mineInStore.is_mine, true);
+        assert.equal((await as(E).get('/stickers/store')).body.data.packs[0].pack_id, own.pack_id, 'own packs come first');
+        assert.equal((await as(B).get('/stickers/store')).body.data.packs.some((p) => p.pack_id === own.pack_id), false, 'nobody else does');
+        assert.equal((await as(B).get(`/stickers/packs/${own.pack_id}`)).status, 404);
+        assert.equal((await as(B).post(`/stickers/packs/${own.pack_id}/mine`)).status, 404);
+        assert.equal((await as(E).post(`/stickers/packs/${own.pack_id}/mine`)).status, 201);
+        const detail = (await as(E).get(`/stickers/packs/${own.pack_id}`)).body.data.pack;
+        assert.equal(detail.is_mine, true);
+        assert.equal(detail.stickers.length, 2);
+        assert.equal((await as(E).get('/stickers/mine')).body.data.packs.some((p) => p.pack_id === own.pack_id), true);
+
+        // Eve sends one of them to Ben: he can see it and keep it, like any sticker
+        const sent = detail.stickers[0].sticker_id;
+        assert.equal((await fetch(`${app.baseUrl}/apiv1/stickers/${sent}/image`, { headers: { 'access-token': `Bearer ${B.token}` } })).status, 200);
+        assert.equal((await as(B).put(`/stickers/favourites/${sent}`)).status, 201);
+        assert.equal((await as(B).get('/stickers/mine')).body.data.favourites.some((s) => s.sticker_id === sent), true);
+
+        // Eve deletes her account: the pack belongs to nobody and shows nowhere, but Ben's kept sticker still works
+        const gone = await h.request(app.baseUrl, E.token, 'DELETE', '/profile', { password: E.password });
+        assert.equal(gone.status, 200, JSON.stringify(gone.body));
+        const [row] = await h.sql('select owner_user_id, is_published, is_active from sticker_packs_t where pack_id = ?', [own.pack_id]);
+        assert.deepEqual({ owner: row.owner_user_id, published: row.is_published, active: row.is_active }, { owner: null, published: 0, active: 1 });
+        assert.equal((await as(B).get('/stickers/store')).body.data.packs.some((p) => p.pack_id === own.pack_id), false, 'unpublished: in no store at all');
+        assert.equal((await fetch(`${app.baseUrl}/apiv1/stickers/${sent}/image`, { headers: { 'access-token': `Bearer ${B.token}` } })).status, 200);
+    } finally {
+        if (own) {
+            const paths = await h.sql('select file_path from stickers_t where pack_id = ?', [own.pack_id]);
+            await h.sql('delete from user_favourite_stickers_t where sticker_id in (select sticker_id from stickers_t where pack_id = ?)', [own.pack_id]);
+            await h.sql('delete from user_sticker_packs_t where pack_id = ?', [own.pack_id]);
+            await h.sql('delete from stickers_t where pack_id = ?', [own.pack_id]);
+            await h.sql('delete from sticker_packs_t where pack_id = ?', [own.pack_id]);
+            await storage.remove(paths.map((p) => p.file_path)).catch(() => {});
+        }
+    }
+});
+
 test('ST-10 the Signal pack format: links are read, files are decrypted and checked, the manifest is parsed', async () => {
     const packId = crypto.randomBytes(16).toString('hex');
     const packKey = crypto.randomBytes(32).toString('hex');

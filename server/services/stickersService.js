@@ -10,8 +10,10 @@ const { log } = require('../utils/log.utils');
 /*
  * Stickers, the way WhatsApp does them: a store of packs, a drawer per user made of the packs they
  * added (the default packs to begin with) and the stickers they starred, and nothing uploaded by users.
- * The store is filled by the developer: `npm run import-stickers -- <link>` brings a public Signal
- * sticker pack in (downloaded and decrypted by signal.stickers.utils). Every still sticker is made the
+ * The shared store is filled by the developer: `npm run import-stickers -- <link>` brings a public Signal
+ * sticker pack in (downloaded and decrypted by signal.stickers.utils). A user can bring a pack the same
+ * way, by its link: that pack is theirs alone (owner_user_id), in their store and drawer only, though a
+ * sticker from it that they send is seen (and can be kept) by whoever receives it, like any sticker. Every still sticker is made the
  * same size (at most 512 px, WebP); an animated one (Signal uses APNG or animated WebP, both of which
  * the app plays as they are) is kept untouched. Files live under stickers/<pack id>/<position>.<ext>.
  * A sticker message carries the sticker's id as its encrypted text, so the server never learns which
@@ -24,11 +26,15 @@ const PREPARE_AT_ONCE = 4;
 const STICKER_PREFIX = 'stickers';
 
 const asBool = (v) => v === 1 || v === true;
-const shapePack = (row) => ({
+// userId: whose eyes; is_mine says the pack is one they brought (nobody else sees it in the store)
+const shapePack = (row, userId = null) => ({
     pack_id: row.pack_id, title: row.title, author: row.author, source: row.source,
     is_animated: asBool(row.is_animated), sticker_count: row.sticker_count, cover_sticker_id: row.cover_sticker_id,
-    is_default: asBool(row.is_default), ...(row.added !== undefined ? { added: asBool(row.added) } : {})
+    is_default: asBool(row.is_default), is_mine: row.owner_user_id != null && Number(row.owner_user_id) === Number(userId),
+    ...(row.added !== undefined ? { added: asBool(row.added) } : {})
 });
+// the shared store's packs when published; a user's own pack only for them
+const canSee = (pack, userId) => (pack.owner_user_id == null ? asBool(pack.is_published) : Number(pack.owner_user_id) === Number(userId));
 const shapeSticker = (row) => ({ sticker_id: row.sticker_id, pack_id: row.pack_id, position: row.position, is_animated: asBool(row.is_animated), emoji: row.emoji });
 
 // an animated PNG carries an acTL chunk (sharp reads only its first frame, so it is kept as it is)
@@ -79,7 +85,7 @@ const prepareAll = async (stickers) => {
  * on the way, the files already stored are deleted again and the pack switched off, so the store never
  * shows a half pack.
  */
-exports.createPackSrvc = async ({ packKey, title, author, source, sourceUrl = null, isDefault = false, coverIndex = 0, stickers }) => {
+exports.createPackSrvc = async ({ packKey, title, author, source, sourceUrl = null, isDefault = false, ownerUserId = null, coverIndex = 0, stickers }) => {
     log(`in createPackSrvc ${packKey}: ${stickers.length} sticker(s)`);
     if (!stickers.length) resutils.createError('importFailed', 'This pack has no stickers.');
     if (stickers.length > signal.MAX_STICKERS) resutils.createError('importFailed', `The most a pack may hold is ${signal.MAX_STICKERS} stickers.`);
@@ -91,7 +97,7 @@ exports.createPackSrvc = async ({ packKey, title, author, source, sourceUrl = nu
     if (existing && asBool(existing.is_active)) resutils.createError('packExists', 'This pack is already in the store.');
     let packId;
     if (existing) { packId = existing.pack_id; await stickersMdl.reopenPack(packId, { title: name, author: by, sourceUrl, isDefault }); }
-    else packId = await stickersMdl.insertPack({ packKey, title: name, author: by, source, sourceUrl, isDefault });
+    else packId = await stickersMdl.insertPack({ packKey, title: name, author: by, source, sourceUrl, isDefault, ownerUserId });
 
     const keys = [];
     try {
@@ -115,12 +121,13 @@ exports.createPackSrvc = async ({ packKey, title, author, source, sourceUrl = nu
     return shapePack(await stickersMdl.getPack(packId));
 };
 
-// a public Signal sticker pack by its share link; a pack already in the store is answered as it is
-exports.importPackSrvc = async ({ link, isDefault }) => {
+// a public Signal sticker pack by its share link; a pack already there is answered as it is.
+// ownerUserId: the pack is that user's own (its key carries the user, so two users may bring the same pack)
+exports.importPackSrvc = async ({ link, isDefault, ownerUserId = null }) => {
     log('in importPackSrvc');
     const ids = signal.parseLink(link);
     if (!ids) resutils.createError('validationFailed', 'The link holds no Signal sticker pack id and key.');
-    const packKey = `signal:${ids.packId}`;
+    const packKey = ownerUserId ? `signal:${ids.packId}:u${ownerUserId}` : `signal:${ids.packId}`;
     const existing = await stickersMdl.getPackByKey(packKey);
     if (existing && asBool(existing.is_active)) {
         // someone else's import of the same pack is still running
@@ -129,30 +136,38 @@ exports.importPackSrvc = async ({ link, isDefault }) => {
     }
     const fetched = await signal.fetchPack(ids);
     const coverIndex = Math.max(0, fetched.stickers.findIndex((s) => fetched.cover && s.id === fetched.cover.id));
-    const pack = await exports.createPackSrvc({ packKey, title: fetched.title, author: fetched.author, source: 'SIGNAL', sourceUrl: link, isDefault, coverIndex, stickers: fetched.stickers });
+    const pack = await exports.createPackSrvc({ packKey, title: fetched.title, author: fetched.author, source: 'SIGNAL', sourceUrl: link, isDefault, ownerUserId, coverIndex, stickers: fetched.stickers });
     return { pack, already: false };
 };
 
-// a user brings a pack: it goes into the shared store (everyone can add it) and into their own drawer
+// a user brings a pack: if the shared store already has it, it just joins their drawer; otherwise it is
+// imported as their own pack (nobody else sees it) and put in their drawer
 exports.importForUserSrvc = async (userId, link) => {
     log('in importForUserSrvc');
-    const { pack, already } = await exports.importPackSrvc({ link, isDefault: false });
+    const ids = signal.parseLink(link);
+    if (!ids) resutils.createError('validationFailed', 'The link holds no Signal sticker pack id and key.');
+    const shared = await stickersMdl.getPackByKey(`signal:${ids.packId}`);
+    if (shared && asBool(shared.is_active) && asBool(shared.is_published)) {
+        await stickersMdl.addPack(userId, shared.pack_id);
+        return { pack: { ...shapePack(shared, userId), added: true }, already: true };
+    }
+    const { pack, already } = await exports.importPackSrvc({ link, isDefault: false, ownerUserId: userId });
     await stickersMdl.addPack(userId, pack.pack_id);
-    return { pack: { ...pack, added: true }, already };
+    return { pack: { ...pack, is_mine: true, added: true }, already };
 };
 
 // ---- what users see
 exports.storeSrvc = async (userId) => {
     log('in storeSrvc');
-    return { packs: (await stickersMdl.listStore(userId)).map(shapePack) };
+    return { packs: (await stickersMdl.listStore(userId)).map((p) => shapePack(p, userId)) };
 };
 
 exports.packSrvc = async (userId, packId) => {
     log('in packSrvc');
     const pack = await stickersMdl.getPack(packId);
-    if (!pack || !asBool(pack.is_published)) resutils.createError('packNotFound', 'This sticker pack is not in the store.');
+    if (!pack || !canSee(pack, userId)) resutils.createError('packNotFound', 'This sticker pack is not in the store.');
     const [stickers, added] = await Promise.all([stickersMdl.listStickers(packId), stickersMdl.hasPack(userId, packId)]);
-    return { pack: { ...shapePack(pack), added, stickers: stickers.map(shapeSticker) } };
+    return { pack: { ...shapePack(pack, userId), added, stickers: stickers.map(shapeSticker) } };
 };
 
 // the drawer: the user's packs with their stickers, and the favourites. a first visit starts with the default packs
@@ -163,7 +178,7 @@ exports.drawerSrvc = async (userId) => {
     const byPack = new Map(packs.map((p) => [p.pack_id, []]));
     for (const s of stickers) byPack.get(s.pack_id)?.push(shapeSticker(s));
     return {
-        packs: packs.map((p) => ({ ...shapePack(p), stickers: byPack.get(p.pack_id) || [] })),
+        packs: packs.map((p) => ({ ...shapePack(p, userId), stickers: byPack.get(p.pack_id) || [] })),
         favourites: favourites.map(shapeSticker),
         max_favourites: MAX_FAVOURITES
     };
@@ -172,7 +187,7 @@ exports.drawerSrvc = async (userId) => {
 exports.addPackSrvc = async (userId, packId) => {
     log('in addPackSrvc');
     const pack = await stickersMdl.getPack(packId);
-    if (!pack || !asBool(pack.is_published)) resutils.createError('packNotFound', 'This sticker pack is not in the store.');
+    if (!pack || !canSee(pack, userId)) resutils.createError('packNotFound', 'This sticker pack is not in the store.');
     await stickersMdl.addPack(userId, packId);
     return { pack_id: packId, added: true };
 };
