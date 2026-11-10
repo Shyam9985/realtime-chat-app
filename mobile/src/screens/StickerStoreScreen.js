@@ -100,31 +100,40 @@ export default function StickerStoreScreen({ route }) {
     );
   };
 
+  // the way in for new packs: shown whether or not the store has anything to list (an empty store
+  // used to hide it, so people without packs never saw how to bring one)
+  const importBox = (
+    <View style={{ backgroundColor: c.surface, borderRadius: theme.radius.md, marginHorizontal: theme.space.md, marginTop: theme.space.md, padding: theme.space.md }} testID="store-import">
+      <Text style={{ color: c.text, fontWeight: '700', fontSize: theme.font.md }}>Bring a pack</Text>
+      <Text style={{ color: c.textMuted, fontSize: theme.font.sm, marginTop: 2, marginBottom: theme.space.sm }}>
+        Paste a pack's share link from the Sticker.ly app (sticker.ly/s/…) or from signalstickers.com, and it is yours: only you see it here and in your drawer. In Sticker.ly: open a pack → Share → copy link.
+      </Text>
+      <TextField value={link} onChangeText={setLink} placeholder="https://sticker.ly/s/… or signalstickers.com/pack/…" autoCapitalize="none" autoCorrect={false} keyboardType="url"
+        style={{ marginBottom: theme.space.sm }} testID="store-import-link" accessibilityLabel="Sticker pack link" />
+      <View style={{ flexDirection: 'row', gap: theme.space.sm }}>
+        <Button title="Add pack" icon="download-outline" loading={importing} onPress={importLink} style={{ flex: 1 }} testID="store-import-add" />
+        <Button title="Browse packs" variant="ghost" icon="open-outline" onPress={() => Linking.openURL('https://signalstickers.com').catch(() => {})} style={{ flex: 1 }} />
+      </View>
+    </View>
+  );
+
   return (
     <Screen>
       {error ? <Banner kind="danger" text={error} action={<Button title="Retry" variant="ghost" onPress={load} style={{ paddingVertical: 6, paddingHorizontal: 10 }} />} /> : null}
       {packs == null ? <Spinner /> : !packs.length ? (
-        <EmptyState icon="images-outline" title="No sticker packs yet" subtitle="Packs appear here as soon as they are added to the store." />
+        <View style={{ flex: 1 }}>
+          {importBox}
+          <EmptyState icon="images-outline" title="No packs yet" subtitle="Bring your first pack with a link above. Packs you add show up here and in your sticker drawer." />
+        </View>
       ) : (
         <FlatList data={packs} keyExtractor={(p) => String(p.pack_id)} renderItem={renderPack} extraData={[open, details, busy]}
           contentContainerStyle={{ paddingBottom: theme.space.xl }}
           ListHeaderComponent={(
             <View>
-              <View style={{ backgroundColor: c.surface, borderRadius: theme.radius.md, marginHorizontal: theme.space.md, marginTop: theme.space.md, padding: theme.space.md }} testID="store-import">
-                <Text style={{ color: c.text, fontWeight: '700', fontSize: theme.font.md }}>Bring a pack</Text>
-                <Text style={{ color: c.textMuted, fontSize: theme.font.sm, marginTop: 2, marginBottom: theme.space.sm }}>
-                  Paste a pack's share link from the Sticker.ly app (sticker.ly/s/…) or from signalstickers.com, and it is yours: only you see it here and in your drawer. In Sticker.ly: open a pack → Share → copy link.
-                </Text>
-                <TextField value={link} onChangeText={setLink} placeholder="https://sticker.ly/s/… or signalstickers.com/pack/…" autoCapitalize="none" autoCorrect={false} keyboardType="url"
-                  style={{ marginBottom: theme.space.sm }} testID="store-import-link" accessibilityLabel="Sticker pack link" />
-                <View style={{ flexDirection: 'row', gap: theme.space.sm }}>
-                  <Button title="Add pack" icon="download-outline" loading={importing} onPress={importLink} style={{ flex: 1 }} testID="store-import-add" />
-                  <Button title="Browse packs" variant="ghost" icon="open-outline" onPress={() => Linking.openURL('https://signalstickers.com').catch(() => {})} style={{ flex: 1 }} />
-                </View>
-              </View>
+              {importBox}
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: theme.space.md, paddingTop: theme.space.md }}>
                 <Ionicons name="information-circle-outline" size={16} color={c.textMuted} />
-                <Text style={{ flex: 1, color: c.textMuted, fontSize: theme.font.sm }}>Add a pack to see it in your sticker drawer. Hold any sticker in a chat to star it.</Text>
+                <Text style={{ flex: 1, color: c.textMuted, fontSize: theme.font.sm }}>Add a pack to see it in your sticker drawer. Tap any sticker in a chat to add it to your stickers.</Text>
               </View>
             </View>
           )}
